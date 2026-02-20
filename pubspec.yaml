@@ -42,6 +42,8 @@ dependencies:
   cached_network_image: ^3.4.1
   firebase_auth: ^6.1.4
   google_sign_in: 6.2.1
+  url_launcher: ^6.3.0
+  crypto: ^3.0.0
   firebase_messaging: ^16.1.1
   flutter_local_notifications: ^18.0.1
   shared_preferences: ^2.3.4
@@ -49,13 +51,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  msix: ^3.16.7
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -67,6 +64,15 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+msix_config:
+  display_name: UsOnly
+  publisher_display_name: evho
+  identity_name: com.evho.usonly
+  msix_version: 1.0.0.0
+  description: 우리만의 공간, UsOnly
+  windows_build_args: --release
+  capabilities: internetClient # 인터넷 접속 권한 필수
 
   # To add assets to your application, add an assets section, like this:
   # assets:

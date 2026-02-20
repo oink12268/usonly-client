@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -6,18 +7,25 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'auth_service.dart';
 import 'home_screen.dart';
-import 'login_screen.dart'; // 아래 4번 파일
-import 'matching_screen.dart'; // 아래 5번 파일
+import 'login_screen.dart';
+import 'matching_screen.dart';
 import 'fcm_service.dart';
 import 'api_config.dart';
 import 'firebase_options.dart';
+
+bool get _isMobile => !kIsWeb && (
+  defaultTargetPlatform == TargetPlatform.android ||
+  defaultTargetPlatform == TargetPlatform.iOS
+);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  if (_isMobile) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
   runApp(const MyApp());
 }
 
@@ -117,12 +125,21 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
         // FCM 초기화 (서버에서 memberId 받은 후)
         FcmService().initialize(_serverMemberId);
       } else {
-        print("서버 에러: ${response.statusCode}");
-        // 에러 시 일단 로딩 해제 (재시도 로직 등은 추후 추가)
+        print("서버 에러: ${response.statusCode} / ${response.body}");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('서버 에러: ${response.statusCode}\n${response.body}')),
+          );
+        }
         setState(() => _isLoading = false);
       }
     } catch (e) {
       print("서버 통신 실패: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('서버 연결 실패: $e')),
+        );
+      }
       setState(() => _isLoading = false);
     }
   }

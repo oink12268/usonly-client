@@ -1,48 +1,137 @@
+import 'dart:io';
+import 'dart:math';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+import 'windows_oauth_config.dart';
+
+const _windowsClientId = windowsClientId;
+const _windowsClientSecret = windowsClientSecret;
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
-  // 구글 로그인
   Future<User?> signInWithGoogle() async {
     try {
-      // 1. 구글 팝업 띄우기
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
-      if (googleUser == null) return null; // 사용자가 취소함
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+        return await _signInWindowsGoogle();
+      }
 
-      // 2. 인증 정보 가져오기
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      // Mobile
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return null;
 
-      // 3. Firebase 자격 증명 만들기
-      final AuthCredential credential = GoogleAuthProvider.credential(
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-
-      // 4. Firebase 로그인
-      final UserCredential userCredential = await _auth.signInWithCredential(credential);
-      
+      final userCredential = await _auth.signInWithCredential(credential);
       return userCredential.user;
     } catch (e) {
-      print("에러 발생: $e");
-      return null;
+      print("로그인 실패: $e");
+      rethrow;
     }
   }
 
-  // 로그아웃
+  // Windows: 로컬 HTTP 서버 + PKCE OAuth 플로우
+  Future<User?> _signInWindowsGoogle() async {
+    // 1. 빈 포트로 로컬 서버 시작
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final port = server.port;
+
+    // 2. PKCE 생성 (client_secret 없이도 안전하게 인증)
+    final codeVerifier = _generateCodeVerifier();
+    final codeChallenge = _generateCodeChallenge(codeVerifier);
+
+    // 3. Google OAuth URL 구성
+    final authUrl = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
+      'client_id': _windowsClientId,
+      'redirect_uri': 'http://localhost:$port',
+      'response_type': 'code',
+      'scope': 'email profile openid',
+      'code_challenge': codeChallenge,
+      'code_challenge_method': 'S256',
+    });
+
+    // 4. 기본 브라우저로 열기
+    await launchUrl(authUrl, mode: LaunchMode.externalApplication);
+
+    // 5. 브라우저 리다이렉트 대기
+    String? code;
+    await for (final request in server) {
+      code = request.uri.queryParameters['code'];
+      request.response
+        ..statusCode = 200
+        ..headers.contentType = ContentType.html
+        ..write('''
+          <html><body style="font-family:sans-serif;text-align:center;padding:60px">
+            <h2>✅ 로그인 완료!</h2>
+            <p>앱으로 돌아가세요.</p>
+            <script>setTimeout(()=>window.close(), 2000)</script>
+          </body></html>
+        ''');
+      await request.response.close();
+      break;
+    }
+    await server.close();
+
+    if (code == null) throw Exception('인증 코드를 받지 못했습니다');
+
+    // 6. 인증 코드 → 토큰 교환 (PKCE: client_secret 불필요)
+    final tokenResponse = await http.post(
+      Uri.parse('https://oauth2.googleapis.com/token'),
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: {
+        'code': code,
+        'client_id': _windowsClientId,
+        'client_secret': _windowsClientSecret,
+        'redirect_uri': 'http://localhost:$port',
+        'grant_type': 'authorization_code',
+        'code_verifier': codeVerifier,
+      },
+    );
+
+    final tokenData = jsonDecode(tokenResponse.body) as Map<String, dynamic>;
+    final idToken = tokenData['id_token'] as String?;
+    final accessToken = tokenData['access_token'] as String?;
+
+    if (idToken == null) {
+      throw Exception('토큰 교환 실패: ${tokenResponse.body}');
+    }
+
+    // 7. Firebase 로그인
+    final credential = GoogleAuthProvider.credential(
+      idToken: idToken,
+      accessToken: accessToken,
+    );
+    final userCredential = await _auth.signInWithCredential(credential);
+    return userCredential.user;
+  }
+
+  String _generateCodeVerifier() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(32, (i) => random.nextInt(256));
+    return base64UrlEncode(bytes).replaceAll('=', '');
+  }
+
+  String _generateCodeChallenge(String verifier) {
+    final bytes = utf8.encode(verifier);
+    final digest = sha256.convert(bytes);
+    return base64UrlEncode(digest.bytes).replaceAll('=', '');
+  }
+
   Future<void> signOut() async {
     try {
-      // 1. 구글 로그아웃 시도 (에러가 나도 무시하고 진행해야 함)
-      // 사용자 입장에서는 앱에서만 나가시면 되니까요.
       await _googleSignIn.signOut();
     } catch (e) {
       print("구글 로그아웃 중 에러 발생 (무시 가능): $e");
     }
-
-    // 2. Firebase 로그아웃 (이게 진짜 핵심)
     await _auth.signOut();
   }
 }

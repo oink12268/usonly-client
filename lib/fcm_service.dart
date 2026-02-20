@@ -1,7 +1,13 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
+
+bool get _isMobile => !kIsWeb && (
+  defaultTargetPlatform == TargetPlatform.android ||
+  defaultTargetPlatform == TargetPlatform.iOS
+);
 
 // 백그라운드 메시지 핸들러 (top-level 함수여야 함)
 @pragma('vm:entry-point')
@@ -19,6 +25,8 @@ class FcmService {
       FlutterLocalNotificationsPlugin();
 
   Future<void> initialize(int memberId) async {
+    if (!_isMobile) return; // Windows/Web에서는 FCM 스킵 (WebSocket으로 실시간 수신)
+
     // 1. 알림 권한 요청
     await _messaging.requestPermission(
       alert: true,

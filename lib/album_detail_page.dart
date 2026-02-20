@@ -59,7 +59,8 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
         request.fields['albumId'] = widget.albumId.toString();
         request.fields['userId'] = widget.memberId.toString();
         request.fields['type'] = 'IMAGE';
-        request.files.add(await http.MultipartFile.fromPath('file', image.path));
+        final bytes = await image.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: image.name));
 
         var response = await request.send();
 

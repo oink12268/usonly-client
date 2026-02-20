@@ -32,8 +32,15 @@ class LoginScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
               ),
               onPressed: () async {
-                // 로그인 시도 -> 성공하면 main.dart의 StreamBuilder가 감지해서 화면 전환
-                await AuthService().signInWithGoogle();
+                try {
+                  await AuthService().signInWithGoogle();
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('로그인 실패: $e')),
+                    );
+                  }
+                }
               },
             ),
           ],

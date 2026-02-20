@@ -271,7 +271,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         'POST',
         Uri.parse('${ApiConfig.baseUrl}/api/chat/image'),
       );
-      request.files.add(await http.MultipartFile.fromPath('file', image.path));
+      final bytes = await image.readAsBytes();
+      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: image.name));
 
       var response = await request.send();
       if (response.statusCode == 200) {

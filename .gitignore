@@ -49,5 +49,8 @@ android/app/google-services.json
 lib/firebase_options.dart
 firebase.json
 
+# Windows OAuth credentials
+lib/windows_oauth_config.dart
+
 # Build reports
 android/build/
