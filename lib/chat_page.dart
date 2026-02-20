@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'api_config.dart';
+import 'api_client.dart';
 
 class ChatPage extends StatefulWidget {
   final String uid; // 내 아이디
@@ -100,7 +101,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   Future<String> _getNickname(String uid) async {
     if (_nicknameCache.containsKey(uid)) return _nicknameCache[uid]!;
     try {
-      final response = await http.get(
+      final response = await ApiClient.get(
         Uri.parse('${ApiConfig.baseUrl}/api/members/nickname?providerId=$uid'),
       );
       if (response.statusCode == 200) {
@@ -117,7 +118,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   // --- [1] 지난 대화 로딩 (HTTP GET) ---
   Future<void> _fetchHistory() async {
     try {
-      final response = await http.get(Uri.parse(httpUrl));
+      final response = await ApiClient.get(Uri.parse(httpUrl));
       if (response.statusCode == 200) {
         final chats = jsonDecode(utf8.decode(response.bodyBytes)) as List;
         setState(() {
@@ -143,10 +144,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   // --- [2] 소켓 연결 및 구독 (WebSocket) ---
-  void _connectSocket() {
+  void _connectSocket() async {
+    final connectHeaders = await ApiClient.stompHeaders();
     stompClient = StompClient(
       config: StompConfig(
         url: socketUrl,
+        stompConnectHeaders: connectHeaders,
         onConnect: (StompFrame frame) {
           print("✅ 소켓 연결 성공!");
 
@@ -274,7 +277,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       final bytes = await image.readAsBytes();
       request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: image.name));
 
-      var response = await request.send();
+      var response = await ApiClient.sendMultipart(request);
       if (response.statusCode == 200) {
         final respBody = await response.stream.bytesToString();
         final data = jsonDecode(respBody);
@@ -366,7 +369,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Future<void> _deleteChat(dynamic chatId) async {
     try {
-      final response = await http.delete(
+      final response = await ApiClient.delete(
         Uri.parse('${ApiConfig.baseUrl}/api/chats/$chatId'),
       );
       if (response.statusCode != 200) {

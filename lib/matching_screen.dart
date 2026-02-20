@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // 클립보드 복사 기능용
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http; // 서버 통신용
 import 'dart:convert'; // JSON 처리용
 import 'auth_service.dart'; // 로그아웃용
+import 'api_client.dart';
 import 'home_screen.dart'; // 매칭 성공 시 이동할 화면
 import 'api_config.dart';
 
@@ -60,12 +60,10 @@ class _MatchingScreenState extends State<MatchingScreen> {
     try {
       // 2. 스프링 부트 서버로 요청 전송
       // (안드로이드 에뮬레이터 기준 localhost는 10.0.2.2 입니다)
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('${ApiConfig.baseUrl}/api/couples/connect'),
-        headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "email": widget.user.email, // 내 이메일 (누가 요청했는지 식별)
-          "code": partnerCode,        // 입력한 상대방 코드
+          "code": partnerCode,
         }),
       );
 

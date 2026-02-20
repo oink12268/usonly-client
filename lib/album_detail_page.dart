@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
 import 'api_config.dart';
+import 'api_client.dart';
 
 class AlbumDetailPage extends StatefulWidget {
   final int albumId;
@@ -28,8 +29,8 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   }
 
   Future<void> _fetchPhotos() async {
-    final response = await http.get(
-      Uri.parse('${ApiConfig.baseUrl}/api/archives/${widget.albumId}?userId=${widget.memberId}'),
+    final response = await ApiClient.get(
+      Uri.parse('${ApiConfig.baseUrl}/api/archives/${widget.albumId}'),
     );
     if (response.statusCode == 200) {
       final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -57,12 +58,11 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
         );
 
         request.fields['albumId'] = widget.albumId.toString();
-        request.fields['userId'] = widget.memberId.toString();
         request.fields['type'] = 'IMAGE';
         final bytes = await image.readAsBytes();
         request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: image.name));
 
-        var response = await request.send();
+        var response = await ApiClient.sendMultipart(request);
 
         if (response.statusCode == 200) {
           success++;
@@ -88,7 +88,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
 
   Future<void> _deleteMedia(int mediaId) async {
     try {
-      final response = await http.delete(
+      final response = await ApiClient.delete(
         Uri.parse('${ApiConfig.baseUrl}/api/archives/media/$mediaId'),
       );
       if (response.statusCode == 200) {

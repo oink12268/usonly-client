@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'api_config.dart';
+import 'api_client.dart';
 
 class CalendarPage extends StatefulWidget {
   final int memberId;
@@ -28,10 +28,10 @@ class _CalendarPageState extends State<CalendarPage> {
   Future<void> _fetchSchedules() async {
     setState(() => _isLoading = true);
     try {
-      final response = await http.get(
+      final response = await ApiClient.get(
         Uri.parse(
-          '${ApiConfig.baseUrl}/api/schedules?userId=${widget.memberId}'
-          '&year=${_focusedMonth.year}&month=${_focusedMonth.month}',
+          '${ApiConfig.baseUrl}/api/schedules'
+          '?year=${_focusedMonth.year}&month=${_focusedMonth.month}',
         ),
       );
       if (response.statusCode == 200) {
@@ -235,9 +235,8 @@ class _CalendarPageState extends State<CalendarPage> {
     final dateStr =
         "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}";
     try {
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/schedules?userId=${widget.memberId}'),
-        headers: {'Content-Type': 'application/json'},
+      final response = await ApiClient.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/schedules'),
         body: jsonEncode({
           'title': title,
           'memo': memo,
@@ -254,7 +253,7 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Future<void> _deleteSchedule(int id) async {
     try {
-      final response = await http.delete(
+      final response = await ApiClient.delete(
         Uri.parse('${ApiConfig.baseUrl}/api/schedules/$id'),
       );
       if (response.statusCode == 200) {

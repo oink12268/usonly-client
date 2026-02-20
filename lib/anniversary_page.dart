@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'api_config.dart';
+import 'api_client.dart';
 
 class AnniversaryPage extends StatefulWidget {
   final int memberId;
@@ -24,8 +24,8 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
 
   Future<void> _fetchAnniversaries() async {
     try {
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/anniversaries?userId=${widget.memberId}'),
+      final response = await ApiClient.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/anniversaries'),
       );
       if (response.statusCode == 200) {
         setState(() {
@@ -118,9 +118,8 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
     final dateStr =
         "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
     try {
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/anniversaries?userId=${widget.memberId}'),
-        headers: {'Content-Type': 'application/json'},
+      final response = await ApiClient.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/anniversaries'),
         body: jsonEncode({
           'title': title,
           'date': dateStr,
@@ -137,7 +136,7 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
 
   Future<void> _deleteAnniversary(int id) async {
     try {
-      final response = await http.delete(
+      final response = await ApiClient.delete(
         Uri.parse('${ApiConfig.baseUrl}/api/anniversaries/$id'),
       );
       if (response.statusCode == 200) {

@@ -1,8 +1,8 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:http/http.dart' as http;
 import 'api_config.dart';
+import 'api_client.dart';
 
 bool get _isMobile => !kIsWeb && (
   defaultTargetPlatform == TargetPlatform.android ||
@@ -24,7 +24,7 @@ class FcmService {
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
-  Future<void> initialize(int memberId) async {
+  Future<void> initialize() async {
     if (!_isMobile) return; // Windows/Web에서는 FCM 스킵 (WebSocket으로 실시간 수신)
 
     // 1. 알림 권한 요청
@@ -60,12 +60,12 @@ class FcmService {
     // 3. FCM 토큰 가져와서 서버에 전송
     String? token = await _messaging.getToken();
     if (token != null) {
-      await _sendTokenToServer(memberId, token);
+      await _sendTokenToServer(token);
     }
 
     // 토큰 갱신 시 자동 업데이트
     _messaging.onTokenRefresh.listen((newToken) {
-      _sendTokenToServer(memberId, newToken);
+      _sendTokenToServer(newToken);
     });
 
     // 4. 포그라운드 메시지 수신 → 로컬 알림 표시
@@ -95,10 +95,10 @@ class FcmService {
     });
   }
 
-  Future<void> _sendTokenToServer(int memberId, String token) async {
+  Future<void> _sendTokenToServer(String token) async {
     try {
-      await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/members/fcm-token?userId=$memberId&token=$token'),
+      await ApiClient.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/members/fcm-token?token=$token'),
       );
       print("FCM 토큰 서버 전송 완료");
     } catch (e) {

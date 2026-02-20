@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
-import 'album_detail_page.dart'; // 곧 만들 상세 페이지
+import 'album_detail_page.dart';
 import 'api_config.dart';
+import 'api_client.dart';
 
 class AlbumPage extends StatefulWidget {
   final int memberId; // 우리 서버의 pk (member 테이블의 id)
@@ -27,9 +27,8 @@ class _AlbumPageState extends State<AlbumPage> {
   // 서버에서 앨범 목록 가져오기 (우리 커플 것만)
   Future<void> _fetchAlbums() async {
     try {
-      final response = await http.get(
-        // userId를 쿼리 파라미터로 넘겨서 서버가 내 커플 정보를 찾게 함
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/albums?userId=${widget.memberId}'),
+      final response = await ApiClient.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/archives/albums'),
       );
 
       if (response.statusCode == 200) {
@@ -190,7 +189,7 @@ class _AlbumPageState extends State<AlbumPage> {
 
   Future<void> _renameAlbum(int albumId, String title) async {
     try {
-      final response = await http.put(
+      final response = await ApiClient.put(
         Uri.parse('${ApiConfig.baseUrl}/api/archives/$albumId?title=${Uri.encodeComponent(title)}'),
       );
       if (response.statusCode == 200) {
@@ -225,7 +224,7 @@ class _AlbumPageState extends State<AlbumPage> {
 
   Future<void> _deleteAlbum(int albumId) async {
     try {
-      final response = await http.delete(
+      final response = await ApiClient.delete(
         Uri.parse('${ApiConfig.baseUrl}/api/archives/$albumId'),
       );
       if (response.statusCode == 200) {
@@ -265,8 +264,8 @@ class _AlbumPageState extends State<AlbumPage> {
 
   // 서버에 앨범 생성 요청
   Future<void> _createAlbum(String title) async {
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/archives/create?title=$title&userId=${widget.memberId}'),
+    final response = await ApiClient.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/archives/create?title=$title'),
     );
     if (response.statusCode == 200) {
       _fetchAlbums(); // 목록 새로고침

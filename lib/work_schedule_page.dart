@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:typed_data';
 import 'api_config.dart';
+import 'api_client.dart';
 
 class WorkSchedulePage extends StatefulWidget {
   final String? nickname;
@@ -114,7 +115,7 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
         ),
       );
 
-      var response = await request.send();
+      var response = await ApiClient.sendMultipart(request);
       var responseBody = await response.stream.bytesToString();
 
       if (response.statusCode == 200) {

@@ -3,9 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'auth_service.dart';
+import 'api_client.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 import 'matching_screen.dart';
@@ -99,9 +99,8 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
   // 스프링 서버에 "나 누구야" 하고 물어보는 함수
   Future<void> _checkBackendStatus() async {
     try {
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('${ApiConfig.baseUrl}/api/auth/login'),
-        headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.user.email,
           "nickname": widget.user.displayName ?? "이름없음",
@@ -122,8 +121,8 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
           _isLoading = false;
         });
 
-        // FCM 초기화 (서버에서 memberId 받은 후)
-        FcmService().initialize(_serverMemberId);
+        // FCM 초기화
+        FcmService().initialize();
       } else {
         print("서버 에러: ${response.statusCode} / ${response.body}");
         if (mounted) {
