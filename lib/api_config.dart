@@ -6,11 +6,11 @@ class ApiConfig {
   // static const String _host = '15.164.123.38';  // EC2
   // static const String _host = '192.168.0.13';   // 개발 PC
   // static const String _host = '192.168.0.16';   // 서버 PC (내부)
-  static const String _host = 'usonly.iptime.org';  // DDNS (어디서든 접속)
+  static const String _host = 'usonly.duckdns.org';  // DDNS (어디서든 접속)
   static const int _port = 30080;  // 로컬: 8080, 서버: 30080
 
   static String get baseUrl =>
-      kIsWeb ? 'http://localhost:$_port' : 'http://$_host:$_port';
+      kIsWeb ? 'http://localhost:$_port' : 'https://$_host:$_port';
 
   static String get wsUrl =>
       kIsWeb ? 'ws://localhost:$_port/ws' : 'ws://$_host:$_port/ws';

@@ -38,6 +38,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   Timer? _typingTimer;
   Timer? _partnerTypingTimer;
 
+  // 페이지네이션 상태
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+
   // 검색 관련 상태
   bool _isSearching = false;
   String _searchQuery = '';
@@ -59,6 +63,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _fetchHistory();
     // 2. 소켓 연결 시작 (전화기 들기)
     _connectSocket();
+
+    _scrollController.addListener(_onScroll);
 
     _focusNode.addListener(() {
       setState(() {}); // 포커스 변경 시 하트 아이콘 토글
@@ -115,31 +121,84 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     return uid.substring(0, 4);
   }
 
-  // --- [1] 지난 대화 로딩 (HTTP GET) ---
+  // 스크롤 맨 위 도달 시 이전 메시지 추가 로드
+  void _onScroll() {
+    if (_scrollController.position.pixels <= 0 && _hasMore && !_isLoadingMore) {
+      _loadMore();
+    }
+  }
+
+  // --- [1] 지난 대화 로딩 (HTTP GET, 최신 50개) ---
   Future<void> _fetchHistory() async {
     try {
-      final response = await ApiClient.get(Uri.parse(httpUrl));
+      final response = await ApiClient.get(Uri.parse('$httpUrl?size=50'));
       if (response.statusCode == 200) {
         final chats = jsonDecode(utf8.decode(response.bodyBytes)) as List;
         setState(() {
           _chats = chats;
+          _hasMore = chats.length >= 50;
         });
 
-        // 상대방 닉네임 미리 조회
+        // 상대방 닉네임 병렬 조회
         final partnerUids = chats
             .map((c) => c['writerUid']?.toString() ?? '')
             .where((uid) => uid.isNotEmpty && uid != widget.uid)
             .toSet();
-        for (final uid in partnerUids) {
-          await _getNickname(uid);
+        if (partnerUids.isNotEmpty) {
+          await Future.wait(partnerUids.map((uid) => _getNickname(uid)));
+          setState(() {});
         }
-        if (partnerUids.isNotEmpty) setState(() {});
 
         // 로딩 끝나면 스크롤 맨 아래로
         _scrollToBottom();
       }
     } catch (e) {
       print("❌ 지난 대화 로딩 실패: $e");
+    }
+  }
+
+  // 이전 메시지 추가 로드 (스크롤 위로 올릴 때)
+  Future<void> _loadMore() async {
+    if (_chats.isEmpty) return;
+    final firstId = _chats.first['id'];
+    if (firstId == null) return;
+
+    setState(() => _isLoadingMore = true);
+    try {
+      final response = await ApiClient.get(
+        Uri.parse('$httpUrl?before=$firstId&size=50'),
+      );
+      if (response.statusCode == 200) {
+        final older = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+
+        // 새로 로드한 메시지의 닉네임 병렬 조회
+        final partnerUids = older
+            .map((c) => c['writerUid']?.toString() ?? '')
+            .where((uid) => uid.isNotEmpty && uid != widget.uid && !_nicknameCache.containsKey(uid))
+            .toSet();
+        if (partnerUids.isNotEmpty) {
+          await Future.wait(partnerUids.map((uid) => _getNickname(uid)));
+        }
+
+        // 현재 스크롤 위치 기억 후 맨 위에 삽입
+        final prevMax = _scrollController.position.maxScrollExtent;
+        setState(() {
+          _chats = [...older, ..._chats];
+          _hasMore = older.length >= 50;
+        });
+
+        // 삽입 후 스크롤 위치 보정 (점프 방지)
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            final newMax = _scrollController.position.maxScrollExtent;
+            _scrollController.jumpTo(newMax - prevMax);
+          }
+        });
+      }
+    } catch (e) {
+      print("❌ 이전 메시지 로딩 실패: $e");
+    } finally {
+      setState(() => _isLoadingMore = false);
     }
   }
 
@@ -265,7 +324,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Future<void> _pickAndUploadImage() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 30, maxWidth: 800);
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 30, maxWidth: 400);
     if (image == null) return;
 
     setState(() => _isUploadingImage = true);
@@ -568,19 +627,27 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             child: ListView.builder(
             controller: _scrollController,
             padding: const EdgeInsets.all(16),
-            itemCount: _chats.length,
+            itemCount: _chats.length + (_isLoadingMore ? 1 : 0),
             itemBuilder: (context, index) {
-              final chat = _chats[index];
+              // 맨 위 로딩 인디케이터
+              if (_isLoadingMore && index == 0) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74))),
+                );
+              }
+              final chatIndex = _isLoadingMore ? index - 1 : index;
+              final chat = _chats[chatIndex];
               final message = chat['message'] as String;
               final String? createdAt = chat['created_at'] ?? chat['createdAt'];
               final isMe = chat['writerUid'] == widget.uid;
 
               // ★ 날짜 구분선 표시 여부 판단
               bool showDateDivider = false;
-              if (index == 0) {
+              if (chatIndex == 0) {
                 showDateDivider = true;
               } else {
-                final prevChat = _chats[index - 1];
+                final prevChat = _chats[chatIndex - 1];
                 final prevDate = prevChat['created_at'] ?? prevChat['createdAt'];
                 showDateDivider = !_isSameDate(createdAt, prevDate);
               }
@@ -590,10 +657,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               final String content = isImage ? message.replaceFirst('IMAGE:', '') : message;
 
               // 검색 매치 여부
-              final bool isSearchMatch = _isSearching && _searchMatchIndices.contains(index);
+              final bool isSearchMatch = _isSearching && _searchMatchIndices.contains(chatIndex);
               final bool isCurrentMatch = isSearchMatch && _currentMatchIndex >= 0 &&
                   _currentMatchIndex < _searchMatchIndices.length &&
-                  _searchMatchIndices[_currentMatchIndex] == index;
+                  _searchMatchIndices[_currentMatchIndex] == chatIndex;
 
               // 답장 정보
               final hasReply = chat['replyToId'] != null;
@@ -729,6 +796,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                       child: CachedNetworkImage(
                                         imageUrl: content,
                                         width: 200,
+                                        height: 200,
                                         fit: BoxFit.cover,
                                         memCacheWidth: 300,
                                         placeholder: (context, url) => Container(
