@@ -130,19 +130,35 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           if (xFile == null) return;
 
           final selection = editorState.selection;
-          final insertPath = selection != null
+          final imagePath = selection != null
               ? selection.end.path.next
               : [editorState.document.root.children.length];
+          final paraPath = imagePath.next;
 
           final txn = editorState.transaction;
           txn.insertNode(
-            insertPath,
+            imagePath,
             Node(
               type: ImageBlockKeys.type,
               attributes: {ImageBlockKeys.url: xFile.path},
             ),
           );
+          // 이미지 아래에 빈 단락 삽입 후 커서 이동
+          txn.insertNode(paraPath, paragraphNode());
+          txn.afterSelection = Selection.collapsed(
+            Position(path: paraPath, offset: 0),
+          );
           await editorState.apply(txn);
+
+          // 갤러리에서 돌아온 후 키보드 재활성화
+          await Future.delayed(const Duration(milliseconds: 100));
+          final newSel = editorState.selection;
+          if (newSel != null) {
+            await editorState.updateSelectionWithReason(
+              newSel,
+              reason: SelectionUpdateReason.uiEvent,
+            );
+          }
         },
       );
 

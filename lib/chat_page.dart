@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'api_config.dart';
 import 'api_client.dart';
+import 'fcm_service.dart';
 
 class ChatPage extends StatefulWidget {
   final String uid; // 내 아이디
@@ -33,8 +34,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   Map<String, dynamic>? _replyTarget;
   bool _isUploadingImage = false;
 
-  // 타이핑 인디케이터 상태
-  bool _partnerTyping = false;
+  // 타이핑 인디케이터 상태 (ValueNotifier: setState 없이 해당 위젯만 업데이트 → 키보드 유지)
+  final ValueNotifier<bool> _partnerTypingNotifier = ValueNotifier(false);
   Timer? _typingTimer;
   Timer? _partnerTypingTimer;
 
@@ -59,6 +60,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 채팅 화면 진입: 포그라운드 알림 억제 + 기존 알림/배지 소거
+    FcmService().setChatActive(true);
+    FcmService().clearChatNotifications();
     // 1. 방에 들어오자마자 지난 대화 기록 가져오기 (HTTP)
     _fetchHistory();
     // 2. 소켓 연결 시작 (전화기 들기)
@@ -85,6 +89,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // 채팅 화면으로 복귀: 알림/배지 소거
+      FcmService().clearChatNotifications();
       _fetchHistory();
       // 기존 소켓 끊고 재연결
       stompClient?.deactivate();
@@ -96,10 +102,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // 채팅 화면 이탈: 포그라운드 알림 억제 해제
+    FcmService().setChatActive(false);
     // 방 나가면 소켓 끊기 (필수)
     stompClient?.deactivate();
     _typingTimer?.cancel();
     _partnerTypingTimer?.cancel();
+    _partnerTypingNotifier.dispose();
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -218,11 +227,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               if (frame.body != null) {
                 final data = jsonDecode(frame.body!);
                 if (data['writerUid'] != widget.uid) {
-                  setState(() => _partnerTyping = data['typing'] == true);
+                  // setState 대신 notifier만 업데이트 → 전체 리빌드 없음 → 키보드 유지
+                  _partnerTypingNotifier.value = data['typing'] == true;
                   _partnerTypingTimer?.cancel();
                   if (data['typing'] == true) {
                     _partnerTypingTimer = Timer(const Duration(seconds: 3), () {
-                      setState(() => _partnerTyping = false);
+                      _partnerTypingNotifier.value = false;
                     });
                   }
                 }
@@ -859,15 +869,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           ),
         ),
 
-        // 상대방 입력 중 표시
-        if (_partnerTyping)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text("입력 중...", style: TextStyle(fontSize: 12, color: Colors.grey)),
-            ),
-          ),
+        // 상대방 입력 중 표시 (ValueListenableBuilder: 전체 리빌드 없이 이 위젯만 업데이트)
+        ValueListenableBuilder<bool>(
+          valueListenable: _partnerTypingNotifier,
+          builder: (context, isTyping, _) {
+            if (!isTyping) return const SizedBox.shrink();
+            return const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text("입력 중...", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ),
+            );
+          },
+        ),
 
         // 사진 업로드 중 표시
         if (_isUploadingImage)

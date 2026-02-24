@@ -24,6 +24,31 @@ class FcmService {
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
+  // 채팅 화면이 열려 있을 때 포그라운드 FCM 알림 억제
+  bool _isChatActive = false;
+  void setChatActive(bool active) => _isChatActive = active;
+
+  // 채팅 읽음 처리: 알림 영역 + 앱 아이콘 배지 초기화
+  Future<void> clearChatNotifications() async {
+    if (!_isMobile) return;
+    // 알림 영역에서 채팅 알림 제거 (Android: 배지도 함께 제거됨)
+    await _localNotifications.cancelAll();
+    // iOS: 별도로 배지 카운트 0으로 초기화
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      await _localNotifications.show(
+        0, null, null,
+        const NotificationDetails(
+          iOS: DarwinNotificationDetails(
+            badgeNumber: 0,
+            presentAlert: false,
+            presentBadge: true,
+            presentSound: false,
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> initialize() async {
     if (!_isMobile) return; // Windows/Web에서는 FCM 스킵 (WebSocket으로 실시간 수신)
 
@@ -75,8 +100,9 @@ class FcmService {
       _sendTokenToServer(newToken);
     });
 
-    // 4. 포그라운드 메시지 수신 → 로컬 알림 표시
+    // 4. 포그라운드 메시지 수신 → 채팅 화면이 열려 있으면 알림 억제
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (_isChatActive) return; // 채팅 화면 중이면 알림 표시 안 함
       final notification = message.notification;
       if (notification != null) {
         _localNotifications.show(
