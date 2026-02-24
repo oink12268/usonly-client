@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>메모에 사진을 첨부하기 위해 사진 라이브러리 접근이 필요합니다.</string>
 </dict>
 </plist>

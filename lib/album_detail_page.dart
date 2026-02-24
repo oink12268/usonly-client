@@ -163,18 +163,18 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
               ),
               itemCount: _photos.length,
               itemBuilder: (context, index) {
+                // 그리드: 썸네일 사용 (없으면 원본으로 폴백)
+                final thumbUrl = _photos[index]['thumbnailUrl'] as String?
+                    ?? _photos[index]['mediaUrl'] as String;
                 return GestureDetector(
                   onTap: () => _openPhotoViewer(index),
                   onLongPress: () => _showDeleteDialog(_photos[index]),
                   child: CachedNetworkImage(
-                    imageUrl: _photos[index]['mediaUrl'],
+                    imageUrl: thumbUrl,
                     fit: BoxFit.cover,
                     memCacheWidth: 300,
                     maxWidthDiskCache: 300,
-                    placeholder: (context, url) => Container(
-                      color: Colors.grey[200],
-                      child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                    ),
+                    placeholder: (context, url) => Container(color: Colors.grey[200]),
                     errorWidget: (context, url, error) => Container(
                       color: Colors.grey[200],
                       child: const Icon(Icons.broken_image, color: Colors.grey),

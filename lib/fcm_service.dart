@@ -52,10 +52,17 @@ class FcmService {
       playSound: true,
       enableVibration: true,
     );
-    await _localNotifications
+    const anniversaryChannel = AndroidNotificationChannel(
+      'anniversary_channel',
+      '기념일 알림',
+      description: '기념일 D-7, D-1 알림',
+      importance: Importance.high,
+    );
+    final androidPlugin = _localNotifications
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(androidChannel);
+            AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.createNotificationChannel(androidChannel);
+    await androidPlugin?.createNotificationChannel(anniversaryChannel);
 
     // 3. FCM 토큰 가져와서 서버에 전송
     String? token = await _messaging.getToken();

@@ -161,9 +161,8 @@ class _AlbumPageState extends State<AlbumPage> {
                         width: double.infinity,
                         height: double.infinity,
                         memCacheWidth: 300,
-                        placeholder: (context, url) => const Center(
-                          child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74))),
-                        ),
+                        maxWidthDiskCache: 300,
+                        placeholder: (context, url) => Container(color: Colors.grey[100]),
                         errorWidget: (context, url, error) => const Center(child: Icon(Icons.error, color: Colors.grey)),
                       ),
                     )

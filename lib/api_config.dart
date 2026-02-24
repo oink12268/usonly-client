@@ -7,11 +7,11 @@ class ApiConfig {
   // static const String _host = '192.168.0.13';   // 개발 PC
   // static const String _host = '192.168.0.16';   // 서버 PC (내부)
   static const String _host = 'usonly.duckdns.org';  // DDNS (어디서든 접속)
-  static const int _port = 30080;  // 로컬: 8080, 서버: 30080
+  static const int _port = 8080;  // 로컬: 8080, 서버: 30080
 
   static String get baseUrl =>
-      kIsWeb ? 'http://localhost:$_port' : 'https://$_host:$_port';
+      kIsWeb ? 'http://localhost:$_port' : 'https://$_host';
 
   static String get wsUrl =>
-      kIsWeb ? 'ws://localhost:$_port/ws' : 'ws://$_host:$_port/ws';
+      kIsWeb ? 'ws://localhost:$_port/ws' : 'wss://$_host/ws';
 }

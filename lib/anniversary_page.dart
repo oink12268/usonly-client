@@ -46,52 +46,92 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
     final titleController = TextEditingController();
     DateTime selectedDate = DateTime.now();
     bool recurring = true;
+    bool isLunar = false;
+    int lunarMonth = 1;
+    int lunarDay = 1;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text("기념일 추가"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(
-                  hintText: "기념일 이름 (예: 100일, 생일)",
-                  border: OutlineInputBorder(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    hintText: "기념일 이름 (예: 100일, 생일)",
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.calendar_today, color: const Color(0xFF8B7E74)),
-                title: Text(
-                  "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}",
+                const SizedBox(height: 12),
+                // 음력 토글
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text("음력 날짜"),
+                  activeColor: const Color(0xFF8B7E74),
+                  value: isLunar,
+                  onChanged: (val) => setDialogState(() => isLunar = val),
                 ),
-                trailing: TextButton(
-                  onPressed: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: selectedDate,
-                      firstDate: DateTime(1900),
-                      lastDate: DateTime(2100),
-                    );
-                    if (picked != null) {
-                      setDialogState(() => selectedDate = picked);
-                    }
-                  },
-                  child: const Text("날짜 선택", style: TextStyle(color: const Color(0xFF8B7E74))),
+                if (!isLunar) ...[
+                  // 양력: 날짜 피커
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.calendar_today, color: Color(0xFF8B7E74)),
+                    title: Text(
+                      "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}",
+                    ),
+                    trailing: TextButton(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(1900),
+                          lastDate: DateTime(2100),
+                        );
+                        if (picked != null) {
+                          setDialogState(() => selectedDate = picked);
+                        }
+                      },
+                      child: const Text("날짜 선택", style: TextStyle(color: Color(0xFF8B7E74))),
+                    ),
+                  ),
+                ] else ...[
+                  // 음력: 월/일 드롭다운
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_month, color: Color(0xFF8B7E74), size: 20),
+                      const SizedBox(width: 8),
+                      const Text("음력 ", style: TextStyle(fontSize: 14)),
+                      DropdownButton<int>(
+                        value: lunarMonth,
+                        items: List.generate(12, (i) => i + 1)
+                            .map((m) => DropdownMenuItem(value: m, child: Text("$m월")))
+                            .toList(),
+                        onChanged: (v) => setDialogState(() => lunarMonth = v!),
+                      ),
+                      const SizedBox(width: 8),
+                      DropdownButton<int>(
+                        value: lunarDay,
+                        items: List.generate(30, (i) => i + 1)
+                            .map((d) => DropdownMenuItem(value: d, child: Text("$d일")))
+                            .toList(),
+                        onChanged: (v) => setDialogState(() => lunarDay = v!),
+                      ),
+                    ],
+                  ),
+                ],
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text("매년 반복"),
+                  activeColor: const Color(0xFF8B7E74),
+                  value: recurring,
+                  onChanged: (val) => setDialogState(() => recurring = val),
                 ),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text("매년 반복"),
-                activeColor: const Color(0xFF8B7E74),
-                value: recurring,
-                onChanged: (val) => setDialogState(() => recurring = val),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -102,7 +142,14 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B7E74)),
               onPressed: () async {
                 if (titleController.text.isNotEmpty) {
-                  await _createAnniversary(titleController.text, selectedDate, recurring);
+                  await _createAnniversary(
+                    titleController.text,
+                    selectedDate,
+                    recurring,
+                    isLunar: isLunar,
+                    lunarMonth: isLunar ? lunarMonth : null,
+                    lunarDay: isLunar ? lunarDay : null,
+                  );
                   Navigator.pop(context);
                 }
               },
@@ -114,17 +161,33 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
     );
   }
 
-  Future<void> _createAnniversary(String title, DateTime date, bool recurring) async {
+  Future<void> _createAnniversary(
+    String title,
+    DateTime date,
+    bool recurring, {
+    bool isLunar = false,
+    int? lunarMonth,
+    int? lunarDay,
+  }) async {
     final dateStr =
         "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+    final body = <String, dynamic>{
+      'title': title,
+      'recurring': recurring,
+      'lunar': isLunar,
+    };
+
+    if (isLunar) {
+      body['lunarMonth'] = lunarMonth;
+      body['lunarDay'] = lunarDay;
+    } else {
+      body['date'] = dateStr;
+    }
+
     try {
       final response = await ApiClient.post(
         Uri.parse('${ApiConfig.baseUrl}/api/anniversaries'),
-        body: jsonEncode({
-          'title': title,
-          'date': dateStr,
-          'recurring': recurring,
-        }),
+        body: jsonEncode(body),
       );
       if (response.statusCode == 200) {
         _fetchAnniversaries();
@@ -186,6 +249,10 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
   }
 
   Widget _buildAnniversaryCard(dynamic item, int dday) {
+    final bool isLunar = item['lunar'] == true;
+    final int? lunarMonth = item['lunarMonth'];
+    final int? lunarDay = item['lunarDay'];
+
     return Dismissible(
       key: Key(item['id'].toString()),
       direction: DismissDirection.endToStart,
@@ -254,6 +321,14 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                     item['date'] ?? "",
                     style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
+                  // 음력 표시
+                  if (isLunar && lunarMonth != null && lunarDay != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      "(음력 $lunarMonth월 $lunarDay일)",
+                      style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -68,11 +68,15 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
     _focusNode.addListener(() {
       setState(() {}); // 포커스 변경 시 하트 아이콘 토글
-      if (_focusNode.hasFocus) {
-        Future.delayed(
-          const Duration(milliseconds: 300),
-          () => _scrollToBottom(),
-        );
+    });
+  }
+
+  // 키보드 올라올 때 스크롤 보정 (300ms 딜레이보다 신뢰성 높음)
+  @override
+  void didChangeMetrics() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _focusNode.hasFocus) {
+        _scrollToBottom();
       }
     });
   }
@@ -122,8 +126,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   // 스크롤 맨 위 도달 시 이전 메시지 추가 로드
+  // (reverse: true 이므로 pixels가 maxScrollExtent에 가까울 때 = 화면 맨 위)
   void _onScroll() {
-    if (_scrollController.position.pixels <= 0 && _hasMore && !_isLoadingMore) {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50 &&
+        _hasMore &&
+        !_isLoadingMore) {
       _loadMore();
     }
   }
@@ -180,19 +187,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           await Future.wait(partnerUids.map((uid) => _getNickname(uid)));
         }
 
-        // 현재 스크롤 위치 기억 후 맨 위에 삽입
-        final prevMax = _scrollController.position.maxScrollExtent;
+        // reverse: true ListView에서는 앞에 아이템 추가 시 기존 아이템의
+        // 시각적 위치가 변하지 않으므로 스크롤 보정 불필요
         setState(() {
           _chats = [...older, ..._chats];
           _hasMore = older.length >= 50;
-        });
-
-        // 삽입 후 스크롤 위치 보정 (점프 방지)
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            final newMax = _scrollController.position.maxScrollExtent;
-            _scrollController.jumpTo(newMax - prevMax);
-          }
         });
       }
     } catch (e) {
@@ -507,8 +506,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   void _jumpToMatch(int matchIndex) {
     if (matchIndex < 0 || matchIndex >= _searchMatchIndices.length) return;
     final chatIndex = _searchMatchIndices[matchIndex];
-    // 대략적인 아이템 높이로 스크롤 위치 추정
-    final estimatedOffset = chatIndex * 80.0;
+    // reverse: true → visual index = _chats.length - 1 - chatIndex (bottom 기준)
+    final estimatedOffset = (_chats.length - 1 - chatIndex) * 80.0;
     final maxScroll = _scrollController.position.maxScrollExtent;
     _scrollController.animateTo(
       estimatedOffset.clamp(0.0, maxScroll),
@@ -534,10 +533,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   // 스크롤 맨 아래로 내리는 함수
+  // (reverse: true 이므로 pixels == 0 이 맨 아래 = 최신 메시지)
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        _scrollController.jumpTo(0);
       }
     });
   }
@@ -626,17 +626,19 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             onLongPress: _startSearch,
             child: ListView.builder(
             controller: _scrollController,
+            reverse: true, // 최신 메시지(index 0)가 맨 아래에 표시됨
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
             itemCount: _chats.length + (_isLoadingMore ? 1 : 0),
             itemBuilder: (context, index) {
-              // 맨 위 로딩 인디케이터
-              if (_isLoadingMore && index == 0) {
+              // 맨 위 로딩 인디케이터 (reverse이므로 가장 높은 index = 화면 맨 위)
+              if (_isLoadingMore && index == _chats.length) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74))),
                 );
               }
-              final chatIndex = _isLoadingMore ? index - 1 : index;
+              // reverse: true → index 0 = 최신(_chats.last), index n = 오래된(_chats.first)
+              final chatIndex = _chats.length - 1 - index;
               final chat = _chats[chatIndex];
               final message = chat['message'] as String;
               final String? createdAt = chat['created_at'] ?? chat['createdAt'];
