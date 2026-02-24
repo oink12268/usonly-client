@@ -567,7 +567,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             onLongPress: _startSearch,
             child: ListView.builder(
             controller: _scrollController,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
             itemCount: _chats.length,
             itemBuilder: (context, index) {
               final chat = _chats[index];
@@ -637,7 +637,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     child: GestureDetector(
                       onLongPress: () => _showMessageOptions(chat),
                       child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
                       child: Row(
                         mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
                         crossAxisAlignment: CrossAxisAlignment.end,

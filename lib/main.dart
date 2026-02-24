@@ -38,6 +38,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'UsOnly',
       theme: ThemeData(
+        fontFamily: 'Pretendard',
         primaryColor: const Color(0xFF8B7E74),
         scaffoldBackgroundColor: const Color(0xFFFAF8F5),
         appBarTheme: const AppBarTheme(
@@ -88,6 +89,7 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
   bool _isLoading = true;
   bool _isCouple = false;
   int _serverMemberId = -1;
+  int? _coupleId;
   String _myCode = "";
 
   @override
@@ -118,6 +120,7 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
           _myCode = data['invitationCode'] ?? "CODE_ERR";
           _isCouple = data['coupleId'] != null; // 커플 ID가 있으면 커플임
           _serverMemberId = data['memberId'];
+          _coupleId = data['coupleId']?.toInt();
           _isLoading = false;
         });
 
@@ -151,7 +154,7 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
 
     // 커플이면 홈으로, 아니면 매칭(초대코드) 화면으로
     if (_isCouple) {
-      return HomeScreen(user: widget.user, memberId: _serverMemberId);
+      return HomeScreen(user: widget.user, memberId: _serverMemberId, coupleId: _coupleId);
     } else {
       return MatchingScreen(user: widget.user, myCode: _myCode);
     }
