@@ -17,29 +17,72 @@ class AlbumPage extends StatefulWidget {
 class _AlbumPageState extends State<AlbumPage> {
   List<dynamic> _albums = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _currentPage = 0;
+  static const int _pageSize = 12;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _fetchAlbums();
+    _scrollController.addListener(_onScroll);
   }
 
-  // 서버에서 앨범 목록 가져오기 (우리 커플 것만)
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200
+        && _hasMore && !_isLoadingMore) {
+      _loadMore();
+    }
+  }
+
+  // 서버에서 앨범 목록 가져오기 (첫 페이지)
   Future<void> _fetchAlbums() async {
+    _currentPage = 0;
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/albums'),
+        Uri.parse('${ApiConfig.baseUrl}/api/archives/albums?page=0&size=$_pageSize'),
       );
-
       if (response.statusCode == 200) {
+        final albums = jsonDecode(utf8.decode(response.bodyBytes)) as List;
         setState(() {
-          _albums = jsonDecode(utf8.decode(response.bodyBytes));
+          _albums = albums;
+          _hasMore = albums.length >= _pageSize;
           _isLoading = false;
         });
       }
     } catch (e) {
       print("앨범 로딩 에러: $e");
       setState(() => _isLoading = false);
+    }
+  }
+
+  // 다음 페이지 로드
+  Future<void> _loadMore() async {
+    setState(() => _isLoadingMore = true);
+    _currentPage++;
+    try {
+      final response = await ApiClient.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/archives/albums?page=$_currentPage&size=$_pageSize'),
+      );
+      if (response.statusCode == 200) {
+        final more = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        setState(() {
+          _albums = [..._albums, ...more];
+          _hasMore = more.length >= _pageSize;
+        });
+      }
+    } catch (e) {
+      print("앨범 추가 로딩 에러: $e");
+    } finally {
+      setState(() => _isLoadingMore = false);
     }
   }
 
@@ -51,20 +94,31 @@ class _AlbumPageState extends State<AlbumPage> {
       backgroundColor: Colors.white,
       body: _albums.isEmpty
           ? const Center(child: Text("우리의 첫 번째 앨범을 만들어보세요!"))
-          : GridView.builder(
-              padding: const EdgeInsets.all(12),
-              // ★ 2열(2x무한) 격자 설정
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,         // 가로 갯수
-                crossAxisSpacing: 12,      // 가로 간격
-                mainAxisSpacing: 12,       // 세로 간격
-                childAspectRatio: 0.85,    // 카드 높이 조절
-              ),
-              itemCount: _albums.length,
-              itemBuilder: (context, index) {
-                final album = _albums[index];
-                return _buildAlbumCard(album);
-              },
+          : Column(
+              children: [
+                Expanded(
+                  child: GridView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(12),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.85,
+                    ),
+                    itemCount: _albums.length,
+                    itemBuilder: (context, index) {
+                      final album = _albums[index];
+                      return _buildAlbumCard(album);
+                    },
+                  ),
+                ),
+                if (_isLoadingMore)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74)),
+                  ),
+              ],
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showCreateAlbumDialog,
