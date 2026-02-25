@@ -50,11 +50,10 @@ _pages = [
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: null,
-      // false: Scaffold가 키보드 높이만큼 직접 리사이즈하지 않음
-      // → 삼성 키보드 adjustResize 두 단계(본체+제안바) 에 의한 "뚜뚝" 이중 점프 방지
-      // 각 페이지에서 MediaQuery.viewInsets.bottom 으로 패딩 직접 처리
-      resizeToAvoidBottomInset: false,
-      body: SafeArea(child: _pages[_selectedIndex]),
+      // bottom: false → BottomNavigationBar가 이미 하단 여백 처리함
+      // SafeArea의 bottom padding이 키보드 등장 시 동적으로 0이 되면서
+      // 입력창이 키보드 위에 붙은 직후 한 번 더 올라가는 2차 점프 원인
+      body: SafeArea(bottom: false, child: _pages[_selectedIndex]),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,

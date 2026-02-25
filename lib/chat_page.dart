@@ -945,12 +945,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
         // 입력창 영역
         Padding(
-          // viewInsets.bottom: 키보드 높이. Scaffold가 직접 리사이즈하지 않으므로
-          // 여기서 직접 키보드 위로 입력창을 밀어 올림 (삼성 이중 점프 방지)
-          padding: EdgeInsets.only(
-            left: 16, right: 16, top: 16,
-            bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-          ),
+          padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
               IconButton(
@@ -966,11 +961,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     focusNode: _focusNode,
                     decoration: InputDecoration(
                       hintText: "",
-                      // Opacity(0)으로 layout은 유지하면서 아이콘만 숨김 → 레이아웃 shift 없음
-                      prefixIcon: Opacity(
-                        opacity: hasFocus ? 0.0 : 1.0,
-                        child: Icon(Icons.favorite, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
-                      ),
+                      prefixIcon: hasFocus
+                          ? null
+                          : const Icon(Icons.favorite, color: Colors.grey, size: 20),
                       filled: true,
                       fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       border: OutlineInputBorder(
