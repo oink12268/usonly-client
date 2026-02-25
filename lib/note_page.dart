@@ -199,7 +199,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: const BorderSide(color: Color(0xFFEDE8E3)),
+                          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                         ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(
@@ -228,8 +228,8 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                                   note['content'],
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.grey, fontSize: 13),
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
                                 )
                               : null,
                           trailing: Column(
@@ -238,8 +238,8 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                             children: [
                               Text(
                                 _formatDate(note['updatedAt']),
-                                style: const TextStyle(
-                                  fontSize: 11, color: Colors.grey),
+                                style: TextStyle(
+                                  fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                               ),
                               if (note['lastEditedByNickname'] != null) ...[
                                 const SizedBox(height: 2),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_service.dart';
+import 'font_size_notifier.dart';
+import 'theme_notifier.dart';
 import 'chat_page.dart'; // ★ ChatPage 파일이 있어야 에러가 안 납니다!
 import 'album_page.dart';
 import 'anniversary_page.dart';
@@ -48,6 +50,10 @@ _pages = [
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: null,
+      // false: Scaffold가 키보드 높이만큼 직접 리사이즈하지 않음
+      // → 삼성 키보드 adjustResize 두 단계(본체+제안바) 에 의한 "뚜뚝" 이중 점프 방지
+      // 각 페이지에서 MediaQuery.viewInsets.bottom 으로 패딩 직접 처리
+      resizeToAvoidBottomInset: false,
       body: SafeArea(child: _pages[_selectedIndex]),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
@@ -75,7 +81,9 @@ class _MorePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    return ListenableBuilder(
+      listenable: Listenable.merge([fontSizeNotifier, themeNotifier]),
+      builder: (context, _) => SafeArea(
       child: ListView(
         children: [
           const SizedBox(height: 20),
@@ -94,7 +102,7 @@ class _MorePage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(user?.displayName ?? '테스트 유저', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text(user?.email ?? '', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                    Text(user?.email ?? '', style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ],
                 ),
               ],
@@ -130,6 +138,50 @@ class _MorePage extends StatelessWidget {
             },
           ),
           const Divider(height: 20),
+          // 다크모드
+          SwitchListTile(
+            secondary: const Icon(Icons.dark_mode_outlined, color: Color(0xFF8B7E74)),
+            title: const Text('다크모드', style: TextStyle(color: Color(0xFF8B7E74))),
+            value: themeNotifier.isDark,
+            activeColor: const Color(0xFF8B7E74),
+            onChanged: (_) => themeNotifier.toggle(),
+          ),
+          // 글자 크기
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Row(
+              children: [
+                const Icon(Icons.text_fields, color: Color(0xFF8B7E74)),
+                const SizedBox(width: 16),
+                const Text('글자 크기', style: TextStyle(color: Color(0xFF8B7E74), fontSize: 16)),
+                const Spacer(),
+                SegmentedButton<double>(
+                  segments: const [
+                    ButtonSegment(value: 0.85, label: Text('작게')),
+                    ButtonSegment(value: 1.0, label: Text('보통')),
+                    ButtonSegment(value: 1.2, label: Text('크게')),
+                  ],
+                  selected: {fontSizeNotifier.scale},
+                  onSelectionChanged: (selected) {
+                    fontSizeNotifier.setScale(selected.first);
+                  },
+                  style: ButtonStyle(
+                    foregroundColor: WidgetStateProperty.resolveWith((states) =>
+                      states.contains(WidgetState.selected)
+                        ? Colors.white
+                        : const Color(0xFF8B7E74),
+                    ),
+                    backgroundColor: WidgetStateProperty.resolveWith((states) =>
+                      states.contains(WidgetState.selected)
+                        ? const Color(0xFF8B7E74)
+                        : Colors.transparent,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 20),
           // 로그아웃
           if (user != null)
             ListTile(
@@ -141,6 +193,7 @@ class _MorePage extends StatelessWidget {
             ),
         ],
       ),
+    ),   // ListenableBuilder 끝
     );
   }
 }

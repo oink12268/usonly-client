@@ -24,6 +24,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
 
   final FocusNode _focusNode = FocusNode();
+  // 포커스 상태 (ValueNotifier: setState 없이 하트 아이콘만 업데이트 → 키보드 뜰 때 전체 rebuild 방지)
+  final ValueNotifier<bool> _focusNotifier = ValueNotifier(false);
   // 채팅 데이터 담을 리스트
   List<dynamic> _chats = [];
 
@@ -71,19 +73,17 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _scrollController.addListener(_onScroll);
 
     _focusNode.addListener(() {
-      setState(() {}); // 포커스 변경 시 하트 아이콘 토글
+      // setState 대신 ValueNotifier → 하트 아이콘만 업데이트, 전체 rebuild 없음
+      // (setState 시 포커스 이벤트 + 키보드 inset 변경이 각각 rebuild → 두 번 뚜뚝)
+      _focusNotifier.value = _focusNode.hasFocus;
     });
   }
 
-  // 키보드 올라올 때 스크롤 보정 (300ms 딜레이보다 신뢰성 높음)
+  // 키보드 올라올 때 스크롤 보정
+  // reverse:true ListView는 키보드 등장 시 position 0(최신 메시지)을 자동 유지하므로
+  // 수동 스크롤 불필요 → 제거 (이중 addPostFrameCallback이 "뚜뚝" 끊김 유발했음)
   @override
-  void didChangeMetrics() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _focusNode.hasFocus) {
-        _scrollToBottom();
-      }
-    });
-  }
+  void didChangeMetrics() {}
 
   // 앱이 포그라운드로 돌아올 때 채팅 새로고침 + 소켓 재연결
   @override
@@ -109,6 +109,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _typingTimer?.cancel();
     _partnerTypingTimer?.cancel();
     _partnerTypingNotifier.dispose();
+    _focusNotifier.dispose();
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -580,7 +581,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         // 검색바
         if (_isSearching)
           Container(
-            color: const Color(0xFFF5F0EB),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
@@ -592,7 +593,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       hintText: '메시지 검색...',
                       hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: Theme.of(context).colorScheme.surface,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
@@ -722,14 +723,14 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           if (!isMe)
-                            const Column(
+                            Column(
                               mainAxisAlignment: MainAxisAlignment.start,
                               children: [
                                 Padding(
-                                  padding: EdgeInsets.only(right: 8.0),
+                                  padding: const EdgeInsets.only(right: 8.0),
                                   child: CircleAvatar(
-                                    backgroundColor: Colors.white,
-                                    child: Icon(Icons.person, color: Colors.grey),
+                                    backgroundColor: Theme.of(context).colorScheme.surface,
+                                    child: Icon(Icons.person, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                   ),
                                 ),
                               ],
@@ -742,7 +743,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                 alignment: Alignment.bottomRight,
                                 child: Text(
                                   _formatTime(createdAt),
-                                  style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                                  style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                 ),
                               ),
                             ),
@@ -755,7 +756,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                     padding: const EdgeInsets.only(bottom: 4, left: 2),
                                     child: Text(
                                       _nicknameCache[chat['writerUid']?.toString()] ?? chat['writerUid'].toString().substring(0, 4),
-                                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                     ),
                                   ),
 
@@ -765,7 +766,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                     margin: const EdgeInsets.only(bottom: 4),
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey[200],
+                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border(
                                         left: BorderSide(color: const Color(0xFF8B7E74), width: 3),
@@ -787,7 +788,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                         const SizedBox(height: 2),
                                         Text(
                                           _replyPreviewText(replyToMessage),
-                                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -812,7 +813,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                         fit: BoxFit.cover,
                                         memCacheWidth: 300,
                                         placeholder: (context, url) => Container(
-                                            width: 200, height: 200, color: Colors.grey[300]),
+                                            width: 200, height: 200, color: Theme.of(context).colorScheme.surfaceContainerHighest),
                                         errorWidget: (context, url, error) => const Icon(Icons.error),
                                       ),
                                     ),
@@ -821,7 +822,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: isMe ? const Color(0xFF8B7E74) : const Color(0xFFF0EBE5),
+                                      color: isMe ? const Color(0xFF8B7E74) : Theme.of(context).colorScheme.surface,
                                       borderRadius: BorderRadius.only(
                                         topLeft: const Radius.circular(15),
                                         topRight: const Radius.circular(15),
@@ -840,7 +841,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                             offset: const Offset(1, 1))
                                       ],
                                     ),
-                                    child: Text(content, style: TextStyle(fontSize: 16, color: isMe ? Colors.white : Colors.black87)),
+                                    child: Text(content, style: TextStyle(fontSize: 16, color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface)),
                                   ),
                               ],
                             ),
@@ -853,7 +854,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                 alignment: Alignment.bottomLeft,
                                 child: Text(
                                   _formatTime(createdAt),
-                                  style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                                  style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                 ),
                               ),
                             ),
@@ -874,11 +875,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           valueListenable: _partnerTypingNotifier,
           builder: (context, isTyping, _) {
             if (!isTyping) return const SizedBox.shrink();
-            return const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text("입력 중...", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                child: Text("입력 중...", style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ),
             );
           },
@@ -901,7 +902,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         if (_replyTarget != null)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.grey[100],
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             child: Row(
               children: [
                 Container(
@@ -936,7 +937,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 ),
                 GestureDetector(
                   onTap: _cancelReply,
-                  child: const Icon(Icons.close, size: 20, color: Colors.grey),
+                  child: Icon(Icons.close, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -944,30 +945,43 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
         // 입력창 영역
         Padding(
-          padding: const EdgeInsets.all(16.0),
+          // viewInsets.bottom: 키보드 높이. Scaffold가 직접 리사이즈하지 않으므로
+          // 여기서 직접 키보드 위로 입력창을 밀어 올림 (삼성 이중 점프 방지)
+          padding: EdgeInsets.only(
+            left: 16, right: 16, top: 16,
+            bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.grey),
+                icon: Icon(Icons.add_photo_alternate_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 onPressed: _pickAndUploadImage,
               ),
               Expanded(
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  decoration: InputDecoration(
-                    hintText: "",
-                    prefixIcon: _focusNode.hasFocus ? null : const Icon(Icons.favorite, color: Colors.grey, size: 20),
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: BorderSide.none,
+                // ValueListenableBuilder: 포커스 변경 시 TextField만 rebuild (전체 페이지 rebuild 없음)
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _focusNotifier,
+                  builder: (context, hasFocus, _) => TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    decoration: InputDecoration(
+                      hintText: "",
+                      // Opacity(0)으로 layout은 유지하면서 아이콘만 숨김 → 레이아웃 shift 없음
+                      prefixIcon: Opacity(
+                        opacity: hasFocus ? 0.0 : 1.0,
+                        child: Icon(Icons.favorite, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
+                      ),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                    onChanged: _onTypingChanged,
+                    onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송
                   ),
-                  onChanged: _onTypingChanged,
-                  onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송
                 ),
               ),
               const SizedBox(width: 8),

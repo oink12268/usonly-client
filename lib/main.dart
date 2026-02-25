@@ -12,6 +12,8 @@ import 'matching_screen.dart';
 import 'fcm_service.dart';
 import 'api_config.dart';
 import 'firebase_options.dart';
+import 'font_size_notifier.dart';
+import 'theme_notifier.dart';
 
 bool get _isMobile => !kIsWeb && (
   defaultTargetPlatform == TargetPlatform.android ||
@@ -34,9 +36,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ListenableBuilder(
+      listenable: Listenable.merge([fontSizeNotifier, themeNotifier]),
+      builder: (context, _) => MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'UsOnly',
+      themeMode: themeNotifier.themeMode,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(fontSizeNotifier.scale),
+        ),
+        child: child!,
+      ),
       theme: ThemeData(
         fontFamily: 'Pretendard',
         primaryColor: const Color(0xFF8B7E74),
@@ -60,6 +71,31 @@ class MyApp extends StatelessWidget {
           surface: const Color(0xFFFAF8F5),
         ),
       ),
+      darkTheme: ThemeData(
+        fontFamily: 'Pretendard',
+        brightness: Brightness.dark,
+        primaryColor: const Color(0xFF8B7E74),
+        scaffoldBackgroundColor: const Color(0xFF1C1B1B),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1C1B1B),
+          foregroundColor: Color(0xFFBFAFA6),
+          elevation: 0,
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: Color(0xFF2A2827),
+          selectedItemColor: Color(0xFFBFAFA6),
+          unselectedItemColor: Color(0xFF6E5E58),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFF8B7E74),
+        ),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF8B7E74),
+          primary: const Color(0xFF8B7E74),
+          surface: const Color(0xFF2A2827),
+          brightness: Brightness.dark,
+        ),
+      ),
       home: StreamBuilder<User?>(
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
@@ -72,7 +108,8 @@ class MyApp extends StatelessWidget {
             return const LoginScreen();
           },
         ),
-    );
+    ),    // MaterialApp 끝
+    );   // ListenableBuilder 끝
   }
 }
 

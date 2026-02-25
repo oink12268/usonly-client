@@ -214,6 +214,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // AppFlowyEditor + MobileToolbar이 keyboard inset을 내부적으로 처리함
+      // true(기본값)로 두면 Scaffold resize + AppFlowy 내부 처리가 중복되어 "뚜뚝" 끊김 발생
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -257,6 +260,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             child: AppFlowyEditor(
               editorState: _editorState,
               editorStyle: EditorStyle.mobile().copyWith(
+                textStyleConfiguration: TextStyleConfiguration(
+                  text: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16),
+                ),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
               blockComponentBuilders: _buildComponentBuilders(),

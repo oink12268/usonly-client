@@ -153,9 +153,9 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
             Container(
               height: 200,
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[300]!),
+                border: Border.all(color: Theme.of(context).colorScheme.outline),
               ),
               child: _imageBytes != null
                   ? ClipRRect(
@@ -255,7 +255,7 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(const Color(0xFFF5F0EB)),
+                  headingRowColor: WidgetStateProperty.all(Theme.of(context).colorScheme.surfaceContainerHighest),
                   columns: const [
                     DataColumn(label: Text('날짜', style: TextStyle(fontWeight: FontWeight.bold))),
                     DataColumn(label: Text('요일', style: TextStyle(fontWeight: FontWeight.bold))),

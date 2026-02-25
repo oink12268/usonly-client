@@ -267,7 +267,6 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       body: Column(
         children: [
           // 캘린더 영역
@@ -335,7 +334,7 @@ class _CalendarPageState extends State<CalendarPage> {
                             ? const Color(0xFF8B7E74)
                             : date.weekday == DateTime.saturday
                                 ? Colors.blue
-                                : Colors.black87),
+                                : Theme.of(context).colorScheme.onSurface),
                   ),
                 ),
                 if (hasEvent)
@@ -390,7 +389,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                 ? const Color(0xFF8B7E74)
                                 : d == '토'
                                     ? Colors.blue
-                                    : Colors.grey[700],
+                                    : Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -426,7 +425,7 @@ class _CalendarPageState extends State<CalendarPage> {
       return Center(
         child: Text(
           "${_selectedDate!.month}월 ${_selectedDate!.day}일 일정이 없습니다",
-          style: TextStyle(color: Colors.grey[500]),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       );
     }
@@ -473,7 +472,7 @@ class _CalendarPageState extends State<CalendarPage> {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0EBE5),
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -505,7 +504,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   const SizedBox(height: 6),
                   Text(
                     schedule['memo'],
-                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ],
               ],
