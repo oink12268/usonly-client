@@ -579,6 +579,159 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     });
   }
 
+  // --- AI 채팅 검색 ---
+  void _showAiSearch() {
+    final TextEditingController queryController = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          left: 20, right: 20, top: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.auto_awesome, color: Color(0xFF8B7E74), size: 20),
+                SizedBox(width: 8),
+                Text('AI 채팅 검색', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: queryController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: '예) 최근에 놀러가고 싶다고 했던 곳들',
+                hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                filled: true,
+                fillColor: Colors.grey[100],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              onSubmitted: (_) {
+                if (queryController.text.isNotEmpty) {
+                  Navigator.pop(context);
+                  _callAiSearch(queryController.text);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B7E74),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () {
+                  if (queryController.text.isNotEmpty) {
+                    Navigator.pop(context);
+                    _callAiSearch(queryController.text);
+                  }
+                },
+                child: const Text('검색'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _callAiSearch(String query) async {
+    // 로딩 다이얼로그
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(color: Color(0xFF8B7E74)),
+            SizedBox(width: 16),
+            Text('AI가 채팅을 분석 중...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final response = await ApiClient.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/chat/ai-search?q=${Uri.encodeComponent(query)}'),
+      );
+      Navigator.pop(context); // 로딩 닫기
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        final result = data['result'] as String;
+        _showAiResult(query, result);
+      } else {
+        _showAiError();
+      }
+    } catch (e) {
+      Navigator.pop(context);
+      _showAiError();
+    }
+  }
+
+  void _showAiResult(String query, String result) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.auto_awesome, color: Color(0xFF8B7E74), size: 18),
+            SizedBox(width: 8),
+            Text('AI 검색 결과', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F0EB),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(query, style: const TextStyle(fontSize: 13, color: Color(0xFF8B7E74))),
+              ),
+              const SizedBox(height: 12),
+              Text(result, style: const TextStyle(fontSize: 14, height: 1.5)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('닫기', style: TextStyle(color: Color(0xFF8B7E74))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAiError() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('AI 검색에 실패했습니다. 잠시 후 다시 시도해주세요.')),
+    );
+  }
+
   bool _isSameDate(String? date1, String? date2) {
     if (date1 == null || date2 == null) return false;
     return date1.split('T')[0] == date2.split('T')[0];
@@ -604,6 +757,17 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // AI 검색 버튼 (우측 상단)
+        if (!_isSearching)
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              icon: const Icon(Icons.auto_awesome, color: Color(0xFF8B7E74), size: 22),
+              tooltip: 'AI 채팅 검색',
+              onPressed: _showAiSearch,
+            ),
+          ),
+
         // 검색바
         if (_isSearching)
           Container(
