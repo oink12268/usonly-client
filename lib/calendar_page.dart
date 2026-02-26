@@ -270,7 +270,16 @@ class _CalendarPageState extends State<CalendarPage> {
       body: Column(
         children: [
           // 캘린더 영역
-          _buildCalendar(),
+          GestureDetector(
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity! < 0) {
+                _nextMonth();
+              } else if (details.primaryVelocity! > 0) {
+                _prevMonth();
+              }
+            },
+            child: _buildCalendar(),
+          ),
           const Divider(height: 1),
           // 선택된 날짜의 일정 목록
           Expanded(child: _buildScheduleList()),
