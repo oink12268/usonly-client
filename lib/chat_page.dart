@@ -360,7 +360,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   Future<void> _pickAndUploadImage(ImageSource source) async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: source, imageQuality: 60, maxWidth: 800);
+    final XFile? image = await picker.pickImage(source: source, imageQuality: 80, maxWidth: 1200);
     if (image == null) return;
 
     setState(() => _isUploadingImage = true);

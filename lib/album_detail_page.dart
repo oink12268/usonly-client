@@ -106,6 +106,52 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
     }
   }
 
+  // 사진 롱프레스 → 옵션 바텀시트
+  void _showPhotoOptions(dynamic photo) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (photo['mediaType'] == 'IMAGE')
+              ListTile(
+                leading: const Icon(Icons.image_outlined),
+                title: const Text("커버로 설정"),
+                onTap: () {
+                  Navigator.pop(context);
+                  _setCoverImage(photo['id']);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text("삭제", style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(context);
+                _showDeleteDialog(photo);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setCoverImage(int mediaId) async {
+    try {
+      final response = await ApiClient.put(
+        Uri.parse('${ApiConfig.baseUrl}/api/archives/${widget.albumId}/cover?mediaId=$mediaId'),
+      );
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("커버 이미지가 변경되었습니다")),
+        );
+      }
+    } catch (e) {
+      print("커버 변경 에러: $e");
+    }
+  }
+
   // 사진 롱프레스 → 삭제 확인
   void _showDeleteDialog(dynamic photo) {
     showDialog(
@@ -174,7 +220,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                     ?? _photos[index]['mediaUrl'] as String;
                 return GestureDetector(
                   onTap: () => _openPhotoViewer(index),
-                  onLongPress: () => _showDeleteDialog(_photos[index]),
+                  onLongPress: () => _showPhotoOptions(_photos[index]),
                   child: CachedNetworkImage(
                     imageUrl: thumbUrl,
                     fit: BoxFit.cover,
