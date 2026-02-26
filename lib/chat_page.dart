@@ -1168,7 +1168,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     decoration: InputDecoration(
                       hintText: "",
                       filled: true,
-                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,,
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
