@@ -228,7 +228,6 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     return Scaffold(
-      backgroundColor: Colors.white,
       body: _anniversaries.isEmpty
           ? const Center(child: Text("우리만의 기념일을 추가해보세요!"))
           : ListView.builder(
@@ -290,7 +289,9 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: dday == 0 ? const Color(0xFFF0EBE5) : Colors.grey[50],
+          color: dday == 0
+            ? Theme.of(context).colorScheme.primaryContainer
+            : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: dday == 0 ? Border.all(color: const Color(0xFF8B7E74), width: 1.5) : null,
         ),
@@ -312,21 +313,21 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                       ),
                       if (item['recurring'] == true) ...[
                         const SizedBox(width: 6),
-                        Icon(Icons.repeat, size: 16, color: Colors.grey[500]),
+                        Icon(Icons.repeat, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       ],
                     ],
                   ),
                   const SizedBox(height: 4),
                   Text(
                     item['date'] ?? "",
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                   // 음력 표시
                   if (isLunar && lunarMonth != null && lunarDay != null) ...[
                     const SizedBox(height: 2),
                     Text(
                       "(음력 $lunarMonth월 $lunarDay일)",
-                      style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+                      style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ],

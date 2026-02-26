@@ -7,7 +7,6 @@ class LoginScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -21,7 +20,7 @@ class LoginScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            const Text("우리 둘만의 공간", style: TextStyle(color: Colors.grey)),
+            Text("우리 둘만의 공간", style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 50),
             
             // 구글 로그인 버튼

@@ -180,9 +180,9 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                     fit: BoxFit.cover,
                     memCacheWidth: 300,
                     maxWidthDiskCache: 300,
-                    placeholder: (context, url) => Container(color: Colors.grey[200]),
+                    placeholder: (context, url) => Container(color: Theme.of(context).colorScheme.surfaceContainerHighest),
                     errorWidget: (context, url, error) => Container(
-                      color: Colors.grey[200],
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       child: const Icon(Icons.broken_image, color: Colors.grey),
                     ),
                   ),

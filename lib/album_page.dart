@@ -91,7 +91,6 @@ class _AlbumPageState extends State<AlbumPage> {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     return Scaffold(
-      backgroundColor: Colors.white,
       body: _albums.isEmpty
           ? const Center(child: Text("우리의 첫 번째 앨범을 만들어보세요!"))
           : Column(
@@ -147,7 +146,7 @@ class _AlbumPageState extends State<AlbumPage> {
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.grey[100],
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 boxShadow: [
                   BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(2, 2))
                 ],
@@ -162,7 +161,7 @@ class _AlbumPageState extends State<AlbumPage> {
                         height: double.infinity,
                         memCacheWidth: 300,
                         maxWidthDiskCache: 300,
-                        placeholder: (context, url) => Container(color: Colors.grey[100]),
+                        placeholder: (context, url) => Container(color: Theme.of(context).colorScheme.surfaceContainerHighest),
                         errorWidget: (context, url, error) => const Center(child: Icon(Icons.error, color: Colors.grey)),
                       ),
                     )

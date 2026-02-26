@@ -113,13 +113,10 @@ class _MatchingScreenState extends State<MatchingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text("커플 연결"),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -138,9 +135,9 @@ class _MatchingScreenState extends State<MatchingScreen> {
               const SizedBox(height: 40),
               
               // --- 내 코드 표시 영역 ---
-              const Text(
+              Text(
                 "내 초대 코드",
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+                style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 12),
               
@@ -155,7 +152,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 48),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0EBE5),
+                    color: Theme.of(context).colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: const Color(0xFF8B7E74).withValues(alpha: 0.5)),
                   ),
@@ -181,7 +178,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
               ),
               
               const SizedBox(height: 60),
-              const Divider(thickness: 1, color: Colors.grey),
+              const Divider(thickness: 1),
               const SizedBox(height: 40),
 
               // --- 상대방 코드 입력 영역 ---
