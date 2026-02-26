@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:stomp_dart_client/stomp_dart_client.dart'; // 소켓 라이브러리
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'api_config.dart';
@@ -71,17 +72,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _scrollController.addListener(_onScroll);
 
     _focusNode.addListener(() {
-      setState(() {}); // 포커스 변경 시 하트 아이콘 토글
-    });
-  }
-
-  // 키보드 올라올 때 스크롤 보정 (300ms 딜레이보다 신뢰성 높음)
-  @override
-  void didChangeMetrics() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _focusNode.hasFocus) {
-        _scrollToBottom();
-      }
+      if (!mounted || !_focusNode.hasFocus) return;
+      // 키보드 애니메이션이 끝난 뒤 1회만 스크롤
+      Future.delayed(const Duration(milliseconds: 350), () {
+        if (mounted && _focusNode.hasFocus) _scrollToBottom();
+      });
     });
   }
 
@@ -331,9 +326,38 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _cancelReply();       // 답장 상태 초기화
   }
 
-  Future<void> _pickAndUploadImage() async {
+  void _showImageSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Color(0xFF8B7E74)),
+              title: const Text('갤러리'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndUploadImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Color(0xFF8B7E74)),
+              title: const Text('카메라'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndUploadImage(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadImage(ImageSource source) async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 30, maxWidth: 400);
+    final XFile? image = await picker.pickImage(source: source, imageQuality: 60, maxWidth: 800);
     if (image == null) return;
 
     setState(() => _isUploadingImage = true);
@@ -637,7 +661,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             child: ListView.builder(
             controller: _scrollController,
             reverse: true, // 최신 메시지(index 0)가 맨 아래에 표시됨
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+            padding: const EdgeInsets.fromLTRB(8, 16, 8, 4),
             itemCount: _chats.length + (_isLoadingMore ? 1 : 0),
             itemBuilder: (context, index) {
               // 맨 위 로딩 인디케이터 (reverse이므로 가장 높은 index = 화면 맨 위)
@@ -944,30 +968,49 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
         // 입력창 영역
         Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Row(
             children: [
               IconButton(
                 icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.grey),
-                onPressed: _pickAndUploadImage,
+                onPressed: _showImageSourceSheet,
               ),
               Expanded(
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  decoration: InputDecoration(
-                    hintText: "",
-                    prefixIcon: _focusNode.hasFocus ? null : const Icon(Icons.favorite, color: Colors.grey, size: 20),
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: BorderSide.none,
+                child: GestureDetector(
+                  onLongPress: () async {
+                    final data = await Clipboard.getData(Clipboard.kTextPlain);
+                    final text = data?.text;
+                    if (text == null || text.isEmpty) return;
+                    final cur = _controller.value;
+                    final newText = cur.text.replaceRange(
+                      cur.selection.start < 0 ? cur.text.length : cur.selection.start,
+                      cur.selection.end < 0 ? cur.text.length : cur.selection.end,
+                      text,
+                    );
+                    _controller.value = TextEditingValue(
+                      text: newText,
+                      selection: TextSelection.collapsed(
+                        offset: (cur.selection.start < 0 ? cur.text.length : cur.selection.start) + text.length,
+                      ),
+                    );
+                    _onTypingChanged(newText);
+                  },
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    decoration: InputDecoration(
+                      hintText: "",
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                    onChanged: _onTypingChanged,
+                    onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송
                   ),
-                  onChanged: _onTypingChanged,
-                  onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송
                 ),
               ),
               const SizedBox(width: 8),

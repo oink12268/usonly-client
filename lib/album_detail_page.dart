@@ -42,10 +42,16 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   }
 
   Future<void> _pickAndUploadImage() async {
-    final List<XFile> images = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 2000);
-    if (images.isEmpty) return;
-
+    // 갤러리 확인 직후 압축 시간 동안 스피너가 안 보이는 문제 방지:
+    // pickMultiImage 호출 전에 미리 로딩 상태로 전환
+    // (갤러리가 열려있는 동안은 어차피 갤러리가 화면을 덮으므로 문제없음)
     setState(() => _isUploading = true);
+
+    final List<XFile> images = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 2000);
+    if (images.isEmpty) {
+      setState(() => _isUploading = false);
+      return;
+    }
 
     int success = 0;
     int fail = 0;
