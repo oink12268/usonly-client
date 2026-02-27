@@ -19,6 +19,7 @@ class _AlbumPageState extends State<AlbumPage> {
   bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _hasMore = true;
+  bool _isReorderMode = false;
   int _currentPage = 0;
   static const int _pageSize = 12;
   final ScrollController _scrollController = ScrollController();
@@ -95,36 +96,138 @@ class _AlbumPageState extends State<AlbumPage> {
           ? const Center(child: Text("우리의 첫 번째 앨범을 만들어보세요!"))
           : Column(
               children: [
-                Expanded(
-                  child: GridView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(12),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 0.85,
-                    ),
-                    itemCount: _albums.length,
-                    itemBuilder: (context, index) {
-                      final album = _albums[index];
-                      return _buildAlbumCard(album);
-                    },
+                // 순서 변경 토글 버튼
+                Padding(
+                  padding: const EdgeInsets.only(right: 8, top: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () async {
+                          if (_isReorderMode) await _saveOrder();
+                          setState(() => _isReorderMode = !_isReorderMode);
+                        },
+                        icon: Icon(
+                          _isReorderMode ? Icons.check : Icons.swap_vert,
+                          color: const Color(0xFF8B7E74),
+                          size: 18,
+                        ),
+                        label: Text(
+                          _isReorderMode ? "완료" : "순서 변경",
+                          style: const TextStyle(color: Color(0xFF8B7E74), fontSize: 13),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                if (_isLoadingMore)
+                Expanded(
+                  child: _isReorderMode
+                      ? _buildReorderableList()
+                      : GridView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: 0.85,
+                          ),
+                          itemCount: _albums.length,
+                          itemBuilder: (context, index) {
+                            final album = _albums[index];
+                            return _buildAlbumCard(album);
+                          },
+                        ),
+                ),
+                if (_isLoadingMore && !_isReorderMode)
                   const Padding(
                     padding: EdgeInsets.all(16),
                     child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74)),
                   ),
               ],
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showCreateAlbumDialog,
-        backgroundColor: const Color(0xFF8B7E74),
-        child: const Icon(Icons.add_a_photo, color: Colors.white),
-      ),
+      floatingActionButton: _isReorderMode
+          ? null
+          : FloatingActionButton(
+              onPressed: _showCreateAlbumDialog,
+              backgroundColor: const Color(0xFF8B7E74),
+              child: const Icon(Icons.add_a_photo, color: Colors.white),
+            ),
     );
+  }
+
+  Widget _buildReorderableList() {
+    return ReorderableListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      itemCount: _albums.length,
+      onReorder: (oldIndex, newIndex) {
+        setState(() {
+          if (newIndex > oldIndex) newIndex--;
+          final item = _albums.removeAt(oldIndex);
+          _albums.insert(newIndex, item);
+        });
+      },
+      itemBuilder: (context, index) {
+        final album = _albums[index];
+        return ListTile(
+          key: ValueKey(album['id']),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: album['coverImageUrl'] != null
+                ? CachedNetworkImage(
+                    imageUrl: album['coverImageUrl'],
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    memCacheWidth: 120,
+                    placeholder: (context, url) => Container(
+                      width: 56,
+                      height: 56,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 56,
+                      height: 56,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: const Icon(Icons.image, color: Colors.grey),
+                    ),
+                  )
+                : Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.image, color: Colors.grey),
+                  ),
+          ),
+          title: Text(
+            album['title'] ?? "무제",
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+          ),
+          trailing: const Icon(Icons.drag_handle, color: Colors.grey),
+        );
+      },
+    );
+  }
+
+  Future<void> _saveOrder() async {
+    final ids = _albums.map((a) => a['id'] as int).toList();
+    try {
+      final response = await ApiClient.put(
+        Uri.parse('${ApiConfig.baseUrl}/api/archives/reorder'),
+        body: jsonEncode(ids),
+      );
+      if (response.statusCode != 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("순서 저장에 실패했습니다")),
+        );
+      }
+    } catch (e) {
+      print("순서 변경 에러: $e");
+    }
   }
 
   // 앨범 하나하나의 카드 디자인

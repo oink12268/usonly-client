@@ -5,8 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:stomp_dart_client/stomp_dart_client.dart'; // 소켓 라이브러리
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'api_config.dart';
 import 'api_client.dart';
 import 'fcm_service.dart';
@@ -327,6 +329,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _sendTypingEvent(false); // 타이핑 상태 해제
     _typingTimer?.cancel();
     _cancelReply();       // 답장 상태 초기화
+    _focusNode.requestFocus(); // 전송 후 포커스 유지
   }
 
   void _showImageSourceSheet() {
@@ -405,6 +408,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   // --- 메시지 롱프레스 옵션 ---
   void _showMessageOptions(dynamic chat) {
     final isMe = chat['writerUid'] == widget.uid;
+    final msg = (chat['message'] as String?) ?? '';
+    final isImage = msg.startsWith('IMAGE:');
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
@@ -419,6 +424,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 _setReplyTarget(chat);
               },
             ),
+            if (!isImage)
+              ListTile(
+                leading: const Icon(Icons.copy, color: Color(0xFF8B7E74)),
+                title: const Text("복사"),
+                onTap: () {
+                  Navigator.pop(context);
+                  Clipboard.setData(ClipboardData(text: msg));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('복사됐어'), duration: Duration(seconds: 1)),
+                  );
+                },
+              ),
             if (isMe && chat['id'] != null)
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
@@ -430,6 +447,56 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  // URL 파싱 후 클릭 가능한 위젯으로 렌더링
+  Widget _buildMessageContent(String text, bool isMe) {
+    final urlRegex = RegExp(
+      r'(https?://[^\s]+)',
+      caseSensitive: false,
+    );
+    final matches = urlRegex.allMatches(text);
+    if (matches.isEmpty) {
+      return Text(
+        text,
+        style: TextStyle(fontSize: 16, color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface),
+      );
+    }
+
+    final spans = <InlineSpan>[];
+    int last = 0;
+    for (final m in matches) {
+      if (m.start > last) {
+        spans.add(TextSpan(text: text.substring(last, m.start)));
+      }
+      final url = m.group(0)!;
+      spans.add(TextSpan(
+        text: url,
+        style: TextStyle(
+          color: isMe ? Colors.white : const Color(0xFF8B7E74),
+          decoration: TextDecoration.underline,
+          decorationColor: isMe ? Colors.white : const Color(0xFF8B7E74),
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () async {
+            final uri = Uri.tryParse(url);
+            if (uri != null && await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            }
+          },
+      ));
+      last = m.end;
+    }
+    if (last < text.length) {
+      spans.add(TextSpan(text: text.substring(last)));
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(fontSize: 16, color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface),
+        children: spans,
       ),
     );
   }
@@ -1031,7 +1098,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                             offset: const Offset(1, 1))
                                       ],
                                     ),
-                                    child: Text(content, style: TextStyle(fontSize: 16, color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface)),
+                                    child: _buildMessageContent(content, isMe),
                                   ),
                               ],
                             ),
