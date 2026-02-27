@@ -216,7 +216,7 @@ class _AlbumPageState extends State<AlbumPage> {
   Future<void> _saveOrder() async {
     final ids = _albums.map((a) => a['id'] as int).toList();
     try {
-      final response = await ApiClient.put(
+      final response = await ApiClient.post(
         Uri.parse('${ApiConfig.baseUrl}/api/archives/reorder'),
         body: jsonEncode(ids),
       );
