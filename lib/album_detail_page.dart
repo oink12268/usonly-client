@@ -58,6 +58,11 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
 
     for (final image in images) {
       try {
+        DateTime? takenAt;
+        try {
+          takenAt = await image.lastModified();
+        } catch (_) {}
+
         var request = http.MultipartRequest(
           'POST',
           Uri.parse('${ApiConfig.baseUrl}/api/archives/upload'),
@@ -65,6 +70,16 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
 
         request.fields['albumId'] = widget.albumId.toString();
         request.fields['type'] = 'IMAGE';
+        if (takenAt != null) {
+          final local = takenAt.toLocal();
+          request.fields['takenAt'] =
+              "${local.year.toString().padLeft(4, '0')}-"
+              "${local.month.toString().padLeft(2, '0')}-"
+              "${local.day.toString().padLeft(2, '0')}T"
+              "${local.hour.toString().padLeft(2, '0')}:"
+              "${local.minute.toString().padLeft(2, '0')}:"
+              "${local.second.toString().padLeft(2, '0')}";
+        }
         final bytes = await image.readAsBytes();
         request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: image.name));
 

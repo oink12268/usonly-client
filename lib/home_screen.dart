@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:convert';
 import 'auth_service.dart';
 import 'font_size_notifier.dart';
 import 'theme_notifier.dart';
@@ -9,6 +11,9 @@ import 'anniversary_page.dart';
 import 'calendar_page.dart';
 import 'note_page.dart';
 import 'work_schedule_page.dart';
+import 'profile_edit_page.dart';
+import 'api_config.dart';
+import 'api_client.dart';
 
 class HomeScreen extends StatefulWidget {
   final User? user;
@@ -72,11 +77,42 @@ _pages = [
   }
 }
 
-class _MorePage extends StatelessWidget {
+class _MorePage extends StatefulWidget {
   final User? user;
   final int memberId;
   final int? coupleId;
   const _MorePage({this.user, required this.memberId, this.coupleId});
+
+  @override
+  State<_MorePage> createState() => _MorePageState();
+}
+
+class _MorePageState extends State<_MorePage> {
+  String? _nickname;
+  String? _profileImageUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final response = await ApiClient.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/members/me'),
+      );
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        setState(() {
+          _nickname = data['nickname'];
+          _profileImageUrl = data['profileImageUrl'];
+        });
+      }
+    } catch (e) {
+      debugPrint("프로필 로딩 실패: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,25 +122,70 @@ class _MorePage extends StatelessWidget {
       child: ListView(
         children: [
           const SizedBox(height: 20),
-          // 프로필 영역
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundImage: user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
-                  child: user?.photoURL == null ? const Icon(Icons.person, size: 30) : null,
+          // ── 프로필 영역 (탭하면 수정 페이지로) ──
+          InkWell(
+            onTap: () async {
+              final changed = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProfileEditPage(
+                    memberId: widget.memberId,
+                    initialNickname: _nickname,
+                    initialProfileImageUrl: _profileImageUrl,
+                  ),
                 ),
-                const SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(user?.displayName ?? '테스트 유저', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text(user?.email ?? '', style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  ],
-                ),
-              ],
+              );
+              if (changed == true) _loadProfile();
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              child: Row(
+                children: [
+                  Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        backgroundImage: _profileImageUrl != null
+                            ? CachedNetworkImageProvider(_profileImageUrl!)
+                            : null,
+                        child: _profileImageUrl == null
+                            ? const Icon(Icons.person, size: 30)
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFF8B7E74),
+                          ),
+                          child: const Icon(Icons.edit, size: 11, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _nickname ?? widget.user?.displayName ?? '',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          widget.user?.email ?? '',
+                          style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.grey),
+                ],
+              ),
             ),
           ),
           const Divider(height: 40),
@@ -112,12 +193,11 @@ class _MorePage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.note_outlined, color: Color(0xFF8B7E74)),
             title: const Text('메모장', style: TextStyle(color: Color(0xFF8B7E74))),
-            // subtitle: const Text('커플 공유 마크다운 메모', style: TextStyle(fontSize: 12)),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => NotePage(memberId: memberId, coupleId: coupleId),
+                  builder: (_) => NotePage(memberId: widget.memberId, coupleId: widget.coupleId),
                 ),
               );
             },
@@ -126,12 +206,11 @@ class _MorePage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.calendar_view_week, color: Color(0xFF8B7E74)),
             title: const Text('근무 스케쥴', style: TextStyle(color: Color(0xFF8B7E74))),
-            // subtitle: const Text('스케쥴표 사진으로 내 근무 확인', style: TextStyle(fontSize: 12)),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => WorkSchedulePage(nickname: user?.displayName),
+                  builder: (_) => WorkSchedulePage(nickname: _nickname ?? widget.user?.displayName),
                 ),
               );
             },
@@ -182,7 +261,7 @@ class _MorePage extends StatelessWidget {
           ),
           const Divider(height: 20),
           // 로그아웃
-          if (user != null)
+          if (widget.user != null)
             ListTile(
               leading: const Icon(Icons.logout, color: Color(0xFF8B7E74)),
               title: const Text('로그아웃', style: TextStyle(color: Color(0xFF8B7E74))),

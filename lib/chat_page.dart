@@ -55,8 +55,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   List<int> _searchMatchIndices = [];
   int _currentMatchIndex = -1;
 
-  // uid → 닉네임 캐시
+  // uid → 닉네임 / 프로필 이미지 캐시
   final Map<String, String> _nicknameCache = {};
+  final Map<String, String?> _profileImageCache = {};
 
   final String socketUrl = ApiConfig.wsUrl;
   final String httpUrl = '${ApiConfig.baseUrl}/api/chats';
@@ -116,22 +117,22 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // --- [닉네임 조회] ---
-  Future<String> _getNickname(String uid) async {
-    if (_nicknameCache.containsKey(uid)) return _nicknameCache[uid]!;
+  // --- [멤버 정보 조회: 닉네임 + 프로필 이미지] ---
+  Future<void> _getNickname(String uid) async {
+    if (_nicknameCache.containsKey(uid)) return;
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/members/nickname?providerId=$uid'),
+        Uri.parse('${ApiConfig.baseUrl}/api/members/info?providerId=$uid'),
       );
       if (response.statusCode == 200) {
-        final nickname = utf8.decode(response.bodyBytes);
-        _nicknameCache[uid] = nickname;
-        return nickname;
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        _nicknameCache[uid] = data['nickname'] ?? uid.substring(0, 4);
+        _profileImageCache[uid] = data['profileImageUrl'];
       }
     } catch (e) {
-      print("닉네임 조회 실패: $e");
+      debugPrint("멤버 정보 조회 실패: $e");
+      _nicknameCache[uid] = uid.substring(0, 4);
     }
-    return uid.substring(0, 4);
   }
 
   // 스크롤 맨 위 도달 시 이전 메시지 추가 로드
@@ -482,7 +483,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         recognizer: TapGestureRecognizer()
           ..onTap = () async {
             final uri = Uri.tryParse(url);
-            if (uri != null && await canLaunchUrl(uri)) {
+            if (uri != null) {
               await launchUrl(uri, mode: LaunchMode.externalApplication);
             }
           },
@@ -980,17 +981,19 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           if (!isMe)
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8.0),
-                                  child: CircleAvatar(
-                                    backgroundColor: Theme.of(context).colorScheme.surface,
-                                    child: Icon(Icons.person, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                  ),
-                                ),
-                              ],
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: CircleAvatar(
+                                backgroundColor: Theme.of(context).colorScheme.surface,
+                                backgroundImage: _profileImageCache[chat['writerUid']?.toString()] != null
+                                    ? CachedNetworkImageProvider(
+                                        _profileImageCache[chat['writerUid']!.toString()]!,
+                                      )
+                                    : null,
+                                child: _profileImageCache[chat['writerUid']?.toString()] == null
+                                    ? Icon(Icons.person, color: Theme.of(context).colorScheme.onSurfaceVariant)
+                                    : null,
+                              ),
                             ),
                           // 내 메시지: 시간 왼쪽 + 말풍선 오른쪽
                           if (isMe)

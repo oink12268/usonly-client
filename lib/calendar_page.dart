@@ -16,17 +16,23 @@ class _CalendarPageState extends State<CalendarPage> {
   DateTime _focusedMonth = DateTime.now();
   DateTime? _selectedDate;
   List<dynamic> _schedules = [];
+  List<dynamic> _anniversaries = [];
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _selectedDate = DateTime.now();
-    _fetchSchedules();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    setState(() => _isLoading = true);
+    await Future.wait([_fetchSchedules(), _fetchAnniversaries()]);
+    setState(() => _isLoading = false);
   }
 
   Future<void> _fetchSchedules() async {
-    setState(() => _isLoading = true);
     try {
       final response = await ApiClient.get(
         Uri.parse(
@@ -42,21 +48,77 @@ class _CalendarPageState extends State<CalendarPage> {
     } catch (e) {
       print("일정 로딩 에러: $e");
     }
-    setState(() => _isLoading = false);
+  }
+
+  Future<void> _fetchAnniversaries() async {
+    try {
+      final response = await ApiClient.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/anniversaries'),
+      );
+      if (response.statusCode == 200) {
+        setState(() {
+          _anniversaries = jsonDecode(utf8.decode(response.bodyBytes));
+        });
+      }
+    } catch (e) {
+      print("기념일 로딩 에러: $e");
+    }
   }
 
   // 해당 날짜에 일정이 있는지
   bool _hasSchedule(DateTime day) {
-    final dayStr =
-        "${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}";
+    final dayStr = _toDateStr(day);
     return _schedules.any((s) => s['date'] == dayStr);
+  }
+
+  // 기념일이 현재 보는 월에 해당하는 날짜 계산 (반복 기념일은 매년 같은 월/일)
+  DateTime? _anniversaryDateInMonth(dynamic anniversary) {
+    final dateStr = anniversary['date'] as String?;
+    if (dateStr == null) return null;
+    final date = DateTime.parse(dateStr);
+    final bool recurring = anniversary['recurring'] == true;
+    final int year = _focusedMonth.year;
+    final int month = _focusedMonth.month;
+
+    if (!recurring) {
+      // 반복 없는 기념일: 정확히 해당 연/월에만 표시
+      if (date.year == year && date.month == month) return date;
+      return null;
+    }
+
+    // 매년 반복: 기념일 월이 현재 보는 월과 같으면 해당 연도로 날짜 생성
+    if (date.month == month) {
+      try {
+        return DateTime(year, month, date.day);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  bool _hasAnniversary(DateTime day) {
+    return _anniversaries.any((a) {
+      final d = _anniversaryDateInMonth(a);
+      return d != null && d.day == day.day;
+    });
+  }
+
+  List<dynamic> _anniversariesForDate(DateTime day) {
+    return _anniversaries.where((a) {
+      final d = _anniversaryDateInMonth(a);
+      return d != null && d.day == day.day;
+    }).toList();
   }
 
   // 선택된 날짜의 일정 목록
   List<dynamic> _schedulesForDate(DateTime day) {
-    final dayStr =
-        "${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}";
+    final dayStr = _toDateStr(day);
     return _schedules.where((s) => s['date'] == dayStr).toList();
+  }
+
+  String _toDateStr(DateTime day) {
+    return "${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}";
   }
 
   void _prevMonth() {
@@ -64,7 +126,7 @@ class _CalendarPageState extends State<CalendarPage> {
       _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
       _selectedDate = null;
     });
-    _fetchSchedules();
+    _fetchData();
   }
 
   void _nextMonth() {
@@ -72,7 +134,7 @@ class _CalendarPageState extends State<CalendarPage> {
       _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
       _selectedDate = null;
     });
-    _fetchSchedules();
+    _fetchData();
   }
 
   void _showYearMonthPicker() {
@@ -164,7 +226,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   _focusedMonth = DateTime(selectedYear, selectedMonth);
                   _selectedDate = null;
                 });
-                _fetchSchedules();
+                _fetchData();
                 Navigator.pop(context);
               },
               child: const Text("확인", style: TextStyle(color: Colors.white)),
@@ -232,8 +294,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Future<void> _createSchedule(String title, String memo) async {
-    final dateStr =
-        "${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}";
+    final dateStr = _toDateStr(_selectedDate!);
     try {
       final response = await ApiClient.post(
         Uri.parse('${ApiConfig.baseUrl}/api/schedules'),
@@ -249,6 +310,123 @@ class _CalendarPageState extends State<CalendarPage> {
     } catch (e) {
       print("일정 추가 에러: $e");
     }
+  }
+
+  Future<void> _updateSchedule(int id, String title, String memo, String date) async {
+    try {
+      final response = await ApiClient.put(
+        Uri.parse('${ApiConfig.baseUrl}/api/schedules/$id'),
+        body: jsonEncode({
+          'title': title,
+          'memo': memo,
+          'date': date,
+        }),
+      );
+      if (response.statusCode == 200) {
+        _fetchSchedules();
+      }
+    } catch (e) {
+      print("일정 수정 에러: $e");
+    }
+  }
+
+  void _showScheduleDetailDialog(dynamic schedule) {
+    final titleController = TextEditingController(text: schedule['title'] ?? '');
+    final memoController = TextEditingController(text: schedule['memo'] ?? '');
+    DateTime selectedDate = DateTime.parse(schedule['date']);
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("일정 상세"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 날짜 선택
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
+                  );
+                  if (picked != null) {
+                    setDialogState(() => selectedDate = picked);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, size: 16, color: Color(0xFF8B7E74)),
+                      const SizedBox(width: 8),
+                      Text(
+                        "${selectedDate.year}년 ${selectedDate.month}월 ${selectedDate.day}일",
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  labelText: "제목",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: memoController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: "메모",
+                  hintText: "메모 없음",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (schedule['writerNickname'] != null &&
+                  schedule['writerNickname'].toString().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  "작성자: ${schedule['writerNickname']}",
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("취소"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B7E74)),
+              onPressed: () async {
+                if (titleController.text.isNotEmpty) {
+                  await _updateSchedule(
+                    schedule['id'],
+                    titleController.text,
+                    memoController.text,
+                    _toDateStr(selectedDate),
+                  );
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text("저장", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteSchedule(int id) async {
@@ -319,7 +497,8 @@ class _CalendarPageState extends State<CalendarPage> {
       final isToday = DateTime.now().year == date.year &&
           DateTime.now().month == date.month &&
           DateTime.now().day == date.day;
-      final hasEvent = _hasSchedule(date);
+      final hasSchedule = _hasSchedule(date);
+      final hasAnniversary = _hasAnniversary(date);
 
       days.add(
         GestureDetector(
@@ -346,14 +525,30 @@ class _CalendarPageState extends State<CalendarPage> {
                                 : Theme.of(context).colorScheme.onSurface),
                   ),
                 ),
-                if (hasEvent)
-                  Container(
-                    width: 5,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : const Color(0xFF8B7E74),
-                      shape: BoxShape.circle,
-                    ),
+                if (hasSchedule || hasAnniversary)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (hasSchedule)
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: isSelected ? Colors.white : const Color(0xFF8B7E74),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      if (hasSchedule && hasAnniversary) const SizedBox(width: 2),
+                      if (hasAnniversary)
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: isSelected ? Colors.white70 : Colors.pinkAccent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
                   ),
               ],
             ),
@@ -424,13 +619,14 @@ class _CalendarPageState extends State<CalendarPage> {
       return const Center(child: Text("날짜를 선택해주세요"));
     }
 
-    final daySchedules = _schedulesForDate(_selectedDate!);
-
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (daySchedules.isEmpty) {
+    final daySchedules = _schedulesForDate(_selectedDate!);
+    final dayAnniversaries = _anniversariesForDate(_selectedDate!);
+
+    if (daySchedules.isEmpty && dayAnniversaries.isEmpty) {
       return Center(
         child: Text(
           "${_selectedDate!.month}월 ${_selectedDate!.day}일 일정이 없습니다",
@@ -439,88 +635,160 @@ class _CalendarPageState extends State<CalendarPage> {
       );
     }
 
-    return ListView.builder(
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: daySchedules.length,
-      itemBuilder: (context, index) {
-        final schedule = daySchedules[index];
-        return Dismissible(
-          key: Key(schedule['id'].toString()),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF8B7E74),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.delete, color: Colors.white),
-          ),
-          confirmDismiss: (_) async {
-            return await showDialog<bool>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text("삭제 확인"),
-                content: Text("'${schedule['title']}'을(를) 삭제할까요?"),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text("취소"),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text("삭제", style: TextStyle(color: Colors.red)),
-                  ),
-                ],
-              ),
-            ) ?? false;
-          },
-          onDismissed: (_) => _deleteSchedule(schedule['id']),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
+      children: [
+        // 기념일 먼저 표시
+        ...dayAnniversaries.map((a) => _buildAnniversaryItem(a)),
+        // 일반 일정
+        ...daySchedules.map((s) => _buildScheduleItem(s)),
+      ],
+    );
+  }
+
+  Widget _buildAnniversaryItem(dynamic anniversary) {
+    final bool isLunar = anniversary['lunar'] == true;
+    final int? lunarMonth = anniversary['lunarMonth'];
+    final int? lunarDay = anniversary['lunarDay'];
+    final bool recurring = anniversary['recurring'] == true;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.pink.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.pinkAccent.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.favorite, size: 18, color: Colors.pinkAccent),
+          const SizedBox(width: 8),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.event, size: 18, color: const Color(0xFF8B7E74)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        schedule['title'] ?? "",
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    Text(
+                      anniversary['title'] ?? "",
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.pinkAccent,
                       ),
                     ),
-                    if (schedule['writerNickname'] != null &&
-                        schedule['writerNickname'].toString().isNotEmpty)
-                      Text(
-                        schedule['writerNickname'],
-                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                      ),
+                    if (recurring) ...[
+                      const SizedBox(width: 4),
+                      const Icon(Icons.repeat, size: 14, color: Colors.pinkAccent),
+                    ],
                   ],
                 ),
-                if (schedule['memo'] != null &&
-                    schedule['memo'].toString().isNotEmpty) ...[
-                  const SizedBox(height: 6),
+                if (isLunar && lunarMonth != null && lunarDay != null) ...[
+                  const SizedBox(height: 2),
                   Text(
-                    schedule['memo'],
-                    style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    "음력 $lunarMonth월 $lunarDay일",
+                    style: TextStyle(fontSize: 12, color: Colors.pink.shade300),
                   ),
                 ],
               ],
             ),
           ),
-        );
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.pinkAccent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              "기념일",
+              style: TextStyle(fontSize: 12, color: Colors.pinkAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleItem(dynamic schedule) {
+    return Dismissible(
+      key: Key(schedule['id'].toString()),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF8B7E74),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      confirmDismiss: (_) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("삭제 확인"),
+            content: Text("'${schedule['title']}'을(를) 삭제할까요?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("취소"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text("삭제", style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        ) ?? false;
       },
+      onDismissed: (_) => _deleteSchedule(schedule['id']),
+      child: GestureDetector(
+        onTap: () => _showScheduleDetailDialog(schedule),
+        child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.event, size: 18, color: Color(0xFF8B7E74)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    schedule['title'] ?? "",
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (schedule['writerNickname'] != null &&
+                    schedule['writerNickname'].toString().isNotEmpty)
+                  Text(
+                    schedule['writerNickname'],
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  ),
+              ],
+            ),
+            if (schedule['memo'] != null &&
+                schedule['memo'].toString().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                schedule['memo'],
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ],
+        ),
+      ),
+      ),
     );
   }
 }
