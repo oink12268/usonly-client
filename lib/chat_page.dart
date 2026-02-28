@@ -799,392 +799,393 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         children: [
           // 채팅 검색 메뉴 툴바 (롱프레스 시 표시)
           if (_showChatSearchMenu)
-          Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              border: Border(
-                bottom: BorderSide(color: Colors.grey.withOpacity(0.2)),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _searchMenuButton(Icons.search, '검색', _openWordSearch),
+                  _searchMenuButton(Icons.calendar_month, '날짜', _openCalendarSearch),
+                  _searchMenuButton(Icons.auto_awesome, 'AI 검색', _showAiSearch),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Color(0xFF8B7E74)),
+                    onPressed: () => setState(() => _showChatSearchMenu = false),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
               ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _searchMenuButton(Icons.search, '검색', _openWordSearch),
-                _searchMenuButton(Icons.calendar_month, '날짜', _openCalendarSearch),
-                _searchMenuButton(Icons.auto_awesome, 'AI 검색', _showAiSearch),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Color(0xFF8B7E74)),
-                  onPressed: () => setState(() => _showChatSearchMenu = false),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-          ),
 
-        // 채팅 리스트 영역
-        Expanded(
-          child: GestureDetector(
-            onLongPress: () => setState(() => _showChatSearchMenu = true),
-            child: ListView.builder(
-            controller: _scrollController,
-            reverse: true, // 최신 메시지(index 0)가 맨 아래에 표시됨
-            padding: const EdgeInsets.fromLTRB(8, 16, 8, 4),
-            itemCount: _chats.length + (_isLoadingMore ? 1 : 0),
-            itemBuilder: (context, index) {
-              // 맨 위 로딩 인디케이터 (reverse이므로 가장 높은 index = 화면 맨 위)
-              if (_isLoadingMore && index == _chats.length) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74))),
-                );
-              }
-              // reverse: true → index 0 = 최신(_chats.last), index n = 오래된(_chats.first)
-              final chatIndex = _chats.length - 1 - index;
-              final chat = _chats[chatIndex];
-              final message = chat['message'] as String;
-              final String? createdAt = chat['created_at'] ?? chat['createdAt'];
-              final isMe = chat['writerUid'] == widget.uid;
+          // 채팅 리스트 영역
+          Expanded(
+            child: GestureDetector(
+              onLongPress: () => setState(() => _showChatSearchMenu = true),
+              child: ListView.builder(
+                controller: _scrollController,
+                reverse: true, // 최신 메시지(index 0)가 맨 아래에 표시됨
+                padding: const EdgeInsets.fromLTRB(8, 16, 8, 4),
+                itemCount: _chats.length + (_isLoadingMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  // 맨 위 로딩 인디케이터 (reverse이므로 가장 높은 index = 화면 맨 위)
+                  if (_isLoadingMore && index == _chats.length) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74))),
+                    );
+                  }
+                  // reverse: true → index 0 = 최신(_chats.last), index n = 오래된(_chats.first)
+                  final chatIndex = _chats.length - 1 - index;
+                  final chat = _chats[chatIndex];
+                  final message = chat['message'] as String;
+                  final String? createdAt = chat['created_at'] ?? chat['createdAt'];
+                  final isMe = chat['writerUid'] == widget.uid;
 
-              // ★ 날짜 구분선 표시 여부 판단
-              bool showDateDivider = false;
-              if (chatIndex == 0) {
-                showDateDivider = true;
-              } else {
-                final prevChat = _chats[chatIndex - 1];
-                final prevDate = prevChat['created_at'] ?? prevChat['createdAt'];
-                showDateDivider = !_isSameDate(createdAt, prevDate);
-              }
+                  // ★ 날짜 구분선 표시 여부 판단
+                  bool showDateDivider = false;
+                  if (chatIndex == 0) {
+                    showDateDivider = true;
+                  } else {
+                    final prevChat = _chats[chatIndex - 1];
+                    final prevDate = prevChat['created_at'] ?? prevChat['createdAt'];
+                    showDateDivider = !_isSameDate(createdAt, prevDate);
+                  }
 
-              // 메시지 내용 처리 (사진 vs 텍스트)
-              final isImage = message.startsWith('IMAGE:');
-              final String content = isImage ? message.replaceFirst('IMAGE:', '') : message;
+                  // 메시지 내용 처리 (사진 vs 텍스트)
+                  final isImage = message.startsWith('IMAGE:');
+                  final String content = isImage ? message.replaceFirst('IMAGE:', '') : message;
 
-              // 답장 정보
-              final hasReply = chat['replyToId'] != null;
-              final String? replyToMessage = chat['replyToMessage'];
-              final String? replyToUid = chat['replyToUid'];
+                  // 답장 정보
+                  final hasReply = chat['replyToId'] != null;
+                  final String? replyToMessage = chat['replyToMessage'];
+                  final String? replyToUid = chat['replyToUid'];
 
-              return Column(
-                children: [
-                  // [1] 날짜 구분선
-                  if (showDateDivider && createdAt != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            createdAt.split('T')[0],
-                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                  return Column(
+                    children: [
+                      // [1] 날짜 구분선
+                      if (showDateDivider && createdAt != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                createdAt.split('T')[0],
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
 
-                  // [2] 말풍선 (스와이프 or 롱프레스로 답장)
-                  Dismissible(
-                    key: ValueKey(chat['id'] ?? index),
-                    direction: DismissDirection.startToEnd,
-                    confirmDismiss: (_) async {
-                      _setReplyTarget(chat);
-                      return false;
-                    },
-                    background: Container(
-                      alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.only(left: 20),
-                      child: const Icon(Icons.reply, color: Color(0xFF8B7E74)),
-                    ),
-                    child: GestureDetector(
-                      onLongPress: () => _showMessageOptions(chat),
-                      child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-                      child: Row(
-                        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (!isMe)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: CircleAvatar(
-                                backgroundColor: Theme.of(context).colorScheme.surface,
-                                backgroundImage: _profileImageCache[chat['writerUid']?.toString()] != null
-                                    ? CachedNetworkImageProvider(
-                                        _profileImageCache[chat['writerUid']!.toString()]!,
-                                      )
-                                    : null,
-                                child: _profileImageCache[chat['writerUid']?.toString()] == null
-                                    ? Icon(Icons.person, color: Theme.of(context).colorScheme.onSurfaceVariant)
-                                    : null,
-                              ),
-                            ),
-                          // 내 메시지: 시간 왼쪽 + 말풍선 오른쪽
-                          if (isMe)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4, top: 4),
-                              child: Align(
-                                alignment: Alignment.bottomRight,
-                                child: Text(
-                                  _formatTime(createdAt),
-                                  style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                ),
-                              ),
-                            ),
-                          Flexible(
-                            child: Column(
-                              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                      // [2] 말풍선 (스와이프 or 롱프레스로 답장)
+                      Dismissible(
+                        key: ValueKey(chat['id'] ?? index),
+                        direction: DismissDirection.startToEnd,
+                        confirmDismiss: (_) async {
+                          _setReplyTarget(chat);
+                          return false;
+                        },
+                        background: Container(
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.only(left: 20),
+                          child: const Icon(Icons.reply, color: Color(0xFF8B7E74)),
+                        ),
+                        child: GestureDetector(
+                          onLongPress: () => _showMessageOptions(chat),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+                            child: Row(
+                              mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 if (!isMe)
                                   Padding(
-                                    padding: const EdgeInsets.only(bottom: 4, left: 2),
-                                    child: Text(
-                                      _nicknameCache[chat['writerUid']?.toString()] ?? chat['writerUid'].toString().substring(0, 4),
-                                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: CircleAvatar(
+                                      backgroundColor: Theme.of(context).colorScheme.surface,
+                                      backgroundImage: _profileImageCache[chat['writerUid']?.toString()] != null
+                                          ? CachedNetworkImageProvider(
+                                              _profileImageCache[chat['writerUid']!.toString()]!,
+                                            )
+                                          : null,
+                                      child: _profileImageCache[chat['writerUid']?.toString()] == null
+                                          ? Icon(Icons.person, color: Theme.of(context).colorScheme.onSurfaceVariant)
+                                          : null,
                                     ),
                                   ),
-
-                                // 답장 인용 표시
-                                if (hasReply && replyToMessage != null)
-                                  Container(
-                                    margin: const EdgeInsets.only(bottom: 4),
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border(
-                                        left: BorderSide(color: const Color(0xFF8B7E74), width: 3),
+                                // 내 메시지: 시간 왼쪽 + 말풍선 오른쪽
+                                if (isMe)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 4, top: 4),
+                                    child: Align(
+                                      alignment: Alignment.bottomRight,
+                                      child: Text(
+                                        _formatTime(createdAt),
+                                        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                       ),
                                     ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          replyToUid != null && replyToUid == widget.uid
-                                              ? "나"
-                                              : _nicknameCache[replyToUid] ?? replyToUid?.substring(0, 4) ?? "",
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: const Color(0xFF8B7E74),
+                                  ),
+                                Flexible(
+                                  child: Column(
+                                    crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                    children: [
+                                      if (!isMe)
+                                        Padding(
+                                          padding: const EdgeInsets.only(bottom: 4, left: 2),
+                                          child: Text(
+                                            _nicknameCache[chat['writerUid']?.toString()] ?? chat['writerUid'].toString().substring(0, 4),
+                                            style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                           ),
                                         ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          _replyPreviewText(replyToMessage),
-                                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
 
-                                if (isImage)
-                                  GestureDetector(
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => FullScreenImageView(imageUrl: content),
+                                      // 답장 인용 표시
+                                      if (hasReply && replyToMessage != null)
+                                        Container(
+                                          margin: const EdgeInsets.only(bottom: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border(
+                                              left: BorderSide(color: const Color(0xFF8B7E74), width: 3),
+                                            ),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                replyToUid != null && replyToUid == widget.uid
+                                                    ? "나"
+                                                    : _nicknameCache[replyToUid] ?? replyToUid?.substring(0, 4) ?? "",
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: const Color(0xFF8B7E74),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                _replyPreviewText(replyToMessage),
+                                                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+
+                                      if (isImage)
+                                        GestureDetector(
+                                          onTap: () => Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => FullScreenImageView(imageUrl: content),
+                                            ),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(15),
+                                            child: CachedNetworkImage(
+                                              imageUrl: content,
+                                              width: 200,
+                                              height: 200,
+                                              fit: BoxFit.cover,
+                                              memCacheWidth: 300,
+                                              placeholder: (context, url) => Container(
+                                                  width: 200, height: 200, color: Theme.of(context).colorScheme.surfaceContainerHighest),
+                                              errorWidget: (context, url, error) => const Icon(Icons.error),
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: isMe ? const Color(0xFF8B7E74) : Theme.of(context).colorScheme.surface,
+                                            borderRadius: BorderRadius.only(
+                                              topLeft: const Radius.circular(15),
+                                              topRight: const Radius.circular(15),
+                                              bottomLeft: isMe ? const Radius.circular(15) : const Radius.circular(0),
+                                              bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(15),
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                  color: Colors.black.withOpacity(0.05),
+                                                  blurRadius: 1,
+                                                  offset: const Offset(1, 1))
+                                            ],
+                                          ),
+                                          child: _buildMessageContent(content, isMe),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                // 상대 메시지: 말풍선 왼쪽 + 시간 오른쪽
+                                if (!isMe)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4, top: 4),
+                                    child: Align(
+                                      alignment: Alignment.bottomLeft,
+                                      child: Text(
+                                        _formatTime(createdAt),
+                                        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                       ),
                                     ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(15),
-                                      child: CachedNetworkImage(
-                                        imageUrl: content,
-                                        width: 200,
-                                        height: 200,
-                                        fit: BoxFit.cover,
-                                        memCacheWidth: 300,
-                                        placeholder: (context, url) => Container(
-                                            width: 200, height: 200, color: Theme.of(context).colorScheme.surfaceContainerHighest),
-                                        errorWidget: (context, url, error) => const Icon(Icons.error),
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: isMe ? const Color(0xFF8B7E74) : Theme.of(context).colorScheme.surface,
-                                      borderRadius: BorderRadius.only(
-                                        topLeft: const Radius.circular(15),
-                                        topRight: const Radius.circular(15),
-                                        bottomLeft: isMe ? const Radius.circular(15) : const Radius.circular(0),
-                                        bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(15),
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                            color: Colors.black.withOpacity(0.05),
-                                            blurRadius: 1,
-                                            offset: const Offset(1, 1))
-                                      ],
-                                    ),
-                                    child: _buildMessageContent(content, isMe),
                                   ),
                               ],
                             ),
                           ),
-                          // 상대 메시지: 말풍선 왼쪽 + 시간 오른쪽
-                          if (!isMe)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4, top: 4),
-                              child: Align(
-                                alignment: Alignment.bottomLeft,
-                                child: Text(
-                                  _formatTime(createdAt),
-                                  style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                ),
-                              ),
-                            ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                  ),
-                ],
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+
+          // 상대방 입력 중 표시 (ValueListenableBuilder: 전체 리빌드 없이 이 위젯만 업데이트)
+          ValueListenableBuilder<bool>(
+            valueListenable: _partnerTypingNotifier,
+            builder: (context, isTyping, _) {
+              if (!isTyping) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text("입력 중...", style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                ),
               );
             },
           ),
-          ),
-        ),
 
-        // 상대방 입력 중 표시 (ValueListenableBuilder: 전체 리빌드 없이 이 위젯만 업데이트)
-        ValueListenableBuilder<bool>(
-          valueListenable: _partnerTypingNotifier,
-          builder: (context, isTyping, _) {
-            if (!isTyping) return const SizedBox.shrink();
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text("입력 중...", style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          // 사진 업로드 중 표시
+          if (_isUploadingImage)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74))),
+                  SizedBox(width: 10),
+                  Text("사진 전송 중...", style: TextStyle(fontSize: 13, color: Color(0xFF8B7E74))),
+                ],
               ),
-            );
-          },
-        ),
-
-        // 사진 업로드 중 표시
-        if (_isUploadingImage)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74))),
-                SizedBox(width: 10),
-                Text("사진 전송 중...", style: TextStyle(fontSize: 13, color: Color(0xFF8B7E74))),
-              ],
             ),
-          ),
 
-        // 답장 미리보기 바
-        if (_replyTarget != null)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Row(
-              children: [
-                Container(
-                  width: 3,
-                  height: 36,
-                  color: const Color(0xFF8B7E74),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _replyTarget!['writerUid'] == widget.uid
-                            ? "나에게 답장"
-                            : "${_replyTarget!['writerUid'].toString().substring(0, 4)}에게 답장",
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF8B7E74),
+          // 답장 미리보기 바
+          if (_replyTarget != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Row(
+                children: [
+                  Container(
+                    width: 3,
+                    height: 36,
+                    color: const Color(0xFF8B7E74),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _replyTarget!['writerUid'] == widget.uid
+                              ? "나에게 답장"
+                              : "${_replyTarget!['writerUid'].toString().substring(0, 4)}에게 답장",
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF8B7E74),
+                          ),
                         ),
+                        Text(
+                          _replyPreviewText(_replyTarget!['message']),
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _cancelReply,
+                    child: Icon(Icons.close, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+
+          // 입력창 영역
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.add_photo_alternate_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  onPressed: _showImageSourceSheet,
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onLongPress: () async {
+                      final data = await Clipboard.getData(Clipboard.kTextPlain);
+                      final text = data?.text;
+                      if (text == null || text.isEmpty) return;
+                      final cur = _controller.value;
+                      final newText = cur.text.replaceRange(
+                        cur.selection.start < 0 ? cur.text.length : cur.selection.start,
+                        cur.selection.end < 0 ? cur.text.length : cur.selection.end,
+                        text,
+                      );
+                      _controller.value = TextEditingValue(
+                        text: newText,
+                        selection: TextSelection.collapsed(
+                          offset: (cur.selection.start < 0 ? cur.text.length : cur.selection.start) + text.length,
+                        ),
+                      );
+                      _onTypingChanged(newText);
+                    },
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      decoration: InputDecoration(
+                        hintText: "",
+                        filled: true,
+                        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(30),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                       ),
-                      Text(
-                        _replyPreviewText(_replyTarget!['message']),
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                      onChanged: _onTypingChanged,
+                      onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송
+                    ),
                   ),
                 ),
-                GestureDetector(
-                  onTap: _cancelReply,
-                  child: Icon(Icons.close, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  backgroundColor: const Color(0xFF8B7E74),
+                  radius: 24,
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                    onPressed: _sendMessage,
+                  ),
                 ),
               ],
             ),
           ),
-
-        // 입력창 영역
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.add_photo_alternate_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                onPressed: _showImageSourceSheet,
-              ),
-              Expanded(
-                child: GestureDetector(
-                  onLongPress: () async {
-                    final data = await Clipboard.getData(Clipboard.kTextPlain);
-                    final text = data?.text;
-                    if (text == null || text.isEmpty) return;
-                    final cur = _controller.value;
-                    final newText = cur.text.replaceRange(
-                      cur.selection.start < 0 ? cur.text.length : cur.selection.start,
-                      cur.selection.end < 0 ? cur.text.length : cur.selection.end,
-                      text,
-                    );
-                    _controller.value = TextEditingValue(
-                      text: newText,
-                      selection: TextSelection.collapsed(
-                        offset: (cur.selection.start < 0 ? cur.text.length : cur.selection.start) + text.length,
-                      ),
-                    );
-                    _onTypingChanged(newText);
-                  },
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    decoration: InputDecoration(
-                      hintText: "",
-                      filled: true,
-                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                    ),
-                    onChanged: _onTypingChanged,
-                    onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              CircleAvatar(
-                backgroundColor: const Color(0xFF8B7E74),
-                radius: 24,
-                child: IconButton(
-                  icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                  onPressed: _sendMessage,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
