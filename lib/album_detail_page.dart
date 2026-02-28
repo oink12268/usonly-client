@@ -278,6 +278,24 @@ class _PhotoViewerPage extends StatefulWidget {
 class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   late PageController _pageController;
   late int _currentIndex;
+  bool _isZoomed = false;
+  int _pointerCount = 0;
+  TapDownDetails? _doubleTapDetails;
+  final Map<int, TransformationController> _transformControllers = {};
+
+  TransformationController _controllerFor(int index) {
+    return _transformControllers.putIfAbsent(index, () {
+      final controller = TransformationController();
+      controller.addListener(() {
+        if (index == _currentIndex) {
+          final scale = controller.value.getMaxScaleOnAxis();
+          final zoomed = scale > 1.05;
+          if (zoomed != _isZoomed) setState(() => _isZoomed = zoomed);
+        }
+      });
+      return controller;
+    });
+  }
 
   @override
   void initState() {
@@ -289,7 +307,32 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   @override
   void dispose() {
     _pageController.dispose();
+    for (final c in _transformControllers.values) c.dispose();
     super.dispose();
+  }
+
+  void _onPageChanged(int index) {
+    _transformControllers[_currentIndex]?.value = Matrix4.identity();
+    setState(() {
+      _currentIndex = index;
+      _isZoomed = false;
+    });
+  }
+
+  void _onDoubleTap(TransformationController controller) {
+    final scale = controller.value.getMaxScaleOnAxis();
+    if (scale > 1.05) {
+      controller.value = Matrix4.identity();
+      return;
+    }
+    if (_doubleTapDetails == null) return;
+    final x = _doubleTapDetails!.localPosition.dx;
+    final y = _doubleTapDetails!.localPosition.dy;
+    const double s = 2.5;
+    controller.value = Matrix4.identity()
+      ..translate(x, y)
+      ..scale(s)
+      ..translate(-x, -y);
   }
 
   @override
@@ -329,26 +372,48 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
           ),
         ],
       ),
-      body: PageView.builder(
-        controller: _pageController,
-        itemCount: widget.photos.length,
-        onPageChanged: (index) => setState(() => _currentIndex = index),
-        itemBuilder: (context, index) {
-          return InteractiveViewer(
-            minScale: 1.0,
-            maxScale: 4.0,
-            child: Center(
-              child: CachedNetworkImage(
-                imageUrl: widget.photos[index]['mediaUrl'],
-                fit: BoxFit.contain,
-                placeholder: (context, url) =>
-                    const CircularProgressIndicator(color: Colors.white),
-                errorWidget: (context, url, error) =>
-                    const Icon(Icons.broken_image, color: Colors.white54, size: 64),
-              ),
-            ),
-          );
+      body: Listener(
+        onPointerDown: (_) {
+          _pointerCount++;
+          if (_pointerCount >= 2 && !_isZoomed) setState(() => _isZoomed = true);
         },
+        onPointerUp: (_) {
+          _pointerCount = (_pointerCount - 1).clamp(0, 100);
+          if (_pointerCount < 2) {
+            final scale = _controllerFor(_currentIndex).value.getMaxScaleOnAxis();
+            setState(() => _isZoomed = scale > 1.05);
+          }
+        },
+        child: PageView.builder(
+          physics: _isZoomed
+              ? const NeverScrollableScrollPhysics()
+              : const PageScrollPhysics(),
+          controller: _pageController,
+          itemCount: widget.photos.length,
+          onPageChanged: _onPageChanged,
+          itemBuilder: (context, index) {
+            final controller = _controllerFor(index);
+            return GestureDetector(
+              onDoubleTapDown: (d) => _doubleTapDetails = d,
+              onDoubleTap: () => _onDoubleTap(controller),
+              child: InteractiveViewer(
+                transformationController: controller,
+                minScale: 1.0,
+                maxScale: 4.0,
+                child: Center(
+                  child: CachedNetworkImage(
+                    imageUrl: widget.photos[index]['mediaUrl'],
+                    fit: BoxFit.contain,
+                    placeholder: (context, url) =>
+                        const CircularProgressIndicator(color: Colors.white),
+                    errorWidget: (context, url, error) =>
+                        const Icon(Icons.broken_image, color: Colors.white54, size: 64),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

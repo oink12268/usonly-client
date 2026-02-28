@@ -59,8 +59,8 @@ class MyApp extends StatelessWidget {
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: Colors.white,
-          selectedItemColor: Color(0xFF8B7E74),
-          unselectedItemColor: Color(0xFFD4C5B9),
+          selectedItemColor: Color(0xFF5C4A44),
+          unselectedItemColor: Color(0xFFB0B0B0),
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: Color(0xFF8B7E74),
@@ -75,16 +75,16 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Pretendard',
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF8B7E74),
-        scaffoldBackgroundColor: const Color(0xFF1C1B1B),
+        scaffoldBackgroundColor: const Color(0xFF282828),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1C1B1B),
-          foregroundColor: Color(0xFFBFAFA6),
+          backgroundColor: Color(0xFF282828),
+          foregroundColor: Color(0xFFFFFFFF),
           elevation: 0,
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF2A2827),
-          selectedItemColor: Color(0xFFBFAFA6),
-          unselectedItemColor: Color(0xFF6E5E58),
+          backgroundColor: Color(0xFF323232),
+          selectedItemColor: Color(0xFFFFFFFF),
+          unselectedItemColor: Color(0xFF777777),
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: Color(0xFF8B7E74),
@@ -92,7 +92,8 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF8B7E74),
           primary: const Color(0xFF8B7E74),
-          surface: const Color(0xFF2A2827),
+          surface: const Color(0xFF323232),
+          onSurface: const Color(0xFFFFFFFF),
           brightness: Brightness.dark,
         ),
       ),

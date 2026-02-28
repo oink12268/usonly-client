@@ -63,8 +63,6 @@ _pages = [
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: const Color(0xFF8B7E74),
-        unselectedItemColor: const Color(0xFFD4C5B9),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.photo_album), label: '앨범'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '캘린더'),
@@ -225,38 +223,33 @@ class _MorePageState extends State<_MorePage> {
             onChanged: (_) => themeNotifier.toggle(),
           ),
           // 글자 크기
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Row(
-              children: [
-                const Icon(Icons.text_fields, color: Color(0xFF8B7E74)),
-                const SizedBox(width: 16),
-                const Text('글자 크기', style: TextStyle(color: Color(0xFF8B7E74), fontSize: 16)),
-                const Spacer(),
-                SegmentedButton<double>(
-                  segments: const [
-                    ButtonSegment(value: 0.85, label: Text('작게')),
-                    ButtonSegment(value: 1.0, label: Text('보통')),
-                    ButtonSegment(value: 1.2, label: Text('크게')),
-                  ],
-                  selected: {fontSizeNotifier.scale},
-                  onSelectionChanged: (selected) {
-                    fontSizeNotifier.setScale(selected.first);
-                  },
-                  style: ButtonStyle(
-                    foregroundColor: WidgetStateProperty.resolveWith((states) =>
-                      states.contains(WidgetState.selected)
-                        ? Colors.white
-                        : const Color(0xFF8B7E74),
-                    ),
-                    backgroundColor: WidgetStateProperty.resolveWith((states) =>
-                      states.contains(WidgetState.selected)
-                        ? const Color(0xFF8B7E74)
-                        : Colors.transparent,
-                    ),
-                  ),
-                ),
+          ListTile(
+            leading: const Icon(Icons.text_fields, color: Color(0xFF8B7E74)),
+            title: const Text('글자 크기', style: TextStyle(color: Color(0xFF8B7E74))),
+            trailing: SegmentedButton<double>(
+              segments: const [
+                ButtonSegment(value: 0.85, label: Text('작게')),
+                ButtonSegment(value: 1.0, label: Text('보통')),
+                ButtonSegment(value: 1.2, label: Text('크게')),
               ],
+              selected: {fontSizeNotifier.scale},
+              onSelectionChanged: (selected) {
+                fontSizeNotifier.setScale(selected.first);
+              },
+              style: ButtonStyle(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+                foregroundColor: WidgetStateProperty.resolveWith((states) =>
+                  states.contains(WidgetState.selected)
+                    ? Colors.white
+                    : const Color(0xFF8B7E74),
+                ),
+                backgroundColor: WidgetStateProperty.resolveWith((states) =>
+                  states.contains(WidgetState.selected)
+                    ? const Color(0xFF8B7E74)
+                    : Colors.transparent,
+                ),
+              ),
             ),
           ),
           const Divider(height: 20),

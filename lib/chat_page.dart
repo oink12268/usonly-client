@@ -48,12 +48,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _hasMore = true;
   bool _isLoadingMore = false;
 
-  // 검색 관련 상태
-  bool _isSearching = false;
-  String _searchQuery = '';
-  final TextEditingController _searchController = TextEditingController();
-  List<int> _searchMatchIndices = [];
-  int _currentMatchIndex = -1;
+  // 채팅 검색 메뉴 표시 상태
+  bool _showChatSearchMenu = false;
 
   // uid → 닉네임 / 프로필 이미지 캐시
   final Map<String, String> _nicknameCache = {};
@@ -113,7 +109,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -565,76 +560,44 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     return message;
   }
 
-  // --- 검색 기능 ---
-  void _startSearch() {
-    setState(() {
-      _isSearching = true;
-      _searchQuery = '';
-      _searchMatchIndices = [];
-      _currentMatchIndex = -1;
-      _searchController.clear();
-    });
-  }
-
-  void _stopSearch() {
-    setState(() {
-      _isSearching = false;
-      _searchQuery = '';
-      _searchMatchIndices = [];
-      _currentMatchIndex = -1;
-      _searchController.clear();
-    });
-  }
-
-  void _onSearchChanged(String query) {
-    final lowerQuery = query.toLowerCase();
-    final matches = <int>[];
-    if (lowerQuery.isNotEmpty) {
-      for (int i = 0; i < _chats.length; i++) {
-        final msg = (_chats[i]['message'] as String?) ?? '';
-        if (msg.startsWith('IMAGE:')) continue;
-        if (msg.toLowerCase().contains(lowerQuery)) {
-          matches.add(i);
-        }
-      }
-    }
-    setState(() {
-      _searchQuery = query;
-      _searchMatchIndices = matches;
-      _currentMatchIndex = matches.isNotEmpty ? 0 : -1;
-    });
-    if (matches.isNotEmpty) {
-      _jumpToMatch(0);
-    }
-  }
-
-  void _jumpToMatch(int matchIndex) {
-    if (matchIndex < 0 || matchIndex >= _searchMatchIndices.length) return;
-    final chatIndex = _searchMatchIndices[matchIndex];
-    // reverse: true → visual index = _chats.length - 1 - chatIndex (bottom 기준)
-    final estimatedOffset = (_chats.length - 1 - chatIndex) * 80.0;
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    _scrollController.animateTo(
-      estimatedOffset.clamp(0.0, maxScroll),
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+  // --- 채팅 검색 메뉴 ---
+  void _openWordSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatSearchListPage(uid: widget.uid),
+      ),
     );
   }
 
-  void _prevMatch() {
-    if (_searchMatchIndices.isEmpty) return;
-    setState(() {
-      _currentMatchIndex = (_currentMatchIndex - 1 + _searchMatchIndices.length) % _searchMatchIndices.length;
-    });
-    _jumpToMatch(_currentMatchIndex);
+  void _openCalendarSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatCalendarPage(uid: widget.uid),
+      ),
+    );
   }
 
-  void _nextMatch() {
-    if (_searchMatchIndices.isEmpty) return;
-    setState(() {
-      _currentMatchIndex = (_currentMatchIndex + 1) % _searchMatchIndices.length;
-    });
-    _jumpToMatch(_currentMatchIndex);
+  Widget _searchMenuButton(IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: () {
+        setState(() => _showChatSearchMenu = false);
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: const Color(0xFF8B7E74), size: 24),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF8B7E74))),
+          ],
+        ),
+      ),
+    );
   }
 
   // 스크롤 맨 아래로 내리는 함수
@@ -653,7 +616,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -679,9 +642,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               autofocus: true,
               decoration: InputDecoration(
                 hintText: '예) 최근에 놀러가고 싶다고 했던 곳들',
-                hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4), fontSize: 14),
                 filled: true,
-                fillColor: Colors.grey[100],
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -825,64 +788,25 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // AI 검색 버튼 (우측 상단)
-        if (!_isSearching)
-          Align(
-            alignment: Alignment.centerRight,
-            child: IconButton(
-              icon: const Icon(Icons.auto_awesome, color: Color(0xFF8B7E74), size: 22),
-              tooltip: 'AI 채팅 검색',
-              onPressed: _showAiSearch,
-            ),
-          ),
-
-        // 검색바
-        if (_isSearching)
+        // 채팅 검색 메뉴 툴바 (롱프레스 시 표시)
+        if (_showChatSearchMenu)
           Container(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              border: Border(
+                bottom: BorderSide(color: Colors.grey.withOpacity(0.2)),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: '메시지 검색...',
-                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                      filled: true,
-                      fillColor: Theme.of(context).colorScheme.surface,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                      prefixIcon: const Icon(Icons.search, color: Color(0xFF8B7E74), size: 20),
-                    ),
-                    onChanged: _onSearchChanged,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (_searchQuery.isNotEmpty)
-                  Text(
-                    _searchMatchIndices.isEmpty
-                        ? '0/0'
-                        : '${_currentMatchIndex + 1}/${_searchMatchIndices.length}',
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF8B7E74)),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.keyboard_arrow_up, color: Color(0xFF8B7E74)),
-                  onPressed: _prevMatch,
-                  visualDensity: VisualDensity.compact,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF8B7E74)),
-                  onPressed: _nextMatch,
-                  visualDensity: VisualDensity.compact,
-                ),
+                _searchMenuButton(Icons.search, '검색', _openWordSearch),
+                _searchMenuButton(Icons.calendar_month, '날짜', _openCalendarSearch),
+                _searchMenuButton(Icons.auto_awesome, 'AI 검색', _showAiSearch),
                 IconButton(
                   icon: const Icon(Icons.close, color: Color(0xFF8B7E74)),
-                  onPressed: _stopSearch,
+                  onPressed: () => setState(() => _showChatSearchMenu = false),
                   visualDensity: VisualDensity.compact,
                 ),
               ],
@@ -892,7 +816,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         // 채팅 리스트 영역
         Expanded(
           child: GestureDetector(
-            onLongPress: _startSearch,
+            onLongPress: () => setState(() => _showChatSearchMenu = true),
             child: ListView.builder(
             controller: _scrollController,
             reverse: true, // 최신 메시지(index 0)가 맨 아래에 표시됨
@@ -926,12 +850,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               // 메시지 내용 처리 (사진 vs 텍스트)
               final isImage = message.startsWith('IMAGE:');
               final String content = isImage ? message.replaceFirst('IMAGE:', '') : message;
-
-              // 검색 매치 여부
-              final bool isSearchMatch = _isSearching && _searchMatchIndices.contains(chatIndex);
-              final bool isCurrentMatch = isSearchMatch && _currentMatchIndex >= 0 &&
-                  _currentMatchIndex < _searchMatchIndices.length &&
-                  _searchMatchIndices[_currentMatchIndex] == chatIndex;
 
               // 답장 정보
               final hasReply = chat['replyToId'] != null;
@@ -1089,11 +1007,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                         bottomLeft: isMe ? const Radius.circular(15) : const Radius.circular(0),
                                         bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(15),
                                       ),
-                                      border: isCurrentMatch
-                                          ? Border.all(color: Colors.orange, width: 2.5)
-                                          : isSearchMatch
-                                              ? Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 1.5)
-                                              : null,
                                       boxShadow: [
                                         BoxShadow(
                                             color: Colors.black.withOpacity(0.05),
@@ -1263,6 +1176,457 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// 채팅 키워드 검색 결과 페이지
+// ─────────────────────────────────────────────
+class ChatSearchListPage extends StatefulWidget {
+  final List<dynamic> chats;
+  final String uid;
+  const ChatSearchListPage({super.key, required this.chats, required this.uid});
+
+  @override
+  State<ChatSearchListPage> createState() => _ChatSearchListPageState();
+}
+
+class _ChatSearchListPageState extends State<ChatSearchListPage> {
+  final TextEditingController _controller = TextEditingController();
+  List<dynamic> _results = [];
+
+  void _search(String query) {
+    final lower = query.toLowerCase();
+    setState(() {
+      if (lower.isEmpty) {
+        _results = [];
+      } else {
+        _results = widget.chats.where((chat) {
+          final msg = (chat['message'] as String?) ?? '';
+          if (msg.startsWith('IMAGE:')) return false;
+          return msg.toLowerCase().contains(lower);
+        }).toList()
+          ..sort((a, b) {
+            final aDate = (a['created_at'] ?? a['createdAt'] ?? '') as String;
+            final bDate = (b['created_at'] ?? b['createdAt'] ?? '') as String;
+            return bDate.compareTo(aDate);
+          });
+      }
+    });
+  }
+
+  String _formatDateTime(String? dateTime) {
+    if (dateTime == null) return '';
+    try {
+      final dt = DateTime.parse(dateTime);
+      final hour = dt.hour;
+      final minute = dt.minute.toString().padLeft(2, '0');
+      String timeStr;
+      if (hour == 0) timeStr = '오전 12:$minute';
+      else if (hour < 12) timeStr = '오전 $hour:$minute';
+      else if (hour == 12) timeStr = '오후 12:$minute';
+      else timeStr = '오후 ${hour - 12}:$minute';
+      return '${dt.month}/${dt.day} $timeStr';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('채팅 검색'),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            child: TextField(
+              controller: _controller,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: '검색어를 입력해',
+                prefixIcon: const Icon(Icons.search, color: Color(0xFF8B7E74)),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              ),
+              onChanged: _search,
+            ),
+          ),
+          if (_controller.text.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${_results.length}개',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF8B7E74)),
+                ),
+              ),
+            ),
+          Expanded(
+            child: _controller.text.isNotEmpty && _results.isEmpty
+                ? const Center(
+                    child: Text('검색 결과가 없어', style: TextStyle(color: Colors.grey)),
+                  )
+                : ListView.builder(
+                    itemCount: _results.length,
+                    itemBuilder: (context, index) {
+                      final chat = _results[index];
+                      final msg = (chat['message'] as String?) ?? '';
+                      final isMe = chat['writerUid'] == widget.uid;
+                      final createdAt = chat['created_at'] ?? chat['createdAt'];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: const Color(0xFF8B7E74).withOpacity(0.15),
+                          child: Icon(
+                            isMe ? Icons.person : Icons.person_outline,
+                            color: const Color(0xFF8B7E74),
+                            size: 18,
+                          ),
+                        ),
+                        title: Text(
+                          isMe ? '나' : '상대방',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          msg,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        trailing: Text(
+                          _formatDateTime(createdAt),
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// 날짜별 채팅 달력 페이지
+// ─────────────────────────────────────────────
+class ChatCalendarPage extends StatefulWidget {
+  final List<dynamic> chats;
+  final String uid;
+  const ChatCalendarPage({super.key, required this.chats, required this.uid});
+
+  @override
+  State<ChatCalendarPage> createState() => _ChatCalendarPageState();
+}
+
+class _ChatCalendarPageState extends State<ChatCalendarPage> {
+  late DateTime _focusedMonth;
+  late Map<String, int> _countByDate;
+  late Map<String, List<dynamic>> _chatsByDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusedMonth = DateTime.now();
+    _buildDateMaps();
+  }
+
+  void _buildDateMaps() {
+    _countByDate = {};
+    _chatsByDate = {};
+    for (final chat in widget.chats) {
+      final dateStr = (chat['created_at'] ?? chat['createdAt'] ?? '') as String;
+      if (dateStr.isEmpty) continue;
+      final date = dateStr.split('T')[0];
+      _countByDate[date] = (_countByDate[date] ?? 0) + 1;
+      _chatsByDate.putIfAbsent(date, () => []).add(chat);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('날짜별 채팅'),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+      ),
+      body: Column(
+        children: [
+          const SizedBox(height: 8),
+          // 월 이동
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left, color: Color(0xFF8B7E74)),
+                onPressed: () => setState(() {
+                  _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+                }),
+              ),
+              Text(
+                '${_focusedMonth.year}년 ${_focusedMonth.month}월',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, color: Color(0xFF8B7E74)),
+                onPressed: () => setState(() {
+                  _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                }),
+              ),
+            ],
+          ),
+          // 요일 헤더
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: const [
+                Expanded(child: Center(child: Text('일', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold)))),
+                Expanded(child: Center(child: Text('월', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('화', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('수', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('목', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('금', style: TextStyle(fontSize: 12)))),
+                Expanded(child: Center(child: Text('토', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)))),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          // 달력 그리드
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: _buildCalendarGrid(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalendarGrid() {
+    final firstDay = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
+    final lastDay = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
+    final startWeekday = firstDay.weekday % 7; // 0=일요일
+    final today = DateTime.now();
+
+    final cells = <Widget>[];
+
+    // 첫 날 이전 빈 칸
+    for (int i = 0; i < startWeekday; i++) {
+      cells.add(const SizedBox());
+    }
+
+    for (int day = 1; day <= lastDay.day; day++) {
+      final date = DateTime(_focusedMonth.year, _focusedMonth.month, day);
+      final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final count = _countByDate[dateStr] ?? 0;
+      final dayChats = _chatsByDate[dateStr] ?? [];
+      final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
+      final isSunday = date.weekday == DateTime.sunday;
+      final isSaturday = date.weekday == DateTime.saturday;
+
+      cells.add(
+        GestureDetector(
+          onTap: count > 0
+              ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChatDayListPage(
+                        date: dateStr,
+                        chats: dayChats,
+                        uid: widget.uid,
+                      ),
+                    ),
+                  )
+              : null,
+          child: Container(
+            height: 60,
+            decoration: BoxDecoration(
+              border: isToday
+                  ? Border.all(color: const Color(0xFF8B7E74), width: 1.5)
+                  : null,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '$day',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                    color: isSunday
+                        ? Colors.red
+                        : isSaturday
+                            ? Colors.blue
+                            : null,
+                  ),
+                ),
+                if (count > 0) ...[
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8B7E74),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(fontSize: 10, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return GridView.count(
+      crossAxisCount: 7,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: cells,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// 특정 날짜의 채팅 리스트 페이지
+// ─────────────────────────────────────────────
+class ChatDayListPage extends StatelessWidget {
+  final String date;
+  final List<dynamic> chats;
+  final String uid;
+  const ChatDayListPage({super.key, required this.date, required this.chats, required this.uid});
+
+  String _formatTime(String? dateTime) {
+    if (dateTime == null) return '';
+    try {
+      final dt = DateTime.parse(dateTime);
+      final hour = dt.hour;
+      final minute = dt.minute.toString().padLeft(2, '0');
+      if (hour == 0) return '오전 12:$minute';
+      if (hour < 12) return '오전 $hour:$minute';
+      if (hour == 12) return '오후 12:$minute';
+      return '오후 ${hour - 12}:$minute';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sortedChats = [...chats]..sort((a, b) {
+        final aDate = (a['created_at'] ?? a['createdAt'] ?? '') as String;
+        final bDate = (b['created_at'] ?? b['createdAt'] ?? '') as String;
+        return aDate.compareTo(bDate);
+      });
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(date),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+      ),
+      body: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        itemCount: sortedChats.length,
+        itemBuilder: (context, index) {
+          final chat = sortedChats[index];
+          final msg = (chat['message'] as String?) ?? '';
+          final isMe = chat['writerUid'] == uid;
+          final createdAt = chat['created_at'] ?? chat['createdAt'];
+          final isImage = msg.startsWith('IMAGE:');
+          final content = isImage ? msg.replaceFirst('IMAGE:', '') : msg;
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!isMe)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: Color(0xFFEEEEEE),
+                      child: Icon(Icons.person, size: 16, color: Color(0xFF8B7E74)),
+                    ),
+                  ),
+                if (isMe)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4, bottom: 2),
+                    child: Text(
+                      _formatTime(createdAt),
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isMe ? const Color(0xFF8B7E74) : Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(15),
+                        topRight: const Radius.circular(15),
+                        bottomLeft: isMe ? const Radius.circular(15) : const Radius.circular(0),
+                        bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(15),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 1,
+                          offset: const Offset(1, 1),
+                        ),
+                      ],
+                    ),
+                    child: isImage
+                        ? CachedNetworkImage(
+                            imageUrl: content,
+                            width: 150,
+                            height: 150,
+                            fit: BoxFit.cover,
+                          )
+                        : Text(
+                            content,
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                  ),
+                ),
+                if (!isMe)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 2),
+                    child: Text(
+                      _formatTime(createdAt),
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
