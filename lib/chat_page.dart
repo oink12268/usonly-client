@@ -626,8 +626,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           bottom: MediaQuery.of(context).viewInsets.bottom + 20,
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Row(
               children: [
@@ -786,10 +785,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // 채팅 검색 메뉴 툴바 (롱프레스 시 표시)
-        if (_showChatSearchMenu)
+    return PopScope(
+      canPop: !_showChatSearchMenu,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_showChatSearchMenu) {
+          setState(() {
+            _showChatSearchMenu = false;
+          });
+        }
+      },
+      child: Column(
+        children: [
+          // 채팅 검색 메뉴 툴바 (롱프레스 시 표시)
+          if (_showChatSearchMenu)
           Container(
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -1184,9 +1193,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 // 채팅 키워드 검색 결과 페이지
 // ─────────────────────────────────────────────
 class ChatSearchListPage extends StatefulWidget {
-  final List<dynamic> chats;
   final String uid;
-  const ChatSearchListPage({super.key, required this.chats, required this.uid});
+  const ChatSearchListPage({super.key, required this.uid});
 
   @override
   State<ChatSearchListPage> createState() => _ChatSearchListPageState();
@@ -1195,25 +1203,33 @@ class ChatSearchListPage extends StatefulWidget {
 class _ChatSearchListPageState extends State<ChatSearchListPage> {
   final TextEditingController _controller = TextEditingController();
   List<dynamic> _results = [];
+  bool _isLoading = false;
 
-  void _search(String query) {
-    final lower = query.toLowerCase();
-    setState(() {
-      if (lower.isEmpty) {
+  Future<void> _search(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
         _results = [];
-      } else {
-        _results = widget.chats.where((chat) {
-          final msg = (chat['message'] as String?) ?? '';
-          if (msg.startsWith('IMAGE:')) return false;
-          return msg.toLowerCase().contains(lower);
-        }).toList()
-          ..sort((a, b) {
-            final aDate = (a['created_at'] ?? a['createdAt'] ?? '') as String;
-            final bDate = (b['created_at'] ?? b['createdAt'] ?? '') as String;
-            return bDate.compareTo(aDate);
-          });
+      });
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await ApiClient.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/chats/search?q=${Uri.encodeComponent(query.trim())}'),
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        setState(() {
+          _results = data;
+        });
       }
-    });
+    } catch (e) {
+      debugPrint('Search error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   String _formatDateTime(String? dateTime) {
@@ -1253,9 +1269,14 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
             child: TextField(
               controller: _controller,
               autofocus: true,
+              textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: '검색어를 입력해',
+                hintText: '검색어를 입력해주세요.',
                 prefixIcon: const Icon(Icons.search, color: Color(0xFF8B7E74)),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.send, color: Color(0xFF8B7E74)),
+                  onPressed: () => _search(_controller.text),
+                ),
                 filled: true,
                 fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(
@@ -1264,7 +1285,14 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               ),
-              onChanged: _search,
+              onChanged: (val) {
+                if (val.isEmpty) {
+                  setState(() {
+                    _results = [];
+                  });
+                }
+              },
+              onSubmitted: _search,
             ),
           ),
           if (_controller.text.isNotEmpty)
@@ -1328,9 +1356,8 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
 // 날짜별 채팅 달력 페이지
 // ─────────────────────────────────────────────
 class ChatCalendarPage extends StatefulWidget {
-  final List<dynamic> chats;
   final String uid;
-  const ChatCalendarPage({super.key, required this.chats, required this.uid});
+  const ChatCalendarPage({super.key, required this.uid});
 
   @override
   State<ChatCalendarPage> createState() => _ChatCalendarPageState();
@@ -1338,25 +1365,32 @@ class ChatCalendarPage extends StatefulWidget {
 
 class _ChatCalendarPageState extends State<ChatCalendarPage> {
   late DateTime _focusedMonth;
-  late Map<String, int> _countByDate;
-  late Map<String, List<dynamic>> _chatsByDate;
+  Map<String, int> _countByDate = {};
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _focusedMonth = DateTime.now();
-    _buildDateMaps();
+    _fetchCalendarData();
   }
 
-  void _buildDateMaps() {
-    _countByDate = {};
-    _chatsByDate = {};
-    for (final chat in widget.chats) {
-      final dateStr = (chat['created_at'] ?? chat['createdAt'] ?? '') as String;
-      if (dateStr.isEmpty) continue;
-      final date = dateStr.split('T')[0];
-      _countByDate[date] = (_countByDate[date] ?? 0) + 1;
-      _chatsByDate.putIfAbsent(date, () => []).add(chat);
+  Future<void> _fetchCalendarData() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await ApiClient.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/chats/calendar'),
+      );
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        setState(() {
+          _countByDate = data.map((key, value) => MapEntry(key, (value as num).toInt()));
+        });
+      }
+    } catch (e) {
+      debugPrint('Calendar data error: $e');
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -1366,55 +1400,63 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
       appBar: AppBar(
         title: const Text('날짜별 채팅'),
         backgroundColor: Theme.of(context).colorScheme.surface,
-      ),
-      body: Column(
-        children: [
-          const SizedBox(height: 8),
-          // 월 이동
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left, color: Color(0xFF8B7E74)),
-                onPressed: () => setState(() {
-                  _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
-                }),
-              ),
-              Text(
-                '${_focusedMonth.year}년 ${_focusedMonth.month}월',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, color: Color(0xFF8B7E74)),
-                onPressed: () => setState(() {
-                  _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
-                }),
-              ),
-            ],
-          ),
-          // 요일 헤더
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              children: const [
-                Expanded(child: Center(child: Text('일', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold)))),
-                Expanded(child: Center(child: Text('월', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('화', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('수', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('목', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('금', style: TextStyle(fontSize: 12)))),
-                Expanded(child: Center(child: Text('토', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)))),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
-          // 달력 그리드
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: _buildCalendarGrid(),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchCalendarData,
           ),
         ],
       ),
+      body: _isLoading && _countByDate.isEmpty
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B7E74)))
+          : Column(
+              children: [
+                const SizedBox(height: 8),
+                // 월 이동
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left, color: Color(0xFF8B7E74)),
+                      onPressed: () => setState(() {
+                        _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+                      }),
+                    ),
+                    Text(
+                      '${_focusedMonth.year}년 ${_focusedMonth.month}월',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right, color: Color(0xFF8B7E74)),
+                      onPressed: () => setState(() {
+                        _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                      }),
+                    ),
+                  ],
+                ),
+                // 요일 헤더
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      Expanded(child: Center(child: Text('일', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold)))),
+                      Expanded(child: Center(child: Text('월', style: TextStyle(fontSize: 12)))),
+                      Expanded(child: Center(child: Text('화', style: TextStyle(fontSize: 12)))),
+                      Expanded(child: Center(child: Text('수', style: TextStyle(fontSize: 12)))),
+                      Expanded(child: Center(child: Text('목', style: TextStyle(fontSize: 12)))),
+                      Expanded(child: Center(child: Text('금', style: TextStyle(fontSize: 12)))),
+                      Expanded(child: Center(child: Text('토', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // 달력 그리드
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: _buildCalendarGrid(),
+                ),
+              ],
+            ),
     );
   }
 
@@ -1435,7 +1477,6 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
       final date = DateTime(_focusedMonth.year, _focusedMonth.month, day);
       final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
       final count = _countByDate[dateStr] ?? 0;
-      final dayChats = _chatsByDate[dateStr] ?? [];
       final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
       final isSunday = date.weekday == DateTime.sunday;
       final isSaturday = date.weekday == DateTime.saturday;
@@ -1448,7 +1489,6 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                     MaterialPageRoute(
                       builder: (_) => ChatDayListPage(
                         date: dateStr,
-                        chats: dayChats,
                         uid: widget.uid,
                       ),
                     ),
@@ -1510,11 +1550,43 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
 // ─────────────────────────────────────────────
 // 특정 날짜의 채팅 리스트 페이지
 // ─────────────────────────────────────────────
-class ChatDayListPage extends StatelessWidget {
+class ChatDayListPage extends StatefulWidget {
   final String date;
-  final List<dynamic> chats;
   final String uid;
-  const ChatDayListPage({super.key, required this.date, required this.chats, required this.uid});
+  const ChatDayListPage({super.key, required this.date, required this.uid});
+
+  @override
+  State<ChatDayListPage> createState() => _ChatDayListPageState();
+}
+
+class _ChatDayListPageState extends State<ChatDayListPage> {
+  List<dynamic> _chats = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDayChats();
+  }
+
+  Future<void> _fetchDayChats() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await ApiClient.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/chats/by-date?date=${widget.date}'),
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        setState(() {
+          _chats = data;
+        });
+      }
+    } catch (e) {
+      debugPrint('Day chats error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   String _formatTime(String? dateTime) {
     if (dateTime == null) return '';
@@ -1533,100 +1605,96 @@ class ChatDayListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sortedChats = [...chats]..sort((a, b) {
-        final aDate = (a['created_at'] ?? a['createdAt'] ?? '') as String;
-        final bDate = (b['created_at'] ?? b['createdAt'] ?? '') as String;
-        return aDate.compareTo(bDate);
-      });
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(date),
+        title: Text(widget.date),
         backgroundColor: Theme.of(context).colorScheme.surface,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-        itemCount: sortedChats.length,
-        itemBuilder: (context, index) {
-          final chat = sortedChats[index];
-          final msg = (chat['message'] as String?) ?? '';
-          final isMe = chat['writerUid'] == uid;
-          final createdAt = chat['created_at'] ?? chat['createdAt'];
-          final isImage = msg.startsWith('IMAGE:');
-          final content = isImage ? msg.replaceFirst('IMAGE:', '') : msg;
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B7E74)))
+          : ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+              itemCount: _chats.length,
+              itemBuilder: (context, index) {
+                final chat = _chats[index];
+                final msg = (chat['message'] as String?) ?? '';
+                final isMe = chat['writerUid'] == widget.uid;
+                final createdAt = chat['created_at'] ?? chat['createdAt'];
+                final isImage = msg.startsWith('IMAGE:');
+                final content = isImage ? msg.replaceFirst('IMAGE:', '') : msg;
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (!isMe)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 8),
-                    child: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: Color(0xFFEEEEEE),
-                      child: Icon(Icons.person, size: 16, color: Color(0xFF8B7E74)),
-                    ),
-                  ),
-                if (isMe)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4, bottom: 2),
-                    child: Text(
-                      _formatTime(createdAt),
-                      style: const TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                  ),
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isMe ? const Color(0xFF8B7E74) : Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(15),
-                        topRight: const Radius.circular(15),
-                        bottomLeft: isMe ? const Radius.circular(15) : const Radius.circular(0),
-                        bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(15),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 1,
-                          offset: const Offset(1, 1),
-                        ),
-                      ],
-                    ),
-                    child: isImage
-                        ? CachedNetworkImage(
-                            imageUrl: content,
-                            width: 150,
-                            height: 150,
-                            fit: BoxFit.cover,
-                          )
-                        : Text(
-                            content,
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface,
-                            ),
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (!isMe)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 8),
+                          child: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: Color(0xFFEEEEEE),
+                            child: Icon(Icons.person, size: 16, color: Color(0xFF8B7E74)),
                           ),
+                        ),
+                      if (isMe)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4, bottom: 2),
+                          child: Text(
+                            _formatTime(createdAt),
+                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                          ),
+                        ),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isMe ? const Color(0xFF8B7E74) : Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(15),
+                              topRight: const Radius.circular(15),
+                              bottomLeft: isMe ? const Radius.circular(15) : const Radius.circular(0),
+                              bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(15),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 1,
+                                offset: const Offset(1, 1),
+                              ),
+                            ],
+                          ),
+                          child: isImage
+                              ? CachedNetworkImage(
+                                  imageUrl: content,
+                                  width: 150,
+                                  height: 150,
+                                  fit: BoxFit.cover,
+                                )
+                              : Text(
+                                  content,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      if (!isMe)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 2),
+                          child: Text(
+                            _formatTime(createdAt),
+                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-                if (!isMe)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 2),
-                    child: Text(
-                      _formatTime(createdAt),
-                      style: const TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                  ),
-              ],
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 }
