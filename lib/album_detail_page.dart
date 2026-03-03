@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:exif/exif.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
@@ -58,10 +59,19 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
 
     for (final image in images) {
       try {
+        final bytes = await image.readAsBytes();
         DateTime? takenAt;
         try {
-          takenAt = await image.lastModified();
+          final exifData = await readExifFromBytes(bytes);
+          final dateStr = exifData['EXIF DateTimeOriginal']?.printable
+                       ?? exifData['Image DateTime']?.printable;
+          if (dateStr != null && dateStr.length >= 19) {
+            final datePart = dateStr.substring(0, 10).replaceAll(':', '-');
+            final timePart = dateStr.substring(11, 19);
+            takenAt = DateTime.parse('${datePart}T$timePart');
+          }
         } catch (_) {}
+        takenAt ??= await image.lastModified();
 
         var request = http.MultipartRequest(
           'POST',
@@ -80,7 +90,6 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
               "${local.minute.toString().padLeft(2, '0')}:"
               "${local.second.toString().padLeft(2, '0')}";
         }
-        final bytes = await image.readAsBytes();
         request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: image.name));
 
         var response = await ApiClient.sendMultipart(request);
