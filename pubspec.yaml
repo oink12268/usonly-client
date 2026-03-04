@@ -50,6 +50,7 @@ dependencies:
   shared_preferences: ^2.3.4
   appflowy_editor: ^6.2.0
   file_picker: ^8.0.0
+  flame: ^1.21.0
 
 dev_dependencies:
   flutter_test:

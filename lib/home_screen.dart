@@ -11,6 +11,7 @@ import 'anniversary_page.dart';
 import 'calendar_page.dart';
 import 'note_page.dart';
 import 'work_schedule_page.dart';
+import 'dino_game_page.dart';
 import 'profile_edit_page.dart';
 import 'api_config.dart';
 import 'api_client.dart';
@@ -210,6 +211,17 @@ class _MorePageState extends State<_MorePage> {
                 MaterialPageRoute(
                   builder: (_) => WorkSchedulePage(nickname: _nickname ?? widget.user?.displayName),
                 ),
+              );
+            },
+          ),
+          // 미니 게임
+          ListTile(
+            leading: const Icon(Icons.sports_esports, color: Color(0xFF8B7E74)),
+            title: const Text('디노 런 🦖', style: TextStyle(color: Color(0xFF8B7E74))),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DinoGamePage()),
               );
             },
           ),
