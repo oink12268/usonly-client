@@ -157,7 +157,8 @@ class DinoGame extends FlameGame
 
 // ── Dino ──────────────────────────────────────────────────────────────────────
 
-class DinoComponent extends PositionComponent with CollisionCallbacks {
+class DinoComponent extends PositionComponent
+    with CollisionCallbacks, HasGameRef<DinoGame> {
   static const double _gravity = 1400.0;
   static const double _jumpV = -620.0;
 
@@ -166,7 +167,7 @@ class DinoComponent extends PositionComponent with CollisionCallbacks {
 
   DinoComponent() : super(size: Vector2(42, 48));
 
-  DinoGame get _game => game as DinoGame;
+  DinoGame get _game => gameRef;
 
   @override
   Future<void> onLoad() async {
@@ -249,7 +250,7 @@ class DinoComponent extends PositionComponent with CollisionCallbacks {
 
 // ── Obstacle (Cactus) ─────────────────────────────────────────────────────────
 
-class ObstacleComponent extends PositionComponent {
+class ObstacleComponent extends PositionComponent with HasGameRef<DinoGame> {
   final double speed;
   static final _rng = Random();
 
@@ -257,7 +258,7 @@ class ObstacleComponent extends PositionComponent {
 
   @override
   Future<void> onLoad() async {
-    final g = game as DinoGame;
+    final g = gameRef;
     final isTall = _rng.nextBool();
     final h = isTall
         ? 60.0 + _rng.nextDouble() * 25
