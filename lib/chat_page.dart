@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:stomp_dart_client/stomp_dart_client.dart'; // 소켓 라이브러리
@@ -12,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api_config.dart';
 import 'api_client.dart';
 import 'fcm_service.dart';
+import 'share_intent_service.dart';
 
 class ChatPage extends StatefulWidget {
   final String uid; // 내 아이디
@@ -71,6 +73,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _connectSocket();
 
     _scrollController.addListener(_onScroll);
+
+    // 공유 인텐트로 앱이 열렸을 때 처리
+    WidgetsBinding.instance.addPostFrameCallback((_) => _handlePendingShare());
 
     _focusNode.addListener(() {
       if (!mounted || !_focusNode.hasFocus) return;
@@ -355,6 +360,53 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  // --- [공유 인텐트 처리] ---
+  void _handlePendingShare() {
+    final share = ShareIntentService().consumePending();
+    if (share == null) return;
+
+    if (share.type == 'text' && share.text != null) {
+      _controller.text = share.text!;
+      _controller.selection = TextSelection.collapsed(offset: share.text!.length);
+      _focusNode.requestFocus();
+    } else if (share.type == 'images' && share.imagePaths != null) {
+      _uploadSharedImages(share.imagePaths!);
+    }
+  }
+
+  Future<void> _uploadSharedImages(List<String> paths) async {
+    setState(() => _isUploadingImage = true);
+    try {
+      for (final path in paths) {
+        final bytes = await File(path).readAsBytes();
+        final filename = path.split('/').last;
+
+        var request = http.MultipartRequest(
+          'POST',
+          Uri.parse('${ApiConfig.baseUrl}/api/chat/image'),
+        );
+        request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+
+        final response = await ApiClient.sendMultipart(request);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(await response.stream.bytesToString());
+          _sendImageMessage(data['imageUrl']);
+        } else {
+          throw Exception('업로드 실패: ${response.statusCode}');
+        }
+      }
+    } catch (e) {
+      debugPrint("공유 이미지 업로드 실패: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('공유 이미지 전송 실패!')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
   }
 
   Future<void> _pickAndUploadImage(ImageSource source) async {
@@ -1133,43 +1185,26 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 IconButton(
                   icon: Icon(Icons.add_photo_alternate_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   onPressed: _showImageSourceSheet,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  visualDensity: VisualDensity.compact,
                 ),
                 Expanded(
-                  child: GestureDetector(
-                    onLongPress: () async {
-                      final data = await Clipboard.getData(Clipboard.kTextPlain);
-                      final text = data?.text;
-                      if (text == null || text.isEmpty) return;
-                      final cur = _controller.value;
-                      final newText = cur.text.replaceRange(
-                        cur.selection.start < 0 ? cur.text.length : cur.selection.start,
-                        cur.selection.end < 0 ? cur.text.length : cur.selection.end,
-                        text,
-                      );
-                      _controller.value = TextEditingValue(
-                        text: newText,
-                        selection: TextSelection.collapsed(
-                          offset: (cur.selection.start < 0 ? cur.text.length : cur.selection.start) + text.length,
-                        ),
-                      );
-                      _onTypingChanged(newText);
-                    },
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      decoration: InputDecoration(
-                        hintText: "",
-                        filled: true,
-                        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(30),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    decoration: InputDecoration(
+                      hintText: "",
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
                       ),
-                      onChanged: _onTypingChanged,
-                      onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                     ),
+                    onChanged: _onTypingChanged,
+                    onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송
                   ),
                 ),
                 const SizedBox(width: 8),

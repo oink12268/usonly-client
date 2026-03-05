@@ -14,6 +14,7 @@ import 'api_config.dart';
 import 'firebase_options.dart';
 import 'font_size_notifier.dart';
 import 'theme_notifier.dart';
+import 'share_intent_service.dart';
 
 bool get _isMobile => !kIsWeb && (
   defaultTargetPlatform == TargetPlatform.android ||
@@ -25,8 +26,13 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  // 토큰 fetch를 백그라운드에서 미리 시작 (authStateChanges 대기 시간과 겹치게)
+  ApiClient.prewarmToken();
+
   if (_isMobile) {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    ShareIntentService().init();
+    ShareIntentService().checkInitialShare();
   }
   runApp(const MyApp());
 }

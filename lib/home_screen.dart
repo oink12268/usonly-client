@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -14,6 +15,7 @@ import 'work_schedule_page.dart';
 import 'profile_edit_page.dart';
 import 'api_config.dart';
 import 'api_client.dart';
+import 'share_intent_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final User? user;
@@ -32,10 +34,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 2; // 처음엔 채팅 탭
   late final List<Widget> _pages;
+  StreamSubscription? _shareSubscription;
 
   @override
   void initState() {
     super.initState();
+    _shareSubscription = ShareIntentService().stream.listen((_) {
+      if (mounted) setState(() => _selectedIndex = 2);
+    });
 _pages = [
       AlbumPage(memberId: widget.memberId),
       CalendarPage(memberId: widget.memberId),
@@ -43,6 +49,12 @@ _pages = [
       AnniversaryPage(memberId: widget.memberId),
       _MorePage(user: widget.user, memberId: widget.memberId, coupleId: widget.coupleId),
     ];
+  }
+
+  @override
+  void dispose() {
+    _shareSubscription?.cancel();
+    super.dispose();
   }
 
   void _onItemTapped(int index) {
