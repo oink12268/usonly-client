@@ -64,8 +64,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       }
       _onContentChanged();
       if (mounted) setState(() {
-        _canUndo = _editorState.undoManager.undoStack.isNotEmpty;
-        _canRedo = _editorState.undoManager.redoStack.isNotEmpty;
+        _canUndo = _editorState.undoManager.undoStack.isNonEmpty;
+        _canRedo = _editorState.undoManager.redoStack.isNonEmpty;
       });
     });
     _titleController.addListener(_onContentChanged);

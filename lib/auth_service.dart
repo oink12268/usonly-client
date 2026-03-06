@@ -9,6 +9,9 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'windows_oauth_config.dart';
 
+// ⚠️ 개발용 - Google 로그인 최초 1회 후 자동 연결됨
+const _devPassword = 'dev-usonly-1234';
+
 const _windowsClientId = windowsClientId;
 const _windowsClientSecret = windowsClientSecret;
 
@@ -32,10 +35,30 @@ class AuthService {
         idToken: googleAuth.idToken,
       );
       final userCredential = await _auth.signInWithCredential(credential);
+      if (kDebugMode) await _linkDevPassword(userCredential.user);
       return userCredential.user;
     } catch (e) {
       print("로그인 실패: $e");
       rethrow;
+    }
+  }
+
+  // debug 전용: Google 로그인 후 Email/Password 연결 (최초 1회)
+  Future<void> _linkDevPassword(User? user) async {
+    if (user == null) return;
+    final hasEmailProvider = user.providerData
+        .any((p) => p.providerId == 'password');
+    if (hasEmailProvider) return; // 이미 연결됨
+
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: _devPassword,
+      );
+      await user.linkWithCredential(credential);
+      print('[DEV] Email/Password 연결 완료 → 다음부터 Dev 버튼 사용 가능');
+    } catch (e) {
+      print('[DEV] Email/Password 연결 실패 (무시): $e');
     }
   }
 
@@ -124,6 +147,18 @@ class AuthService {
     final bytes = utf8.encode(verifier);
     final digest = sha256.convert(bytes);
     return base64UrlEncode(digest.bytes).replaceAll('=', '');
+  }
+
+  // ⚠️ 개발용 전용 - 빌드 전 반드시 제거 또는 kDebugMode 체크 필수
+  Future<User?> devSignIn({
+    required String email,
+    required String password,
+  }) async {
+    final result = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    return result.user;
   }
 
   Future<void> signOut() async {
