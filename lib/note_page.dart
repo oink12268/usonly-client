@@ -8,8 +8,16 @@ import 'note_editor_page.dart';
 class NotePage extends StatefulWidget {
   final int memberId;
   final int? coupleId;
+  final int? parentNoteId;
+  final String? parentTitle;
 
-  const NotePage({super.key, required this.memberId, this.coupleId});
+  const NotePage({
+    super.key,
+    required this.memberId,
+    this.coupleId,
+    this.parentNoteId,
+    this.parentTitle,
+  });
 
   @override
   State<NotePage> createState() => _NotePageState();
@@ -49,9 +57,10 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
 
   Future<void> _fetchNotes() async {
     try {
-      final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/notes'),
-      );
+      final uri = widget.parentNoteId != null
+          ? Uri.parse('${ApiConfig.baseUrl}/api/notes?parentId=${widget.parentNoteId}')
+          : Uri.parse('${ApiConfig.baseUrl}/api/notes');
+      final response = await ApiClient.get(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes)) as List;
         setState(() {
@@ -84,7 +93,10 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
               setState(() {
                 if (type == 'CREATED' && noteData != null) {
                   final note = Map<String, dynamic>.from(noteData);
-                  if (!_notes.any((n) => n['id'] == note['id'])) {
+                  // 현재 레벨의 노트만 추가 (parentId가 현재 화면과 일치해야 함)
+                  final noteParentId = note['parentId'] as int?;
+                  final isSameLevel = noteParentId == widget.parentNoteId;
+                  if (isSameLevel && !_notes.any((n) => n['id'] == note['id'])) {
                     _notes.insert(0, note);
                   }
                 } else if (type == 'UPDATED' && noteData != null) {
@@ -106,9 +118,11 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
 
   Future<void> _createNote() async {
     try {
+      final body = <String, dynamic>{'title': '새 메모', 'content': ''};
+      if (widget.parentNoteId != null) body['parentId'] = widget.parentNoteId;
       final response = await ApiClient.post(
         Uri.parse('${ApiConfig.baseUrl}/api/notes'),
-        body: jsonEncode({'title': '새 메모', 'content': ''}),
+        body: jsonEncode(body),
       );
       if (response.statusCode == 200 && mounted) {
         final note = jsonDecode(utf8.decode(response.bodyBytes));
@@ -117,6 +131,8 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
           MaterialPageRoute(
             builder: (_) => NoteEditorPage(
               note: Map<String, dynamic>.from(note),
+              memberId: widget.memberId,
+              coupleId: widget.coupleId,
             ),
           ),
         );
@@ -157,7 +173,10 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('메모장', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          widget.parentTitle ?? '메모장',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -236,6 +255,8 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                               MaterialPageRoute(
                                 builder: (_) => NoteEditorPage(
                                   note: Map<String, dynamic>.from(note),
+                                  memberId: widget.memberId,
+                                  coupleId: widget.coupleId,
                                 ),
                               ),
                             );
@@ -258,23 +279,68 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                                     color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
                                 )
                               : null,
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                _formatDate(note['updatedAt']),
-                                style: TextStyle(
-                                  fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    _formatDate(note['updatedAt']),
+                                    style: TextStyle(
+                                      fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                  ),
+                                  if (note['lastEditedByNickname'] != null) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      note['lastEditedByNickname'],
+                                      style: const TextStyle(
+                                        fontSize: 11, color: Color(0xFF8B7E74)),
+                                    ),
+                                  ],
+                                ],
                               ),
-                              if (note['lastEditedByNickname'] != null) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  note['lastEditedByNickname'],
-                                  style: const TextStyle(
-                                    fontSize: 11, color: Color(0xFF8B7E74)),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                icon: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      (note['childCount'] ?? 0) > 0
+                                          ? Icons.folder
+                                          : Icons.folder_outlined,
+                                      size: 20,
+                                      color: (note['childCount'] ?? 0) > 0
+                                          ? const Color(0xFF8B7E74)
+                                          : Theme.of(context).colorScheme.outlineVariant,
+                                    ),
+                                    if ((note['childCount'] ?? 0) > 0)
+                                      Text(
+                                        '${note['childCount']}',
+                                        style: const TextStyle(fontSize: 10, color: Color(0xFF8B7E74)),
+                                      ),
+                                  ],
                                 ),
-                              ],
+                                onPressed: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => NotePage(
+                                        memberId: widget.memberId,
+                                        coupleId: widget.coupleId,
+                                        parentNoteId: note['id'],
+                                        parentTitle: note['title']?.isEmpty == true
+                                            ? '(제목 없음)'
+                                            : note['title'],
+                                      ),
+                                    ),
+                                  );
+                                  _fetchNotes();
+                                },
+                              ),
                             ],
                           ),
                         ),

@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'api_config.dart';
 import 'api_client.dart';
+import 'note_page.dart';
 
 // 불릿/번호/체크 리스트 아이템의 세로 간격 (기본값보다 좁게)
 EdgeInsets _tightListPadding(Node node) =>
@@ -15,8 +16,10 @@ EdgeInsets _tightListPadding(Node node) =>
 
 class NoteEditorPage extends StatefulWidget {
   final Map<String, dynamic> note;
+  final int? memberId;
+  final int? coupleId;
 
-  const NoteEditorPage({super.key, required this.note});
+  const NoteEditorPage({super.key, required this.note, this.memberId, this.coupleId});
 
   @override
   State<NoteEditorPage> createState() => _NoteEditorPageState();
@@ -245,6 +248,28 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.folder_open),
+            tooltip: '하위 메모',
+            onPressed: () async {
+              _debounce?.cancel();
+              await _save();
+              if (!mounted) return;
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => NotePage(
+                    memberId: widget.memberId ?? 0,
+                    coupleId: widget.coupleId,
+                    parentNoteId: widget.note['id'],
+                    parentTitle: _titleController.text.isEmpty
+                        ? '(제목 없음)'
+                        : _titleController.text,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.undo),
             tooltip: '실행 취소',
