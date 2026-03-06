@@ -121,6 +121,129 @@ class _CalendarPageState extends State<CalendarPage> {
     return "${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}";
   }
 
+  // 연도별 전체 공휴일 계산 (대체공휴일 포함)
+  Map<DateTime, String> _buildYearHolidays(int year) {
+    final Map<DateTime, List<String>> base = {};
+
+    void add(DateTime date, String name) {
+      final d = DateTime(date.year, date.month, date.day);
+      (base[d] ??= []).add(name);
+    }
+
+    // 고정 양력 공휴일
+    add(DateTime(year,  1,  1), '신정');
+    add(DateTime(year,  3,  1), '삼일절');
+    add(DateTime(year,  5,  5), '어린이날');
+    add(DateTime(year,  6,  6), '현충일');
+    add(DateTime(year,  8, 15), '광복절');
+    add(DateTime(year, 10,  3), '개천절');
+    add(DateTime(year, 10,  9), '한글날');
+    add(DateTime(year, 12, 25), '크리스마스');
+
+    // 설날 (전날·당일·연휴)
+    final seollal = _seollalDate(year);
+    if (seollal != null) {
+      add(seollal.subtract(const Duration(days: 1)), '설날 전날');
+      add(seollal, '설날');
+      add(seollal.add(const Duration(days: 1)), '설날 연휴');
+    }
+
+    // 추석 (전날·당일·연휴)
+    final chuseok = _chuseokDate(year);
+    if (chuseok != null) {
+      add(chuseok.subtract(const Duration(days: 1)), '추석 전날');
+      add(chuseok, '추석');
+      add(chuseok.add(const Duration(days: 1)), '추석 연휴');
+    }
+
+    // 부처님오신날
+    final buddha = _buddhaDate(year);
+    if (buddha != null) add(buddha, '부처님오신날');
+
+    // 임시공휴일 — 정부 발표 후 여기에 추가
+    // add(DateTime(year, m, d), '임시공휴일명');
+
+    // 1차: 베이스 공휴일 확정 (같은 날 첫 번째 이름 사용)
+    final result = <DateTime, String>{};
+    final sortedDates = base.keys.toList()..sort();
+    for (final date in sortedDates) {
+      result[date] = base[date]!.first;
+    }
+
+    // 대체공휴일 후보 탐색 (주말·이미 지정된 날 건너뜀)
+    DateTime nextAvailable(DateTime from) {
+      DateTime sub = from.add(const Duration(days: 1));
+      while (result.containsKey(sub) ||
+             sub.weekday == DateTime.saturday ||
+             sub.weekday == DateTime.sunday) {
+        sub = sub.add(const Duration(days: 1));
+      }
+      return sub;
+    }
+
+    // 2차: 대체공휴일 추가
+    for (final date in sortedDates) {
+      final names = base[date]!;
+
+      // 공휴일끼리 겹침 → 밀린 공휴일 대체
+      for (int i = 1; i < names.length; i++) {
+        result[nextAvailable(date)] = '${names[i]} 대체공휴일';
+      }
+
+      // 일요일 → 다음 평일 대체
+      if (date.weekday == DateTime.sunday) {
+        final sub = nextAvailable(date);
+        if (!result.containsKey(sub)) {
+          result[sub] = '${names.first} 대체공휴일';
+        }
+      }
+
+      // 어린이날 토요일 → 대체 (법 개정으로 토요일도 적용)
+      if (names.contains('어린이날') && date.weekday == DateTime.saturday) {
+        final sub = nextAvailable(date);
+        if (!result.containsKey(sub)) result[sub] = '어린이날 대체공휴일';
+      }
+    }
+
+    return result;
+  }
+
+  // 설날 당일 양력 날짜 (2025~2040, 19년 주기 기반)
+  DateTime? _seollalDate(int year) {
+    final dates = <int, List<int>>{
+      2025: [1, 29], 2026: [2, 17], 2027: [2,  6], 2028: [1, 26],
+      2029: [2, 13], 2030: [2,  3], 2031: [1, 23], 2032: [2, 10],
+      2033: [1, 31], 2034: [2, 19], 2035: [2,  8], 2036: [1, 28],
+      2037: [2, 16], 2038: [2,  5], 2039: [1, 25], 2040: [2, 12],
+    };
+    final d = dates[year];
+    return d == null ? null : DateTime(year, d[0], d[1]);
+  }
+
+  // 추석 당일 양력 날짜 (2025~2040)
+  DateTime? _chuseokDate(int year) {
+    final dates = <int, List<int>>{
+      2025: [10,  6], 2026: [9, 25], 2027: [9, 15], 2028: [10,  3],
+      2029: [ 9, 22], 2030: [9, 12], 2031: [10,  1], 2032: [9, 19],
+      2033: [ 9,  7], 2034: [9, 27], 2035: [9, 16], 2036: [10,  4],
+      2037: [ 9, 24], 2038: [9, 13], 2039: [10,  2], 2040: [9, 21],
+    };
+    final d = dates[year];
+    return d == null ? null : DateTime(year, d[0], d[1]);
+  }
+
+  // 부처님오신날 양력 날짜 (2025~2040)
+  DateTime? _buddhaDate(int year) {
+    final dates = <int, List<int>>{
+      2025: [5,  5], 2026: [5, 24], 2027: [5, 13], 2028: [5,  2],
+      2029: [5, 20], 2030: [5,  9], 2031: [5, 28], 2032: [5, 17],
+      2033: [5,  6], 2034: [5, 25], 2035: [5, 14], 2036: [5,  3],
+      2037: [5, 22], 2038: [5, 12], 2039: [4, 30], 2040: [5, 19],
+    };
+    final d = dates[year];
+    return d == null ? null : DateTime(year, d[0], d[1]);
+  }
+
   void _prevMonth() {
     setState(() {
       _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
@@ -480,6 +603,7 @@ class _CalendarPageState extends State<CalendarPage> {
     final lastDay = DateTime(year, month + 1, 0);
     final startWeekday = firstDay.weekday % 7; // 일=0, 월=1 ...
 
+    final holidays = _buildYearHolidays(year);
     final days = <Widget>[];
 
     // 빈 칸 채우기
@@ -499,6 +623,7 @@ class _CalendarPageState extends State<CalendarPage> {
           DateTime.now().day == date.day;
       final hasSchedule = _hasSchedule(date);
       final hasAnniversary = _hasAnniversary(date);
+      final holidayName = holidays[DateTime(year, month, d)];
 
       days.add(
         GestureDetector(
@@ -518,17 +643,30 @@ class _CalendarPageState extends State<CalendarPage> {
                     fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                     color: isSelected
                         ? Colors.white
-                        : (date.weekday == DateTime.sunday
-                            ? const Color(0xFF8B7E74)
-                            : date.weekday == DateTime.saturday
-                                ? Colors.blue
-                                : Theme.of(context).colorScheme.onSurface),
+                        : holidayName != null
+                            ? Colors.red.shade600
+                            : date.weekday == DateTime.sunday
+                                ? const Color(0xFF8B7E74)
+                                : date.weekday == DateTime.saturday
+                                    ? Colors.blue
+                                    : Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
-                if (hasSchedule || hasAnniversary)
+                if (holidayName != null || hasSchedule || hasAnniversary)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      if (holidayName != null)
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: isSelected ? Colors.white : Colors.red.shade400,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      if (holidayName != null && (hasSchedule || hasAnniversary))
+                        const SizedBox(width: 2),
                       if (hasSchedule)
                         Container(
                           width: 5,
@@ -625,8 +763,10 @@ class _CalendarPageState extends State<CalendarPage> {
 
     final daySchedules = _schedulesForDate(_selectedDate!);
     final dayAnniversaries = _anniversariesForDate(_selectedDate!);
+    final dayHoliday = _buildYearHolidays(_selectedDate!.year)[
+        DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day)];
 
-    if (daySchedules.isEmpty && dayAnniversaries.isEmpty) {
+    if (daySchedules.isEmpty && dayAnniversaries.isEmpty && dayHoliday == null) {
       return Center(
         child: Text(
           "${_selectedDate!.month}월 ${_selectedDate!.day}일 일정이 없습니다",
@@ -638,11 +778,52 @@ class _CalendarPageState extends State<CalendarPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // 기념일 먼저 표시
+        // 공휴일 먼저 표시
+        if (dayHoliday != null) _buildHolidayItem(dayHoliday),
+        // 기념일
         ...dayAnniversaries.map((a) => _buildAnniversaryItem(a)),
         // 일반 일정
         ...daySchedules.map((s) => _buildScheduleItem(s)),
       ],
+    );
+  }
+
+  Widget _buildHolidayItem(String name) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.flag, size: 18, color: Colors.red.shade600),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Colors.red.shade600,
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              "공휴일",
+              style: TextStyle(fontSize: 12, color: Colors.red.shade600),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

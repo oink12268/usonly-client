@@ -194,7 +194,33 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                         ),
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
-                      onDismissed: (_) => _deleteNote(note['id']),
+                      onDismissed: (_) async {
+                        final deletedNote = Map<String, dynamic>.from(note);
+                        final deletedIndex = index;
+                        setState(() => _notes.removeAt(deletedIndex));
+
+                        bool undone = false;
+                        final controller = ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('메모가 삭제되었습니다'),
+                            action: SnackBarAction(
+                              label: '실행 취소',
+                              onPressed: () {
+                                undone = true;
+                                if (mounted) {
+                                  setState(() => _notes.insert(
+                                    deletedIndex.clamp(0, _notes.length),
+                                    deletedNote,
+                                  ));
+                                }
+                              },
+                            ),
+                          ),
+                        );
+
+                        await controller.closed;
+                        if (!undone) _deleteNote(deletedNote['id']);
+                      },
                       child: Card(
                         elevation: 0,
                         shape: RoundedRectangleBorder(

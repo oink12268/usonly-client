@@ -936,6 +936,27 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: '복사',
+            icon: const Icon(Icons.copy, size: 20, color: Color(0xFF8B7E74)),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: result));
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('결과가 클립보드에 복사되었습니다.')),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: '채팅으로 전송',
+            icon: const Icon(Icons.send, size: 20, color: Color(0xFF8B7E74)),
+            onPressed: () {
+              Navigator.pop(context);
+              _controller.text = result;
+              _controller.selection = TextSelection.collapsed(offset: result.length);
+              _focusNode.requestFocus();
+            },
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('닫기', style: TextStyle(color: Color(0xFF8B7E74))),
@@ -1424,10 +1445,15 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   constraints: const BoxConstraints(),
                   visualDensity: VisualDensity.compact,
                 ),
+                const SizedBox(width: 4),
                 IconButton(
                   icon: Icon(Icons.attach_file, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   onPressed: _pickAndUploadFile,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  visualDensity: VisualDensity.compact,
                 ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _controller,

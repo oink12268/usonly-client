@@ -311,10 +311,10 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      if (item['recurring'] == true) ...[
-                        const SizedBox(width: 6),
-                        Icon(Icons.repeat, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      ],
+                      // if (item['recurring'] == true) ...[
+                      //   const SizedBox(width: 6),
+                      //   Icon(Icons.repeat, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      // ],
                     ],
                   ),
                   const SizedBox(height: 4),

@@ -28,6 +28,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   StreamSubscription? _transactionSubscription;
   Timer? _debounce;
   bool _isSaving = false;
+  bool _canUndo = false;
+  bool _canRedo = false;
   String? _lastSavedContent;
   String? _lastSavedTitle;
 
@@ -58,6 +60,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         _handleImageUploads(transaction);
       }
       _onContentChanged();
+      if (mounted) setState(() {
+        _canUndo = _editorState.undoManager.undoStack.isNotEmpty;
+        _canRedo = _editorState.undoManager.redoStack.isNotEmpty;
+      });
     });
     _titleController.addListener(_onContentChanged);
   }
@@ -239,6 +245,16 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.undo),
+            tooltip: '실행 취소',
+            onPressed: _canUndo ? () => _editorState.undoManager.undo() : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.redo),
+            tooltip: '다시 실행',
+            onPressed: _canRedo ? () => _editorState.undoManager.redo() : null,
+          ),
           Padding(
             padding: const EdgeInsets.all(12),
             child: _isSaving

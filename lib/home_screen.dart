@@ -47,7 +47,7 @@ _pages = [
       AlbumPage(memberId: widget.memberId),
       CalendarPage(memberId: widget.memberId),
       ChatPage(uid: widget.uid),
-      AnniversaryPage(memberId: widget.memberId),
+      NotePage(memberId: widget.memberId, coupleId: widget.coupleId),
       _MorePage(user: widget.user, memberId: widget.memberId, coupleId: widget.coupleId),
     ];
   }
@@ -80,7 +80,7 @@ _pages = [
           BottomNavigationBarItem(icon: Icon(Icons.photo_album), label: '앨범'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '캘린더'),
           BottomNavigationBarItem(icon: Icon(Icons.chat), label: '채팅'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: '기념일'),
+          BottomNavigationBarItem(icon: Icon(Icons.note_outlined), label: '메모장'),
           BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: '더보기'),
         ],
       ),
@@ -200,28 +200,15 @@ class _MorePageState extends State<_MorePage> {
             ),
           ),
           const Divider(height: 40),
-          // 메모장
+          // 기념일
           ListTile(
-            leading: const Icon(Icons.note_outlined, color: Color(0xFF8B7E74)),
-            title: const Text('메모장', style: TextStyle(color: Color(0xFF8B7E74))),
+            leading: const Icon(Icons.favorite, color: Color(0xFF8B7E74)),
+            title: const Text('기념일', style: TextStyle(color: Color(0xFF8B7E74))),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => NotePage(memberId: widget.memberId, coupleId: widget.coupleId),
-                ),
-              );
-            },
-          ),
-          // 근무 스케쥴
-          ListTile(
-            leading: const Icon(Icons.calendar_view_week, color: Color(0xFF8B7E74)),
-            title: const Text('근무 스케쥴', style: TextStyle(color: Color(0xFF8B7E74))),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => WorkSchedulePage(nickname: _nickname ?? widget.user?.displayName),
+                  builder: (_) => AnniversaryPage(memberId: widget.memberId),
                 ),
               );
             },
