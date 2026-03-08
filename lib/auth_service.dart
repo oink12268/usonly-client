@@ -88,23 +88,21 @@ class AuthService {
 
     // 5. 브라우저 리다이렉트 대기
     String? code;
-    String? code;
     try {
       await for (final request in server.timeout(const Duration(minutes: 3))) {
-      code = request.uri.queryParameters['code'];
-      request.response
-        ..statusCode = 200
-        ..headers.contentType = ContentType.html
-        ..write('''
-          <html><body style="font-family:sans-serif;text-align:center;padding:60px">
-            <h2>✅ 로그인 완료!</h2>
-            <p>앱으로 돌아가세요.</p>
-            <script>setTimeout(()=>window.close(), 2000)</script>
-          </body></html>
-        ''');
-      await request.response.close();
-      break;
-    }
+        code = request.uri.queryParameters['code'];
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.html
+          ..write('''
+            <html><body style="font-family:sans-serif;text-align:center;padding:60px">
+              <h2>✅ 로그인 완료!</h2>
+              <p>앱으로 돌아가세요.</p>
+              <script>setTimeout(()=>window.close(), 2000)</script>
+            </body></html>
+          ''');
+        await request.response.close();
+        break;
       }
     } on TimeoutException catch (_) {
       await server.close(force: true);

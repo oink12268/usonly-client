@@ -25,7 +25,7 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
+class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, TickerProviderStateMixin {
   // 텍스트 입력 및 스크롤 제어기
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -59,6 +59,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   // 검색 결과에서 이동한 메시지 하이라이트
   int? _highlightedMessageId;
 
+  // 전송 버튼 애니메이션
+  late AnimationController _sendAnimController;
+  late Animation<double> _sendScaleAnim;
+
   // uid → 닉네임 / 프로필 이미지 캐시
   final Map<String, String> _nicknameCache = {};
   final Map<String, String?> _profileImageCache = {};
@@ -70,6 +74,15 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _sendAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+    );
+    _sendScaleAnim = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.35), weight: 40),
+      TweenSequenceItem(tween: Tween(begin: 1.35, end: 0.85), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 0.85, end: 1.0), weight: 30),
+    ]).animate(CurvedAnimation(parent: _sendAnimController, curve: Curves.easeOut));
     // 채팅 화면 진입: 포그라운드 알림 억제 + 기존 알림/배지 소거
     FcmService().setChatActive(true);
     FcmService().clearChatNotifications();
@@ -120,6 +133,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
+    _sendAnimController.dispose();
     super.dispose();
   }
 
@@ -308,9 +322,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   void _sendTypingEvent(bool isTyping) {
-    stompClient?.send(
-    // [FIX #1] stompClient connected 확인 후 전송
     if (stompClient == null || !stompClient!.connected) return;
+    stompClient!.send(
       destination: '/pub/chat/typing',
       body: jsonEncode({'writerUid': widget.uid, 'typing': isTyping}),
     );
@@ -1458,18 +1471,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.add_photo_alternate_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  icon: Icon(Icons.add_photo_alternate_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 22),
                   onPressed: _showImageSourceSheet,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(2),
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                   visualDensity: VisualDensity.compact,
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 2),
                 IconButton(
-                  icon: Icon(Icons.attach_file, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  icon: Icon(Icons.attach_file, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 22),
                   onPressed: _pickAndUploadFile,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(2),
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                   visualDensity: VisualDensity.compact,
                 ),
                 const SizedBox(width: 8),
@@ -1485,19 +1498,25 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     ),
                     onChanged: _onTypingChanged,
                     onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송
                   ),
                 ),
                 const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: const Color(0xFF8B7E74),
-                  radius: 24,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                    onPressed: _sendMessage,
+                ScaleTransition(
+                  scale: _sendScaleAnim,
+                  child: CircleAvatar(
+                    backgroundColor: const Color(0xFF8B7E74),
+                    radius: 20,
+                    child: IconButton(
+                      icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                      onPressed: () {
+                        _sendAnimController.forward(from: 0.0);
+                        _sendMessage();
+                      },
+                    ),
                   ),
                 ),
               ],
