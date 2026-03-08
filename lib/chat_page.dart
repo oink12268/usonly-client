@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:any_link_preview/any_link_preview.dart';
 import 'api_config.dart';
 import 'api_client.dart';
 import 'fcm_service.dart';
@@ -366,7 +367,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     _focusNode.requestFocus(); // 전송 후 포커스 유지
   }
 
-  void _showImageSourceSheet() {
+  void _showAttachmentSheet() {
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
@@ -375,7 +376,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library, color: Color(0xFF8B7E74)),
-              title: const Text('갤러리 (여러 장 선택 가능)'),
+              title: const Text('갤러리'),
               onTap: () {
                 Navigator.pop(context);
                 _pickAndUploadMultipleImages();
@@ -387,6 +388,14 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
               onTap: () {
                 Navigator.pop(context);
                 _pickAndUploadImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.attach_file, color: Color(0xFF8B7E74)),
+              title: const Text('파일 첨부'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndUploadFile();
               },
             ),
           ],
@@ -626,6 +635,44 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   }
 
   // URL 파싱 후 클릭 가능한 위젯으로 렌더링
+  String? _extractFirstUrl(String text) {
+    final urlRegex = RegExp(r'(https?://[^\s]+)', caseSensitive: false);
+    return urlRegex.firstMatch(text)?.group(0);
+  }
+
+  Widget _buildLinkPreview(String url, bool isMe) {
+    return GestureDetector(
+      onTap: () async {
+        final uri = Uri.tryParse(url);
+        if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(top: 6),
+        constraints: const BoxConstraints(maxWidth: 280),
+        child: AnyLinkPreview(
+          link: url,
+          displayDirection: UIDirection.uiDirectionVertical,
+          showMultimedia: true,
+          bodyMaxLines: 2,
+          bodyTextOverflow: TextOverflow.ellipsis,
+          titleStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          bodyStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
+          errorWidget: const SizedBox.shrink(),
+          placeholderWidget: Container(
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          backgroundColor: isMe ? const Color(0xFF7A6E65) : Colors.grey[100]!,
+          borderRadius: 8,
+          removeElevation: true,
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageContent(String text, bool isMe) {
     final urlRegex = RegExp(
       r'(https?://[^\s]+)',
@@ -1343,24 +1390,31 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                                           ),
                                         )
                                       else
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                          decoration: BoxDecoration(
-                                            color: isMe ? const Color(0xFF8B7E74) : Theme.of(context).colorScheme.surface,
-                                            borderRadius: BorderRadius.only(
-                                              topLeft: const Radius.circular(15),
-                                              topRight: const Radius.circular(15),
-                                              bottomLeft: isMe ? const Radius.circular(15) : const Radius.circular(0),
-                                              bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(15),
+                                        Column(
+                                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                              decoration: BoxDecoration(
+                                                color: isMe ? const Color(0xFF8B7E74) : Theme.of(context).colorScheme.surface,
+                                                borderRadius: BorderRadius.only(
+                                                  topLeft: const Radius.circular(15),
+                                                  topRight: const Radius.circular(15),
+                                                  bottomLeft: isMe ? const Radius.circular(15) : const Radius.circular(0),
+                                                  bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(15),
+                                                ),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                      color: Colors.black.withOpacity(0.05),
+                                                      blurRadius: 1,
+                                                      offset: const Offset(1, 1))
+                                                ],
+                                              ),
+                                              child: _buildMessageContent(content, isMe),
                                             ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                  color: Colors.black.withOpacity(0.05),
-                                                  blurRadius: 1,
-                                                  offset: const Offset(1, 1))
-                                            ],
-                                          ),
-                                          child: _buildMessageContent(content, isMe),
+                                            if (_extractFirstUrl(content) != null)
+                                              _buildLinkPreview(_extractFirstUrl(content)!, isMe),
+                                          ],
                                         ),
                                     ],
                                   ),
@@ -1467,25 +1521,17 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
           // 입력창 영역
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.add_photo_alternate_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 22),
-                  onPressed: _showImageSourceSheet,
+                  icon: Icon(Icons.add, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 22),
+                  onPressed: _showAttachmentSheet,
                   padding: const EdgeInsets.all(2),
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                   visualDensity: VisualDensity.compact,
                 ),
-                const SizedBox(width: 2),
-                IconButton(
-                  icon: Icon(Icons.attach_file, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 22),
-                  onPressed: _pickAndUploadFile,
-                  padding: const EdgeInsets.all(2),
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                  visualDensity: VisualDensity.compact,
-                ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 Expanded(
                   child: TextField(
                     controller: _controller,
@@ -1498,7 +1544,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      isDense: true,
                     ),
                     onChanged: _onTypingChanged,
                     onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송

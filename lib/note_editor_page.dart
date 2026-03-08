@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter_quill/flutter_quill.dart';
+import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
 import 'api_client.dart';
@@ -21,10 +20,8 @@ class NoteEditorPage extends StatefulWidget {
 }
 
 class _NoteEditorPageState extends State<NoteEditorPage> {
-  late QuillController _controller;
+  late EditorState _editorState;
   late TextEditingController _titleController;
-  final FocusNode _focusNode = FocusNode();
-  final ScrollController _scrollController = ScrollController();
 
   bool _isSaving = false;
   bool _hasUnsavedChanges = false;
@@ -37,36 +34,27 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     super.initState();
     _titleController = TextEditingController(text: widget.note['title'] ?? '');
 
-    // 저장된 내용 로드: Delta JSON → 실패하면 일반 텍스트로 처리 (구버전 마크다운 노트)
     final content = widget.note['content'] as String? ?? '';
-    Document doc;
+    Document document;
     try {
-      if (content.trim().startsWith('[') || content.trim().startsWith('{')) {
-        final deltaJson = jsonDecode(content) as List;
-        doc = Document.fromJson(deltaJson);
-      } else if (content.trim().isNotEmpty) {
-        // 구버전 마크다운 → 평문으로 표시
-        doc = Document()..insert(0, content);
-      } else {
-        doc = Document();
-      }
+      document = markdownToDocument(content);
     } catch (_) {
-      doc = Document();
+      document = Document.blank();
     }
 
-    _controller = QuillController(
-      document: doc,
-      selection: const TextSelection.collapsed(offset: 0),
-    );
-
-    _lastSavedContent = _getContentJson();
+    _editorState = EditorState(document: document);
+    _lastSavedContent = content;
     _lastSavedTitle = widget.note['title'] ?? '';
 
-    _controller.addListener(() {
-      if (mounted && !_hasUnsavedChanges) {
-        setState(() => _hasUnsavedChanges = true);
+    _editorState.transactionStream.listen((event) {
+      if (event.$1 == TransactionTime.after) {
+        if (mounted && !_hasUnsavedChanges) {
+          setState(() => _hasUnsavedChanges = true);
+        }
+        _handleImageUpload(event.$2);
       }
     });
+
     _titleController.addListener(() {
       if (mounted && !_hasUnsavedChanges) {
         setState(() => _hasUnsavedChanges = true);
@@ -74,28 +62,26 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     });
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    _titleController.dispose();
-    _focusNode.dispose();
-    _scrollController.dispose();
-    super.dispose();
+  void _handleImageUpload(Transaction transaction) {
+    for (final op in transaction.operations) {
+      if (op is InsertOperation) {
+        for (final node in op.nodes) {
+          if (node.type == ImageBlockKeys.type) {
+            final url = node.attributes[ImageBlockKeys.url] as String?;
+            if (url != null && !url.startsWith('http')) {
+              _uploadImage(node, url);
+            }
+          }
+        }
+      }
+    }
   }
 
-  String _getContentJson() {
-    return jsonEncode(_controller.document.toDelta().toJson());
-  }
-
-  // 갤러리에서 사진 선택 → 서버 업로드 → 에디터에 삽입
-  Future<void> _pickAndInsertImage() async {
-    final xFile = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (xFile == null) return;
-
+  Future<void> _uploadImage(Node node, String localPath) async {
     if (mounted) setState(() => _pendingUploads++);
     try {
-      final bytes = await File(xFile.path).readAsBytes();
-      final filename = xFile.path.split('/').last;
+      final bytes = await File(localPath).readAsBytes();
+      final filename = localPath.split('/').last;
 
       final request = http.MultipartRequest(
         'POST',
@@ -108,12 +94,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         final data = jsonDecode(await response.stream.bytesToString());
         final serverUrl = data['imageUrl'] as String;
 
-        // 현재 커서 위치에 이미지 삽입
-        final offset = _controller.selection.baseOffset;
-        final safeOffset = offset < 0 ? _controller.document.length - 1 : offset;
-        _controller.replaceText(safeOffset, 0, BlockEmbed.image(serverUrl), null);
+        final transaction = _editorState.transaction;
+        transaction.updateNode(node, {ImageBlockKeys.url: serverUrl});
+        await _editorState.apply(transaction);
 
-        // 이미지 삽입 후 자동 저장 (서버 URL 반영)
         await _saveInternal();
       }
     } catch (e) {
@@ -123,7 +107,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     }
   }
 
-  // 수동 저장 버튼
+  String _getMarkdown() {
+    return documentToMarkdown(_editorState.document);
+  }
+
   Future<void> _save() async {
     if (_pendingUploads > 0) {
       if (mounted) {
@@ -141,9 +128,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   Future<void> _saveInternal() async {
     if (_isSaving) return;
-    final contentJson = _getContentJson();
+    final content = _getMarkdown();
     final title = _titleController.text;
-    if (contentJson == _lastSavedContent && title == _lastSavedTitle) {
+    if (content == _lastSavedContent && title == _lastSavedTitle) {
       if (mounted) setState(() => _hasUnsavedChanges = false);
       return;
     }
@@ -151,9 +138,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     try {
       await ApiClient.put(
         Uri.parse('${ApiConfig.baseUrl}/api/notes/${widget.note['id']}'),
-        body: jsonEncode({'title': title, 'content': contentJson}),
+        body: jsonEncode({'title': title, 'content': content}),
       );
-      _lastSavedContent = contentJson;
+      _lastSavedContent = content;
       _lastSavedTitle = title;
       if (mounted) setState(() => _hasUnsavedChanges = false);
     } catch (e) {
@@ -163,19 +150,25 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     }
   }
 
-  // 뒤로가기 시 미저장 내용 강제 저장
   Future<void> _forceSave() async {
-    final contentJson = _getContentJson();
+    final content = _getMarkdown();
     final title = _titleController.text;
-    if (contentJson == _lastSavedContent && title == _lastSavedTitle) return;
+    if (content == _lastSavedContent && title == _lastSavedTitle) return;
     try {
       await ApiClient.put(
         Uri.parse('${ApiConfig.baseUrl}/api/notes/${widget.note['id']}'),
-        body: jsonEncode({'title': title, 'content': contentJson}),
+        body: jsonEncode({'title': title, 'content': content}),
       );
     } catch (e) {
       debugPrint('노트 강제 저장 오류: $e');
     }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _editorState.dispose();
+    super.dispose();
   }
 
   @override
@@ -244,98 +237,32 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       ),
       body: Column(
         children: [
-          // 서식 툴바
-          QuillSimpleToolbar(
-            controller: _controller,
-            config: QuillSimpleToolbarConfig(
-              multiRowsDisplay: false,
-              showDividers: false,
-              showFontFamily: false,
-              showFontSize: false,
-              showBoldButton: true,
-              showItalicButton: true,
-              showUnderLineButton: true,
-              showStrikeThrough: false,
-              showInlineCode: false,
-              showColorButton: false,
-              showBackgroundColorButton: false,
-              showClearFormat: false,
-              showAlignmentButtons: false,
-              showHeaderStyle: true,
-              showListNumbers: true,
-              showListBullets: true,
-              showListCheck: true,
-              showCodeBlock: false,
-              showQuote: false,
-              showIndent: false,
-              showLink: false,
-              showUndo: true,
-              showRedo: true,
-              showSearchButton: false,
-              showSubscript: false,
-              showSuperscript: false,
-              showClipboardCut: false,
-              showClipboardCopy: false,
-              showClipboardPaste: false,
-              customButtons: [
-                QuillToolbarCustomButtonOptions(
-                  icon: const Icon(Icons.image_outlined),
-                  tooltip: '사진 첨부',
-                  onPressed: _pickAndInsertImage,
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          // 에디터 본문
           Expanded(
-            child: QuillEditor(
-              controller: _controller,
-              focusNode: _focusNode,
-              scrollController: _scrollController,
-              config: QuillEditorConfig(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                placeholder: '내용을 입력하세요...',
-                textCapitalization: TextCapitalization.none,
-                embedBuilders: [NoteImageEmbedBuilder()],
+            child: AppFlowyEditor(
+              editorState: _editorState,
+              editorStyle: EditorStyle.mobile().copyWith(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                textStyleConfiguration: TextStyleConfiguration(
+                  text: const TextStyle(color: Colors.white),
+                ),
               ),
             ),
+          ),
+          MobileToolbar(
+            editorState: _editorState,
+            toolbarItems: [
+              textDecorationMobileToolbarItem,
+              headingMobileToolbarItem,
+              todoListMobileToolbarItem,
+              listMobileToolbarItem,
+              linkMobileToolbarItem,
+              quoteMobileToolbarItem,
+              codeMobileToolbarItem,
+            ],
           ),
         ],
       ),
     );
   }
-}
 
-// 서버 이미지 URL → CachedNetworkImage로 표시
-class NoteImageEmbedBuilder extends EmbedBuilder {
-  @override
-  String get key => BlockEmbed.imageType;
-
-  @override
-  bool get expanded => false;
-
-  @override
-  Widget build(BuildContext context, EmbedContext embedContext) {
-    final imageUrl = embedContext.node.value.data as String;
-    // 로컬 경로면 File로, 서버 URL이면 CachedNetworkImage로
-    if (imageUrl.startsWith('http')) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: CachedNetworkImage(
-          imageUrl: imageUrl,
-          fit: BoxFit.contain,
-          placeholder: (context, url) =>
-              const Center(child: CircularProgressIndicator()),
-          errorWidget: (context, url, error) =>
-              const Icon(Icons.broken_image, size: 48),
-        ),
-      );
-    }
-    // 업로드 전 로컬 파일 미리보기
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Image.file(File(imageUrl), fit: BoxFit.contain),
-    );
-  }
 }
