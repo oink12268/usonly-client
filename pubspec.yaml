@@ -48,9 +48,9 @@ dependencies:
   firebase_messaging: ^16.1.1
   flutter_local_notifications: ^18.0.1
   shared_preferences: ^2.3.4
-  appflowy_editor: ^6.2.0
   file_picker: ^10.3.10
   flame: ^1.21.0
+  flutter_quill: 11.5.0
 
 dev_dependencies:
   flutter_test:

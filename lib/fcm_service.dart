@@ -28,6 +28,16 @@ class FcmService {
   bool _isChatActive = false;
   void setChatActive(bool active) => _isChatActive = active;
 
+  // 알림 탭 → 탭 이동 콜백 (HomeScreen이 등록)
+  void Function(int)? onNavigateToTab;
+  // 앱이 종료 상태에서 알림 탭으로 열린 경우 pending 저장
+  int? _pendingNavigationTab;
+  int? consumePendingNavigation() {
+    final tab = _pendingNavigationTab;
+    _pendingNavigationTab = null;
+    return tab;
+  }
+
   // 채팅 읽음 처리: 알림 영역 + 앱 아이콘 배지 초기화
   Future<void> clearChatNotifications() async {
     if (!_isMobile) return;
@@ -100,7 +110,22 @@ class FcmService {
       _sendTokenToServer(newToken);
     });
 
-    // 4. 포그라운드 메시지 수신 → 채팅 화면이 열려 있으면 알림 억제
+    // 4. 알림 탭으로 앱 진입 처리
+    // 4-1. 앱이 완전히 종료된 상태에서 알림 탭
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      _pendingNavigationTab = 2; // 채팅 탭
+    }
+    // 4-2. 앱이 백그라운드 상태에서 알림 탭
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      if (onNavigateToTab != null) {
+        onNavigateToTab!(2);
+      } else {
+        _pendingNavigationTab = 2;
+      }
+    });
+
+    // 5. 포그라운드 메시지 수신 → 채팅 화면이 열려 있으면 알림 억제
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (_isChatActive) return; // 채팅 화면 중이면 알림 표시 안 함
       final notification = message.notification;

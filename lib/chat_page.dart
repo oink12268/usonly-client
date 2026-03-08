@@ -15,6 +15,7 @@ import 'api_config.dart';
 import 'api_client.dart';
 import 'fcm_service.dart';
 import 'share_intent_service.dart';
+import 'chat_media_page.dart';
 
 class ChatPage extends StatefulWidget {
   final String uid; // 내 아이디
@@ -1037,6 +1038,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   _searchMenuButton(Icons.search, '검색', _openWordSearch),
                   _searchMenuButton(Icons.calendar_month, '날짜', _openCalendarSearch),
                   _searchMenuButton(Icons.auto_awesome, 'AI 검색', _showAiSearch),
+                  _searchMenuButton(Icons.photo_library_outlined, '사진 모음', () {
+                    setState(() => _showChatSearchMenu = false);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatMediaPage()));
+                  }),
                   IconButton(
                     icon: const Icon(Icons.close, color: Color(0xFF8B7E74)),
                     onPressed: () => setState(() => _showChatSearchMenu = false),

@@ -17,6 +17,7 @@ import 'profile_edit_page.dart';
 import 'api_config.dart';
 import 'api_client.dart';
 import 'share_intent_service.dart';
+import 'fcm_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final User? user;
@@ -43,6 +44,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _shareSubscription = ShareIntentService().stream.listen((_) {
       if (mounted) setState(() => _selectedIndex = 2);
     });
+
+    // FCM 알림 탭 → 채팅 탭으로 이동
+    FcmService().onNavigateToTab = (int index) {
+      if (mounted) setState(() => _selectedIndex = index);
+    };
+    // 앱이 종료 상태에서 알림 탭으로 열린 경우
+    final pendingTab = FcmService().consumePendingNavigation();
+    if (pendingTab != null) _selectedIndex = pendingTab;
+
 _pages = [
       AlbumPage(memberId: widget.memberId),
       CalendarPage(memberId: widget.memberId),
@@ -55,6 +65,7 @@ _pages = [
   @override
   void dispose() {
     _shareSubscription?.cancel();
+    FcmService().onNavigateToTab = null;
     super.dispose();
   }
 
