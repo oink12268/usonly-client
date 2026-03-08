@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:exif/exif.dart';
 import 'package:http/http.dart' as http;
@@ -109,10 +109,13 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
 
     setState(() => _isUploading = false);
     _fetchPhotos();
-    if (fail == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$success장 업로드 성공!")));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("성공 $success장 / 실패 $fail장")));
+    // [FIX #4] mounted 체크 추가 - 업로드 중 화면 이탈 시 크래시 방지
+    if (mounted) {
+      if (fail == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${success}장 업로드 성공!")));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("성공 ${success}장 / 실패 ${fail}장")));
+      }
     }
   }
 
@@ -123,7 +126,10 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
       );
       if (response.statusCode == 200) {
         _fetchPhotos();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("사진 삭제 완료")));
+        // [FIX #4] mounted 체크 추가
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("사진 삭제 완료")));
+        }
       }
     } catch (e) {
       print("사진 삭제 에러: $e");
@@ -427,3 +433,6 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
     );
   }
 }
+
+
+

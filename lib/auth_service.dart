@@ -1,3 +1,4 @@
+﻿import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
@@ -87,7 +88,9 @@ class AuthService {
 
     // 5. 브라우저 리다이렉트 대기
     String? code;
-    await for (final request in server) {
+    String? code;
+    try {
+      await for (final request in server.timeout(const Duration(minutes: 3))) {
       code = request.uri.queryParameters['code'];
       request.response
         ..statusCode = 200
@@ -101,6 +104,14 @@ class AuthService {
         ''');
       await request.response.close();
       break;
+    }
+      }
+    } on TimeoutException catch (_) {
+      await server.close(force: true);
+      throw Exception('Google 로그인 시간이 초과되었습니다. 다시 시도해주세요.');
+    } catch (e) {
+      await server.close(force: true);
+      rethrow;
     }
     await server.close();
 
@@ -170,3 +181,6 @@ class AuthService {
     await _auth.signOut();
   }
 }
+
+
+

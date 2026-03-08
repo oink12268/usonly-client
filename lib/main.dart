@@ -135,6 +135,8 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
   int _serverMemberId = -1;
   int? _coupleId;
   String _myCode = "";
+  // [FIX #5] 백엔드 연결 실패 상태 추적
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -166,27 +168,26 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
           _serverMemberId = data['memberId'];
           _coupleId = data['coupleId']?.toInt();
           _isLoading = false;
+          _hasError = false;
         });
 
         // FCM 초기화
         FcmService().initialize();
       } else {
         print("서버 에러: ${response.statusCode} / ${response.body}");
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('서버 에러: ${response.statusCode}\n${response.body}')),
-          );
-        }
-        setState(() => _isLoading = false);
+        // [FIX #5] 에러 상태로 전환 (빈 코드로 MatchingScreen 진입 방지)
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+        });
       }
     } catch (e) {
       print("서버 통신 실패: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('서버 연결 실패: $e')),
-        );
-      }
-      setState(() => _isLoading = false);
+      // [FIX #5] 에러 상태로 전환
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+      });
     }
   }
 
@@ -194,6 +195,36 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    // [FIX #5] 서버 연결 실패 시 재시도 화면 (빈 코드로 MatchingScreen 진입 방지)
+    if (_hasError) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.wifi_off, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text('서버 연결에 실패했습니다', style: TextStyle(fontSize: 16)),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B7E74)),
+                onPressed: () {
+                  setState(() { _hasError = false; _isLoading = true; });
+                  _checkBackendStatus();
+                },
+                child: const Text('다시 시도', style: TextStyle(color: Colors.white)),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => AuthService().signOut(),
+                child: const Text('로그아웃', style: TextStyle(color: Colors.grey)),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     // 커플이면 홈으로, 아니면 매칭(초대코드) 화면으로

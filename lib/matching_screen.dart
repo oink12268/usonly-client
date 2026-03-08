@@ -58,8 +58,6 @@ class _MatchingScreenState extends State<MatchingScreen> {
     });
 
     try {
-      // 2. 스프링 부트 서버로 요청 전송
-      // (안드로이드 에뮬레이터 기준 localhost는 10.0.2.2 입니다)
       final response = await ApiClient.post(
         Uri.parse('${ApiConfig.baseUrl}/api/couples/connect'),
         body: jsonEncode({
@@ -70,24 +68,28 @@ class _MatchingScreenState extends State<MatchingScreen> {
       if (!mounted) return; // 비동기 처리 중 화면이 닫혔으면 중단
 
       if (response.statusCode == 200) {
-        // 1. 서버가 준 응답 바디를 파싱합니다.
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         
-        // 2. 파싱한 데이터에서 내 PK(id)를 가져옵니다. 
-        // (보통 서버 응답에 본인의 id가 포함되어 있어야 합니다.)
         final int myServerId = data['id'];
-        // 3. 성공 시 처리
-        // 홈 화면(채팅방)으로 이동하면서 이전 화면 스택 제거
+        // [FIX #7] coupleId를 응답에서 추출해 HomeScreen에 전달
+        // 서버 응답 구조에 따라 'coupleId' 키로 포함되어 있다고 가정
+        final int? coupleId = data['coupleId']?.toInt();
+
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => HomeScreen(user: widget.user, memberId: myServerId)),
+          MaterialPageRoute(
+            builder: (_) => HomeScreen(
+              user: widget.user,
+              memberId: myServerId,
+              coupleId: coupleId, // coupleId 전달 (노트 실시간 동기화에 필요)
+            ),
+          ),
         );
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("축하합니다! 커플 연결에 성공했습니다 ❤️")),
         );
       } else {
-        // 4. 실패 시 처리 (서버에서 보낸 에러 메시지 표시)
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         String errorMessage = data['message'] ?? "연결에 실패했습니다.";
         
@@ -96,7 +98,6 @@ class _MatchingScreenState extends State<MatchingScreen> {
         );
       }
     } catch (e) {
-      // 5. 네트워크 등 기타 에러 처리
       print("커플 연결 에러: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("서버와 통신 중 오류가 발생했습니다.")),
@@ -164,13 +165,13 @@ class _MatchingScreenState extends State<MatchingScreen> {
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 4,
-                          color: const Color(0xFF8B7E74),
+                          color: Color(0xFF8B7E74),
                         ),
                       ),
                       const SizedBox(height: 8),
                       const Text(
                         "터치해서 복사하기",
-                        style: TextStyle(fontSize: 12, color: const Color(0xFFD4C5B9)),
+                        style: TextStyle(fontSize: 12, color: Color(0xFFD4C5B9)),
                       ),
                     ],
                   ),
@@ -193,8 +194,8 @@ class _MatchingScreenState extends State<MatchingScreen> {
               
               TextField(
                 controller: _codeController,
-                maxLength: 6, // 코드는 보통 6자리
-                textCapitalization: TextCapitalization.characters, // 자동 대문자
+                maxLength: 6,
+                textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
                   hintText: "코드를 입력하세요",
                   prefixIcon: const Icon(Icons.favorite, color: Colors.grey),
@@ -203,9 +204,9 @@ class _MatchingScreenState extends State<MatchingScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: const Color(0xFF8B7E74)),
+                    borderSide: const BorderSide(color: Color(0xFF8B7E74)),
                   ),
-                  counterText: "", // 글자수 카운터 숨김
+                  counterText: "",
                 ),
               ),
               

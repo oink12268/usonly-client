@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -268,6 +268,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 // 받은 메시지를 JSON으로 변환
                 var newChat = jsonDecode(frame.body!);
 
+                // [FIX #6] 중복 메시지 방지: 재연결 시 소켓 중복 수신 차단
+                final newId = newChat['id'];
+                if (newId != null && _chats.any((c) => c['id'] == newId)) return;
+
                 // 새 메시지 작성자 닉네임 조회
                 final uid = newChat['writerUid']?.toString() ?? '';
                 if (uid.isNotEmpty && uid != widget.uid && !_nicknameCache.containsKey(uid)) {
@@ -304,6 +308,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   void _sendTypingEvent(bool isTyping) {
     stompClient?.send(
+    // [FIX #1] stompClient connected 확인 후 전송
+    if (stompClient == null || !stompClient!.connected) return;
       destination: '/pub/chat/typing',
       body: jsonEncode({'writerUid': widget.uid, 'typing': isTyping}),
     );
@@ -325,7 +331,15 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       payload['replyToUid'] = _replyTarget!['writerUid']?.toString() ?? '';
     }
 
-    // 소켓으로 메시지 쏘기
+    // [FIX #1] stompClient null 안전성 체크
+    if (stompClient == null || !stompClient!.connected) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('서버 연결 중입니다. 잠시 후 다시 시도해주세요.')),
+        );
+      }
+      return;
+    }
     stompClient!.send(
       destination: '/pub/chat', // Controller의 @MessageMapping 주소
       body: jsonEncode(payload),
@@ -2049,3 +2063,7 @@ class FullScreenImageView extends StatelessWidget {
     );
   }
 }
+
+
+
+

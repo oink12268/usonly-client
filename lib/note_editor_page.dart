@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:async';
@@ -196,6 +196,23 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     _debounce = Timer(const Duration(milliseconds: 800), _save);
   }
 
+  // [FIX #3] _forceSave: _isSaving 여부 관계없이 강제 저장 (뒤로가기용)
+  Future<void> _forceSave() async {
+    final markdown = documentToMarkdown(_editorState.document);
+    final title = _titleController.text;
+    if (markdown == _lastSavedContent && title == _lastSavedTitle) return;
+    try {
+      await ApiClient.put(
+        Uri.parse('${ApiConfig.baseUrl}/api/notes/${widget.note[''id'']}'),
+        body: jsonEncode({'title': title, 'content': markdown}),
+      );
+      _lastSavedContent = markdown;
+      _lastSavedTitle = title;
+    } catch (e) {
+      print('노트 강제 저장 오류: $e');
+    }
+  }
+
   Future<void> _save() async {
     if (_isSaving) return;
 
@@ -232,7 +249,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           onPressed: () async {
             // 뒤로가기 시 즉시 저장 후 pop
             _debounce?.cancel();
-            await _save();
+            await _forceSave();
             if (mounted) Navigator.pop(context);
           },
         ),
@@ -253,7 +270,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             tooltip: '하위 메모',
             onPressed: () async {
               _debounce?.cancel();
-              await _save();
+              await _forceSave();
               if (!mounted) return;
               await Navigator.push(
                 context,
@@ -329,3 +346,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 }
+
+
+
+
