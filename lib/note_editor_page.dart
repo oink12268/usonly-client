@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -22,6 +23,10 @@ class NoteEditorPage extends StatefulWidget {
 class _NoteEditorPageState extends State<NoteEditorPage> {
   late EditorState _editorState;
   late TextEditingController _titleController;
+  late final MobileToolbarItem _imagePickerToolbarItem; // [Fix 4] 매 빌드마다 재생성 방지
+  StreamSubscription? _transactionSubscription;        // [Fix 1] 메모리 누수 방지
+  Timer? _autoSaveDebounce;                            // [Fix 5] 자동저장 디바운스 타이머
+  Timer? _autoSaveForceTimer;                          // [Fix 5] 최대 30초 강제저장 타이머
 
   bool _isSaving = false;
   bool _hasUnsavedChanges = false;
@@ -37,7 +42,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     final content = widget.note['content'] as String? ?? '';
     Document document;
     try {
-      document = markdownToDocument(content);
+      document = content.isEmpty ? Document.blank() : markdownToDocument(content);
     } catch (_) {
       document = Document.blank();
     }
@@ -46,12 +51,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     _lastSavedContent = content;
     _lastSavedTitle = widget.note['title'] ?? '';
 
-    _editorState.transactionStream.listen((event) {
+    // [Fix 4] 한 번만 생성
+    _imagePickerToolbarItem = _buildImagePickerToolbarItem();
+
+    // [Fix 1] subscription 저장 → dispose에서 cancel
+    _transactionSubscription = _editorState.transactionStream.listen((event) {
       if (event.$1 == TransactionTime.after) {
         if (mounted && !_hasUnsavedChanges) {
           setState(() => _hasUnsavedChanges = true);
         }
         _handleImageUpload(event.$2);
+        _scheduleAutoSave(); // [Fix 5] 변경 시 자동저장 예약
       }
     });
 
@@ -59,8 +69,68 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       if (mounted && !_hasUnsavedChanges) {
         setState(() => _hasUnsavedChanges = true);
       }
+      _scheduleAutoSave(); // [Fix 5] 제목 변경 시도 자동저장 예약
     });
   }
+
+  // [Fix 5] 자동저장: 타이핑 멈춘 후 3초 뒤 저장, 최대 30초 강제저장
+  void _scheduleAutoSave() {
+    // 디바운스: 타이핑 중엔 계속 리셋, 멈추면 3초 후 저장
+    _autoSaveDebounce?.cancel();
+    _autoSaveDebounce = Timer(const Duration(seconds: 3), () {
+      if (_pendingUploads == 0) _saveInternal();
+      _autoSaveForceTimer?.cancel();
+      _autoSaveForceTimer = null;
+    });
+
+    // 강제저장: 첫 변경 후 30초가 지나면 무조건 저장 (앱 강제종료 대비)
+    _autoSaveForceTimer ??= Timer(const Duration(seconds: 30), () {
+      _autoSaveDebounce?.cancel();
+      _autoSaveDebounce = null;
+      _autoSaveForceTimer = null;
+      if (_pendingUploads == 0) _saveInternal();
+    });
+  }
+
+  MobileToolbarItem _buildImagePickerToolbarItem() => MobileToolbarItem.action(
+        itemIconBuilder: (_, __, ___) =>
+            const Icon(Icons.image_outlined, size: 22),
+        actionHandler: (context, editorState) async {
+          final xFile = await ImagePicker().pickImage(
+            source: ImageSource.gallery,
+          );
+          if (xFile == null) return;
+
+          final selection = editorState.selection;
+          final imagePath = selection != null
+              ? selection.end.path.next
+              : [editorState.document.root.children.length];
+          final paraPath = imagePath.next;
+
+          final txn = editorState.transaction;
+          txn.insertNode(
+            imagePath,
+            Node(
+              type: ImageBlockKeys.type,
+              attributes: {ImageBlockKeys.url: xFile.path},
+            ),
+          );
+          txn.insertNode(paraPath, paragraphNode());
+          txn.afterSelection = Selection.collapsed(
+            Position(path: paraPath, offset: 0),
+          );
+          await editorState.apply(txn);
+
+          await Future.delayed(const Duration(milliseconds: 100));
+          final newSel = editorState.selection;
+          if (newSel != null) {
+            await editorState.updateSelectionWithReason(
+              newSel,
+              reason: SelectionUpdateReason.uiEvent,
+            );
+          }
+        },
+      );
 
   void _handleImageUpload(Transaction transaction) {
     for (final op in transaction.operations) {
@@ -99,9 +169,30 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         await _editorState.apply(transaction);
 
         await _saveInternal();
+      } else {
+        // [Fix 3] 업로드 실패 시 깨진 이미지 노드 제거 + 유저에게 알림
+        if (mounted) {
+          final transaction = _editorState.transaction;
+          transaction.deleteNode(node);
+          await _editorState.apply(transaction);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('이미지 업로드에 실패했습니다. 다시 시도해주세요.')),
+          );
+        }
       }
     } catch (e) {
       debugPrint('이미지 업로드 에러: $e');
+      // [Fix 3] 예외 발생 시에도 깨진 노드 제거 + 유저에게 알림
+      if (mounted) {
+        try {
+          final transaction = _editorState.transaction;
+          transaction.deleteNode(node);
+          await _editorState.apply(transaction);
+        } catch (_) {}
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('이미지 업로드에 실패했습니다. 다시 시도해주세요.')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _pendingUploads--);
     }
@@ -151,6 +242,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   }
 
   Future<void> _forceSave() async {
+    _autoSaveDebounce?.cancel();   // 예약된 자동저장 취소 후 즉시 저장
+    _autoSaveForceTimer?.cancel();
+    _autoSaveForceTimer = null;
     final content = _getMarkdown();
     final title = _titleController.text;
     if (content == _lastSavedContent && title == _lastSavedTitle) return;
@@ -159,6 +253,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         Uri.parse('${ApiConfig.baseUrl}/api/notes/${widget.note['id']}'),
         body: jsonEncode({'title': title, 'content': content}),
       );
+      // [Fix 2] 저장 성공 후 기준값 갱신
+      _lastSavedContent = content;
+      _lastSavedTitle = title;
     } catch (e) {
       debugPrint('노트 강제 저장 오류: $e');
     }
@@ -166,6 +263,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   @override
   void dispose() {
+    _autoSaveDebounce?.cancel();        // [Fix 5]
+    _autoSaveForceTimer?.cancel();      // [Fix 5]
+    _transactionSubscription?.cancel(); // [Fix 1]
     _titleController.dispose();
     _editorState.dispose();
     super.dispose();
@@ -174,7 +274,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: true,
+      resizeToAvoidBottomInset: false, // AppFlowyEditor + MobileToolbar이 keyboard inset을 내부적으로 처리함
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -258,11 +358,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               linkMobileToolbarItem,
               quoteMobileToolbarItem,
               codeMobileToolbarItem,
+              _imagePickerToolbarItem,
             ],
           ),
         ],
       ),
     );
   }
-
 }
