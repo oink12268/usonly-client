@@ -91,10 +91,31 @@ class GoogleCalendarService {
     }
   }
 
-  /// 앱 일정을 Google Calendar에 단일 날짜 이벤트로 생성
-  Future<String?> createEvent(String title, DateTime date, {String? memo}) async {
+  /// 앱 일정을 Google Calendar에 이벤트로 생성
+  /// startTime/endTime이 있으면 시간 이벤트, 없으면 종일 이벤트로 생성
+  Future<String?> createEvent(
+    String title,
+    DateTime date, {
+    String? memo,
+    String? startTime, // HH:mm
+    String? endTime,   // HH:mm
+  }) async {
     final headers = await _headers();
     if (headers.isEmpty) return null;
+
+    Map<String, dynamic> startObj;
+    Map<String, dynamic> endObj;
+
+    if (startTime != null && endTime != null) {
+      const tz = 'Asia/Seoul';
+      final startDt = '${_fmt(date)}T$startTime:00';
+      final endDt = '${_fmt(date)}T$endTime:00';
+      startObj = {'dateTime': startDt, 'timeZone': tz};
+      endObj = {'dateTime': endDt, 'timeZone': tz};
+    } else {
+      startObj = {'date': _fmt(date)};
+      endObj = {'date': _fmt(date.add(const Duration(days: 1)))};
+    }
 
     try {
       final response = await http.post(
@@ -103,8 +124,8 @@ class GoogleCalendarService {
         body: jsonEncode({
           'summary': title,
           if (memo != null && memo.isNotEmpty) 'description': memo,
-          'start': {'date': _fmt(date)},
-          'end': {'date': _fmt(date.add(const Duration(days: 1)))},
+          'start': startObj,
+          'end': endObj,
         }),
       );
 

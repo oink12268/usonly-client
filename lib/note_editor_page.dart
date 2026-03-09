@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'api_config.dart';
 import 'api_client.dart';
 import 'note_page.dart';
+import 'google_calendar_service.dart';
 
 class NoteEditorPage extends StatefulWidget {
   final Map<String, dynamic> note;
@@ -31,6 +32,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   bool _isSaving = false;
   bool _hasUnsavedChanges = false;
   bool _isNewNote = false;
+  bool _isExtractingSchedule = false;
   int _pendingUploads = 0;
   String? _lastSavedContent;
   String? _lastSavedTitle;
@@ -264,6 +266,195 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     }
   }
 
+  Future<void> _extractAndSaveToCalendar() async {
+    final content = _getMarkdown();
+    if (content.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('메모 내용이 없습니다.')),
+      );
+      return;
+    }
+
+    setState(() => _isExtractingSchedule = true);
+    try {
+      final response = await ApiClient.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/notes/extract-schedule'),
+        body: jsonEncode({'content': content}),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 204) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('메모에서 일정을 찾지 못했습니다.')),
+        );
+        return;
+      }
+
+      if (response.statusCode != 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('일정 추출에 실패했습니다.')),
+        );
+        return;
+      }
+
+      final events = (jsonDecode(response.body) as List)
+          .cast<Map<String, dynamic>>();
+
+      await _showScheduleListDialog(events);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('오류가 발생했습니다: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isExtractingSchedule = false);
+    }
+  }
+
+  Future<void> _showScheduleListDialog(List<Map<String, dynamic>> events) async {
+    // 각 이벤트별 컨트롤러와 날짜 상태
+    final titleCtrls = events.map((e) => TextEditingController(text: e['title'] as String? ?? '')).toList();
+    final descCtrls = events.map((e) => TextEditingController(text: e['description'] as String? ?? '')).toList();
+    final dates = events.map((e) {
+      final d = e['date'] as String?;
+      return (d != null && d.isNotEmpty) ? DateTime.tryParse(d) : null;
+    }).toList();
+    final startTimes = events.map((e) {
+      final t = e['startTime'] as String?;
+      return (t != null && t.isNotEmpty) ? t : null;
+    }).toList();
+    final endTimes = events.map((e) {
+      final t = e['endTime'] as String?;
+      return (t != null && t.isNotEmpty) ? t : null;
+    }).toList();
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.auto_awesome, size: 20),
+              SizedBox(width: 8),
+              Text('AI 추출 일정'),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(events.length, (i) => _buildEventCard(
+                  ctx, setDialogState, i, titleCtrls[i], descCtrls[i], dates,
+                )),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                int saved = 0;
+                for (int i = 0; i < events.length; i++) {
+                  final title = titleCtrls[i].text.trim();
+                  final date = dates[i];
+                  if (title.isEmpty || date == null) continue;
+                  final desc = descCtrls[i].text.trim();
+                  final id = await GoogleCalendarService().createEvent(
+                    title, date,
+                    memo: desc.isEmpty ? null : desc,
+                    startTime: startTimes[i],
+                    endTime: endTimes[i],
+                  );
+                  if (id != null) saved++;
+                }
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(saved > 0
+                      ? '구글 캘린더에 $saved개 일정이 저장되었습니다!'
+                      : '날짜를 입력해야 저장할 수 있습니다.')),
+                );
+              },
+              child: const Text('전체 저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEventCard(
+    BuildContext ctx,
+    StateSetter setDialogState,
+    int i,
+    TextEditingController titleCtrl,
+    TextEditingController descCtrl,
+    List<DateTime?> dates,
+  ) {
+    final date = dates[i];
+    final dateStr = date != null
+        ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}'
+        : '날짜 선택 필요';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              decoration: const InputDecoration(
+                labelText: '일정 제목',
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: ctx,
+                  initialDate: dates[i] ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2035),
+                );
+                if (picked != null) setDialogState(() => dates[i] = picked);
+              },
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: '날짜',
+                  isDense: true,
+                  suffixIcon: date == null
+                      ? const Icon(Icons.warning_amber, color: Colors.orange, size: 18)
+                      : null,
+                ),
+                child: Text(
+                  dateStr,
+                  style: TextStyle(color: date == null ? Colors.orange : null),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: descCtrl,
+              decoration: const InputDecoration(
+                labelText: '설명 (선택)',
+                isDense: true,
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _autoSaveDebounce?.cancel();        // [Fix 5]
@@ -297,6 +488,21 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         actions: [
+          if (_isExtractingSchedule)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.auto_awesome),
+              tooltip: 'AI로 구글 캘린더에 저장',
+              onPressed: _extractAndSaveToCalendar,
+            ),
           IconButton(
             icon: const Icon(Icons.folder_open),
             tooltip: '하위 메모',

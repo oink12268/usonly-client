@@ -53,12 +53,16 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   // 페이지네이션 상태
   bool _hasMore = true;
   bool _isLoadingMore = false;
+  bool _hasNewer = false;   // 답장 이동 후 최신 방향으로 더 불러올 메시지 존재 여부
+  bool _isLoadingNewer = false;
 
   // 채팅 검색 메뉴 표시 상태
   bool _showChatSearchMenu = false;
 
   // 검색 결과에서 이동한 메시지 하이라이트
   int? _highlightedMessageId;
+  // 답장 이동 시 해당 아이템을 화면 중앙으로 스크롤하기 위한 GlobalKey
+  final GlobalKey _targetMessageKey = GlobalKey();
 
   // 전송 버튼 애니메이션
   late AnimationController _sendAnimController;
@@ -159,10 +163,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   // 스크롤 맨 위 도달 시 이전 메시지 추가 로드
   // (reverse: true 이므로 pixels가 maxScrollExtent에 가까울 때 = 화면 맨 위)
   void _onScroll() {
+    // 맨 위 → 오래된 메시지 로드 (reverse: true 이므로 maxScrollExtent = 화면 맨 위)
     if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50 &&
         _hasMore &&
         !_isLoadingMore) {
       _loadMore();
+    }
+    // 맨 아래 → 최신 메시지 로드 (답장 이동 후 _hasNewer = true인 경우)
+    if (_scrollController.hasClients &&
+        _scrollController.position.pixels <= 50 &&
+        _hasNewer &&
+        !_isLoadingNewer) {
+      _loadNewer();
     }
   }
 
@@ -175,6 +187,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         setState(() {
           _chats = chats;
           _hasMore = chats.length >= 50;
+          _hasNewer = false;
         });
 
         // 상대방 닉네임 병렬 조회
@@ -229,6 +242,43 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       print("❌ 이전 메시지 로딩 실패: $e");
     } finally {
       setState(() => _isLoadingMore = false);
+    }
+  }
+
+  // 최신 방향 메시지 추가 로드 (답장 이동 후 아래로 스크롤할 때)
+  Future<void> _loadNewer() async {
+    if (_chats.isEmpty) return;
+    final lastId = _chats.last['id'];
+    if (lastId == null) return;
+
+    setState(() => _isLoadingNewer = true);
+    try {
+      final response = await ApiClient.get(
+        Uri.parse('$httpUrl?after=$lastId&size=50'),
+      );
+      if (response.statusCode == 200) {
+        final newer = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+
+        final partnerUids = newer
+            .map((c) => c['writerUid']?.toString() ?? '')
+            .where((uid) => uid.isNotEmpty && uid != widget.uid && !_nicknameCache.containsKey(uid))
+            .toSet();
+        if (partnerUids.isNotEmpty) {
+          await Future.wait(partnerUids.map((uid) => _getNickname(uid)));
+        }
+
+        setState(() {
+          // 중복 방지 (웹소켓으로 이미 받은 메시지 제외)
+          final existingIds = _chats.map((c) => c['id']).toSet();
+          final unique = newer.where((c) => !existingIds.contains(c['id'])).toList();
+          _chats = [..._chats, ...unique];
+          _hasNewer = newer.length >= 50;
+        });
+      }
+    } catch (e) {
+      debugPrint('최신 메시지 로딩 실패: $e');
+    } finally {
+      setState(() => _isLoadingNewer = false);
     }
   }
 
@@ -807,24 +857,47 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   // 검색 결과 클릭 시 해당 메시지 로드 후 스크롤
   Future<void> _loadAndScrollToMessage(int targetId) async {
     try {
-      final response = await ApiClient.get(
-        Uri.parse('$httpUrl?before=${targetId + 1}&size=50'),
-      );
-      if (response.statusCode == 200) {
-        final chats = jsonDecode(utf8.decode(response.bodyBytes)) as List;
-        final partnerUids = chats
+      // 이전 메시지(타겟 포함)와 이후 메시지를 동시에 로드
+      final responses = await Future.wait([
+        ApiClient.get(Uri.parse('$httpUrl?before=${targetId + 1}&size=50')),
+        ApiClient.get(Uri.parse('$httpUrl?after=$targetId&size=50')),
+      ]);
+
+      if (responses[0].statusCode == 200) {
+        final older = jsonDecode(utf8.decode(responses[0].bodyBytes)) as List;
+        final newer = responses[1].statusCode == 200
+            ? jsonDecode(utf8.decode(responses[1].bodyBytes)) as List
+            : <dynamic>[];
+
+        // 닉네임 일괄 조회
+        final allChats = [...older, ...newer];
+        final partnerUids = allChats
             .map((c) => c['writerUid']?.toString() ?? '')
             .where((uid) => uid.isNotEmpty && uid != widget.uid && !_nicknameCache.containsKey(uid))
             .toSet();
         if (partnerUids.isNotEmpty) {
           await Future.wait(partnerUids.map((uid) => _getNickname(uid)));
         }
+
         setState(() {
-          _chats = chats;
-          _hasMore = chats.length >= 50;
+          _chats = [...older, ...newer];
+          _hasMore = older.length >= 50;
+          _hasNewer = newer.length >= 50;
           _highlightedMessageId = targetId;
         });
-        _scrollToBottom();
+
+        // 타겟 메시지를 화면 중앙으로 스크롤
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final ctx = _targetMessageKey.currentContext;
+          if (ctx != null) {
+            Scrollable.ensureVisible(
+              ctx,
+              alignment: 0.5,
+              duration: const Duration(milliseconds: 300),
+            );
+          }
+        });
+
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) setState(() => _highlightedMessageId = null);
         });
@@ -1168,7 +1241,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                   final String? replyToMessage = chat['replyToMessage'];
                   final String? replyToUid = chat['replyToUid'];
 
-                  return Column(
+                  final isTarget = _highlightedMessageId != null && chat['id'] == _highlightedMessageId;
+
+                  return KeyedSubtree(
+                    key: isTarget ? _targetMessageKey : ValueKey('chat_${chat['id'] ?? index}'),
+                    child: Column(
                     children: [
                       // [1] 날짜 구분선
                       if (showDateDivider && createdAt != null)
@@ -1295,37 +1372,45 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
                                       // 답장 인용 표시
                                       if (hasReply && replyToMessage != null)
-                                        Container(
-                                          margin: const EdgeInsets.only(bottom: 4),
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                            borderRadius: BorderRadius.circular(10),
-                                            border: Border(
-                                              left: BorderSide(color: const Color(0xFF8B7E74), width: 3),
+                                        GestureDetector(
+                                          onTap: () {
+                                            final replyId = chat['replyToId'];
+                                            if (replyId != null) {
+                                              _loadAndScrollToMessage(int.tryParse(replyId.toString()) ?? 0);
+                                            }
+                                          },
+                                          child: Container(
+                                            margin: const EdgeInsets.only(bottom: 4),
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border(
+                                                left: BorderSide(color: const Color(0xFF8B7E74), width: 3),
+                                              ),
                                             ),
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                replyToUid != null && replyToUid == widget.uid
-                                                    ? "나"
-                                                    : _nicknameCache[replyToUid] ?? replyToUid?.substring(0, 4) ?? "",
-                                                style: const TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: const Color(0xFF8B7E74),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  replyToUid != null && replyToUid == widget.uid
+                                                      ? "나"
+                                                      : _nicknameCache[replyToUid] ?? replyToUid?.substring(0, 4) ?? "",
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: const Color(0xFF8B7E74),
+                                                  ),
                                                 ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                _replyPreviewText(replyToMessage),
-                                                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ],
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  _replyPreviewText(replyToMessage),
+                                                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
 
@@ -1437,7 +1522,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                         ),
                       ),
                     ],
-                  );
+                  ),   // Column
+                  );   // KeyedSubtree
                 },
               ),
             ),
