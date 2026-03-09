@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
@@ -18,7 +18,86 @@ const _windowsClientSecret = windowsClientSecret;
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+
+  // Calendar 스코프 포함한 GoogleSignIn (static으로 공유)
+  static final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: [
+      'email',
+      'https://www.googleapis.com/auth/calendar',
+    ],
+  );
+
+  // Google Calendar 토큰 캐시
+  static String? _cachedAccessToken;
+  static DateTime? _tokenExpiry;
+  static String? _windowsRefreshToken; // Windows 전용
+
+  /// Google Calendar API용 액세스 토큰 반환.
+  /// 만료 시 자동 갱신. 권한 없으면 null 반환.
+  static Future<String?> getGoogleAccessToken() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      return _getWindowsToken();
+    }
+
+    // Mobile: google_sign_in에서 토큰 획득 (자동 갱신 포함)
+    try {
+      var account = _googleSignIn.currentUser;
+      account ??= await _googleSignIn.signInSilently();
+      if (account == null) return null;
+
+      // Calendar 스코프 미승인 시 요청
+      final hasScope = await _googleSignIn.requestScopes(
+        ['https://www.googleapis.com/auth/calendar'],
+      );
+      if (!hasScope) return null;
+
+      final auth = await account.authentication;
+      return auth.accessToken;
+    } catch (e) {
+      print('Google Calendar 토큰 획득 실패: $e');
+      return null;
+    }
+  }
+
+  static Future<String?> _getWindowsToken() async {
+    // 캐시된 토큰이 유효하면 (5분 여유) 바로 반환
+    if (_cachedAccessToken != null &&
+        _tokenExpiry != null &&
+        _tokenExpiry!.isAfter(DateTime.now().add(const Duration(minutes: 5)))) {
+      return _cachedAccessToken;
+    }
+
+    if (_windowsRefreshToken != null) {
+      return _refreshWindowsToken();
+    }
+    return null;
+  }
+
+  static Future<String?> _refreshWindowsToken() async {
+    try {
+      final response = await http.post(
+        Uri.parse('https://oauth2.googleapis.com/token'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'client_id': _windowsClientId,
+          'client_secret': _windowsClientSecret,
+          'refresh_token': _windowsRefreshToken!,
+          'grant_type': 'refresh_token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        _cachedAccessToken = data['access_token'] as String?;
+        final expiresIn = data['expires_in'] as int? ?? 3600;
+        _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn));
+        return _cachedAccessToken;
+      }
+    } catch (e) {
+      print('Windows 토큰 갱신 실패: $e');
+    }
+    return null;
+  }
 
   Future<User?> signInWithGoogle() async {
     try {
@@ -47,9 +126,8 @@ class AuthService {
   // debug 전용: Google 로그인 후 Email/Password 연결 (최초 1회)
   Future<void> _linkDevPassword(User? user) async {
     if (user == null) return;
-    final hasEmailProvider = user.providerData
-        .any((p) => p.providerId == 'password');
-    if (hasEmailProvider) return; // 이미 연결됨
+    final hasEmailProvider = user.providerData.any((p) => p.providerId == 'password');
+    if (hasEmailProvider) return;
 
     try {
       final credential = EmailAuthProvider.credential(
@@ -64,29 +142,27 @@ class AuthService {
   }
 
   // Windows: 로컬 HTTP 서버 + PKCE OAuth 플로우
+  // Calendar 스코프 포함, access_type=offline으로 refresh_token 획득
   Future<User?> _signInWindowsGoogle() async {
-    // 1. 빈 포트로 로컬 서버 시작
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final port = server.port;
 
-    // 2. PKCE 생성 (client_secret 없이도 안전하게 인증)
     final codeVerifier = _generateCodeVerifier();
     final codeChallenge = _generateCodeChallenge(codeVerifier);
 
-    // 3. Google OAuth URL 구성
     final authUrl = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
       'client_id': _windowsClientId,
       'redirect_uri': 'http://localhost:$port',
       'response_type': 'code',
-      'scope': 'email profile openid',
+      'scope': 'email profile openid https://www.googleapis.com/auth/calendar',
       'code_challenge': codeChallenge,
       'code_challenge_method': 'S256',
+      'access_type': 'offline',
+      'prompt': 'consent', // refresh_token 발급 위해 항상 동의 화면 표시
     });
 
-    // 4. 기본 브라우저로 열기
     await launchUrl(authUrl, mode: LaunchMode.externalApplication);
 
-    // 5. 브라우저 리다이렉트 대기
     String? code;
     try {
       await for (final request in server.timeout(const Duration(minutes: 3))) {
@@ -115,7 +191,6 @@ class AuthService {
 
     if (code == null) throw Exception('인증 코드를 받지 못했습니다');
 
-    // 6. 인증 코드 → 토큰 교환 (PKCE: client_secret 불필요)
     final tokenResponse = await http.post(
       Uri.parse('https://oauth2.googleapis.com/token'),
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -132,12 +207,20 @@ class AuthService {
     final tokenData = jsonDecode(tokenResponse.body) as Map<String, dynamic>;
     final idToken = tokenData['id_token'] as String?;
     final accessToken = tokenData['access_token'] as String?;
+    final refreshToken = tokenData['refresh_token'] as String?;
+    final expiresIn = tokenData['expires_in'] as int? ?? 3600;
 
     if (idToken == null) {
       throw Exception('토큰 교환 실패: ${tokenResponse.body}');
     }
 
-    // 7. Firebase 로그인
+    // Calendar API용 토큰 저장
+    _cachedAccessToken = accessToken;
+    _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn));
+    if (refreshToken != null) {
+      _windowsRefreshToken = refreshToken;
+    }
+
     final credential = GoogleAuthProvider.credential(
       idToken: idToken,
       accessToken: accessToken,
@@ -158,7 +241,7 @@ class AuthService {
     return base64UrlEncode(digest.bytes).replaceAll('=', '');
   }
 
-  // ⚠️ 개발용 전용 - 빌드 전 반드시 제거 또는 kDebugMode 체크 필수
+  // ⚠️ 개발용 전용
   Future<User?> devSignIn({
     required String email,
     required String password,
@@ -176,9 +259,10 @@ class AuthService {
     } catch (e) {
       print("구글 로그아웃 중 에러 발생 (무시 가능): $e");
     }
+    // 캐시 토큰 초기화
+    _cachedAccessToken = null;
+    _tokenExpiry = null;
+    _windowsRefreshToken = null;
     await _auth.signOut();
   }
 }
-
-
-

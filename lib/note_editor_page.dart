@@ -71,6 +71,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       }
       _scheduleAutoSave(); // [Fix 5] 제목 변경 시도 자동저장 예약
     });
+
+    // 새 메모(빈 내용)일 때 에디터에 자동 포커스 및 커서 설정
+    if (content.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _editorState.updateSelectionWithReason(
+          Selection.collapsed(Position(path: [0], offset: 0)),
+          reason: SelectionUpdateReason.uiEvent,
+        );
+      });
+    }
   }
 
   // [Fix 5] 자동저장: 타이핑 멈춘 후 3초 뒤 저장, 최대 30초 강제저장

@@ -2,6 +2,24 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'api_config.dart';
 import 'api_client.dart';
+import 'google_calendar_service.dart';
+
+// 캘린더 그리드에서 Google 이벤트를 바(bar)로 표시하기 위한 내부 모델
+class _EventBar {
+  final GoogleCalEvent event;
+  final int startCol; // 0=일 ~ 6=토 (주 내 컬럼 인덱스)
+  final int endCol;
+  final bool capLeft; // 이벤트가 이 주에서 시작 → 왼쪽 둥글게
+  final bool capRight; // 이벤트가 이 주에서 종료 → 오른쪽 둥글게
+
+  _EventBar({
+    required this.event,
+    required this.startCol,
+    required this.endCol,
+    required this.capLeft,
+    required this.capRight,
+  });
+}
 
 class CalendarPage extends StatefulWidget {
   final int memberId;
@@ -17,6 +35,7 @@ class _CalendarPageState extends State<CalendarPage> {
   DateTime? _selectedDate;
   List<dynamic> _schedules = [];
   List<dynamic> _anniversaries = [];
+  List<GoogleCalEvent> _googleEvents = [];
   bool _isLoading = false;
 
   @override
@@ -28,7 +47,11 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
-    await Future.wait([_fetchSchedules(), _fetchAnniversaries()]);
+    await Future.wait([
+      _fetchSchedules(),
+      _fetchAnniversaries(),
+      _fetchGoogleEvents(),
+    ]);
     setState(() => _isLoading = false);
   }
 
@@ -65,13 +88,24 @@ class _CalendarPageState extends State<CalendarPage> {
     }
   }
 
-  // 해당 날짜에 일정이 있는지
+  Future<void> _fetchGoogleEvents() async {
+    final events = await GoogleCalendarService().fetchMonthEvents(
+      _focusedMonth.year,
+      _focusedMonth.month,
+    );
+    setState(() => _googleEvents = events);
+  }
+
+  // ─── 날짜 헬퍼 ───────────────────────────────────────────────────────────
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   bool _hasSchedule(DateTime day) {
     final dayStr = _toDateStr(day);
     return _schedules.any((s) => s['date'] == dayStr);
   }
 
-  // 기념일이 현재 보는 월에 해당하는 날짜 계산 (반복 기념일은 매년 같은 월/일)
   DateTime? _anniversaryDateInMonth(dynamic anniversary) {
     final dateStr = anniversary['date'] as String?;
     if (dateStr == null) return null;
@@ -81,12 +115,9 @@ class _CalendarPageState extends State<CalendarPage> {
     final int month = _focusedMonth.month;
 
     if (!recurring) {
-      // 반복 없는 기념일: 정확히 해당 연/월에만 표시
       if (date.year == year && date.month == month) return date;
       return null;
     }
-
-    // 매년 반복: 기념일 월이 현재 보는 월과 같으면 해당 연도로 날짜 생성
     if (date.month == month) {
       try {
         return DateTime(year, month, date.day);
@@ -111,17 +142,23 @@ class _CalendarPageState extends State<CalendarPage> {
     }).toList();
   }
 
-  // 선택된 날짜의 일정 목록
   List<dynamic> _schedulesForDate(DateTime day) {
     final dayStr = _toDateStr(day);
     return _schedules.where((s) => s['date'] == dayStr).toList();
+  }
+
+  /// 선택된 날에 걸치는 Google 이벤트 (단일일 포함)
+  List<GoogleCalEvent> _googleEventsForDate(DateTime day) {
+    final d = DateTime(day.year, day.month, day.day);
+    return _googleEvents.where((e) => !e.start.isAfter(d) && !e.end.isBefore(d)).toList();
   }
 
   String _toDateStr(DateTime day) {
     return "${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}";
   }
 
-  // 연도별 전체 공휴일 계산 (대체공휴일 포함)
+  // ─── 공휴일 계산 ─────────────────────────────────────────────────────────
+
   Map<DateTime, String> _buildYearHolidays(int year) {
     final Map<DateTime, List<String>> base = {};
 
@@ -130,17 +167,15 @@ class _CalendarPageState extends State<CalendarPage> {
       (base[d] ??= []).add(name);
     }
 
-    // 고정 양력 공휴일
-    add(DateTime(year,  1,  1), '신정');
-    add(DateTime(year,  3,  1), '삼일절');
-    add(DateTime(year,  5,  5), '어린이날');
-    add(DateTime(year,  6,  6), '현충일');
-    add(DateTime(year,  8, 15), '광복절');
-    add(DateTime(year, 10,  3), '개천절');
-    add(DateTime(year, 10,  9), '한글날');
+    add(DateTime(year, 1, 1), '신정');
+    add(DateTime(year, 3, 1), '삼일절');
+    add(DateTime(year, 5, 5), '어린이날');
+    add(DateTime(year, 6, 6), '현충일');
+    add(DateTime(year, 8, 15), '광복절');
+    add(DateTime(year, 10, 3), '개천절');
+    add(DateTime(year, 10, 9), '한글날');
     add(DateTime(year, 12, 25), '크리스마스');
 
-    // 설날 (전날·당일·연휴)
     final seollal = _seollalDate(year);
     if (seollal != null) {
       add(seollal.subtract(const Duration(days: 1)), '설날 전날');
@@ -148,7 +183,6 @@ class _CalendarPageState extends State<CalendarPage> {
       add(seollal.add(const Duration(days: 1)), '설날 연휴');
     }
 
-    // 추석 (전날·당일·연휴)
     final chuseok = _chuseokDate(year);
     if (chuseok != null) {
       add(chuseok.subtract(const Duration(days: 1)), '추석 전날');
@@ -156,49 +190,36 @@ class _CalendarPageState extends State<CalendarPage> {
       add(chuseok.add(const Duration(days: 1)), '추석 연휴');
     }
 
-    // 부처님오신날
     final buddha = _buddhaDate(year);
     if (buddha != null) add(buddha, '부처님오신날');
 
-    // 임시공휴일 — 정부 발표 후 여기에 추가
-    // add(DateTime(year, m, d), '임시공휴일명');
-
-    // 1차: 베이스 공휴일 확정 (같은 날 첫 번째 이름 사용)
     final result = <DateTime, String>{};
     final sortedDates = base.keys.toList()..sort();
     for (final date in sortedDates) {
       result[date] = base[date]!.first;
     }
 
-    // 대체공휴일 후보 탐색 (주말·이미 지정된 날 건너뜀)
     DateTime nextAvailable(DateTime from) {
       DateTime sub = from.add(const Duration(days: 1));
       while (result.containsKey(sub) ||
-             sub.weekday == DateTime.saturday ||
-             sub.weekday == DateTime.sunday) {
+          sub.weekday == DateTime.saturday ||
+          sub.weekday == DateTime.sunday) {
         sub = sub.add(const Duration(days: 1));
       }
       return sub;
     }
 
-    // 2차: 대체공휴일 추가
     for (final date in sortedDates) {
       final names = base[date]!;
-
-      // 공휴일끼리 겹침 → 밀린 공휴일 대체
       for (int i = 1; i < names.length; i++) {
         result[nextAvailable(date)] = '${names[i]} 대체공휴일';
       }
-
-      // 일요일 → 다음 평일 대체
       if (date.weekday == DateTime.sunday) {
         final sub = nextAvailable(date);
         if (!result.containsKey(sub)) {
           result[sub] = '${names.first} 대체공휴일';
         }
       }
-
-      // 어린이날 토요일 → 대체 (법 개정으로 토요일도 적용)
       if (names.contains('어린이날') && date.weekday == DateTime.saturday) {
         final sub = nextAvailable(date);
         if (!result.containsKey(sub)) result[sub] = '어린이날 대체공휴일';
@@ -208,41 +229,40 @@ class _CalendarPageState extends State<CalendarPage> {
     return result;
   }
 
-  // 설날 당일 양력 날짜 (2025~2040, 19년 주기 기반)
   DateTime? _seollalDate(int year) {
     final dates = <int, List<int>>{
-      2025: [1, 29], 2026: [2, 17], 2027: [2,  6], 2028: [1, 26],
-      2029: [2, 13], 2030: [2,  3], 2031: [1, 23], 2032: [2, 10],
-      2033: [1, 31], 2034: [2, 19], 2035: [2,  8], 2036: [1, 28],
-      2037: [2, 16], 2038: [2,  5], 2039: [1, 25], 2040: [2, 12],
+      2025: [1, 29], 2026: [2, 17], 2027: [2, 6], 2028: [1, 26],
+      2029: [2, 13], 2030: [2, 3], 2031: [1, 23], 2032: [2, 10],
+      2033: [1, 31], 2034: [2, 19], 2035: [2, 8], 2036: [1, 28],
+      2037: [2, 16], 2038: [2, 5], 2039: [1, 25], 2040: [2, 12],
     };
     final d = dates[year];
     return d == null ? null : DateTime(year, d[0], d[1]);
   }
 
-  // 추석 당일 양력 날짜 (2025~2040)
   DateTime? _chuseokDate(int year) {
     final dates = <int, List<int>>{
-      2025: [10,  6], 2026: [9, 25], 2027: [9, 15], 2028: [10,  3],
-      2029: [ 9, 22], 2030: [9, 12], 2031: [10,  1], 2032: [9, 19],
-      2033: [ 9,  7], 2034: [9, 27], 2035: [9, 16], 2036: [10,  4],
-      2037: [ 9, 24], 2038: [9, 13], 2039: [10,  2], 2040: [9, 21],
+      2025: [10, 6], 2026: [9, 25], 2027: [9, 15], 2028: [10, 3],
+      2029: [9, 22], 2030: [9, 12], 2031: [10, 1], 2032: [9, 19],
+      2033: [9, 7], 2034: [9, 27], 2035: [9, 16], 2036: [10, 4],
+      2037: [9, 24], 2038: [9, 13], 2039: [10, 2], 2040: [9, 21],
     };
     final d = dates[year];
     return d == null ? null : DateTime(year, d[0], d[1]);
   }
 
-  // 부처님오신날 양력 날짜 (2025~2040)
   DateTime? _buddhaDate(int year) {
     final dates = <int, List<int>>{
-      2025: [5,  5], 2026: [5, 24], 2027: [5, 13], 2028: [5,  2],
-      2029: [5, 20], 2030: [5,  9], 2031: [5, 28], 2032: [5, 17],
-      2033: [5,  6], 2034: [5, 25], 2035: [5, 14], 2036: [5,  3],
+      2025: [5, 5], 2026: [5, 24], 2027: [5, 13], 2028: [5, 2],
+      2029: [5, 20], 2030: [5, 9], 2031: [5, 28], 2032: [5, 17],
+      2033: [5, 6], 2034: [5, 25], 2035: [5, 14], 2036: [5, 3],
       2037: [5, 22], 2038: [5, 12], 2039: [4, 30], 2040: [5, 19],
     };
     final d = dates[year];
     return d == null ? null : DateTime(year, d[0], d[1]);
   }
+
+  // ─── 네비게이션 ───────────────────────────────────────────────────────────
 
   void _prevMonth() {
     setState(() {
@@ -271,21 +291,18 @@ class _CalendarPageState extends State<CalendarPage> {
           title: const Text("연도/월 선택"),
           content: Row(
             children: [
-              // 연도 선택
               Expanded(
                 child: SizedBox(
                   height: 200,
                   child: ListWheelScrollView.useDelegate(
                     itemExtent: 40,
                     diameterRatio: 1.5,
-                    controller: FixedExtentScrollController(
-                      initialItem: selectedYear - 1900,
-                    ),
+                    controller: FixedExtentScrollController(initialItem: selectedYear - 1900),
                     onSelectedItemChanged: (index) {
                       setDialogState(() => selectedYear = 1900 + index);
                     },
                     childDelegate: ListWheelChildBuilderDelegate(
-                      childCount: 201, // 1900 ~ 2100
+                      childCount: 201,
                       builder: (context, index) {
                         final y = 1900 + index;
                         return Center(
@@ -303,16 +320,13 @@ class _CalendarPageState extends State<CalendarPage> {
                   ),
                 ),
               ),
-              // 월 선택
               Expanded(
                 child: SizedBox(
                   height: 200,
                   child: ListWheelScrollView.useDelegate(
                     itemExtent: 40,
                     diameterRatio: 1.5,
-                    controller: FixedExtentScrollController(
-                      initialItem: selectedMonth - 1,
-                    ),
+                    controller: FixedExtentScrollController(initialItem: selectedMonth - 1),
                     onSelectedItemChanged: (index) {
                       setDialogState(() => selectedMonth = index + 1);
                     },
@@ -360,75 +374,94 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
+  // ─── 일정 CRUD ────────────────────────────────────────────────────────────
+
   void _showAddScheduleDialog() {
     if (_selectedDate == null) return;
 
     final titleController = TextEditingController();
     final memoController = TextEditingController();
+    bool syncToGoogle = true;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          "${_selectedDate!.month}월 ${_selectedDate!.day}일 일정 추가",
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                hintText: "일정 제목",
-                border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text("${_selectedDate!.month}월 ${_selectedDate!.day}일 일정 추가"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  hintText: "일정 제목",
+                  border: OutlineInputBorder(),
+                ),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: memoController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: "메모 (선택)",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Checkbox(
+                    value: syncToGoogle,
+                    activeColor: Colors.blue,
+                    onChanged: (v) => setDialogState(() => syncToGoogle = v ?? true),
+                  ),
+                  const Text("Google 캘린더에도 추가", style: TextStyle(fontSize: 13)),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("취소"),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: memoController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: "메모 (선택)",
-                border: OutlineInputBorder(),
-              ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B7E74)),
+              onPressed: () async {
+                if (titleController.text.isNotEmpty) {
+                  final nav = Navigator.of(context);
+                  await _createSchedule(
+                    titleController.text,
+                    memoController.text,
+                    syncToGoogle: syncToGoogle,
+                  );
+                  nav.pop();
+                }
+              },
+              child: const Text("추가", style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("취소"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B7E74)),
-            onPressed: () async {
-              if (titleController.text.isNotEmpty) {
-                await _createSchedule(
-                  titleController.text,
-                  memoController.text,
-                );
-                Navigator.pop(context);
-              }
-            },
-            child: const Text("추가", style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
 
-  Future<void> _createSchedule(String title, String memo) async {
+  Future<void> _createSchedule(
+    String title,
+    String memo, {
+    bool syncToGoogle = true,
+  }) async {
     final dateStr = _toDateStr(_selectedDate!);
     try {
       final response = await ApiClient.post(
         Uri.parse('${ApiConfig.baseUrl}/api/schedules'),
-        body: jsonEncode({
-          'title': title,
-          'memo': memo,
-          'date': dateStr,
-        }),
+        body: jsonEncode({'title': title, 'memo': memo, 'date': dateStr}),
       );
       if (response.statusCode == 200) {
-        _fetchSchedules();
+        if (syncToGoogle) {
+          await GoogleCalendarService().createEvent(title, _selectedDate!, memo: memo);
+        }
+        await Future.wait([_fetchSchedules(), if (syncToGoogle) _fetchGoogleEvents()]);
       }
     } catch (e) {
       print("일정 추가 에러: $e");
@@ -439,17 +472,50 @@ class _CalendarPageState extends State<CalendarPage> {
     try {
       final response = await ApiClient.put(
         Uri.parse('${ApiConfig.baseUrl}/api/schedules/$id'),
-        body: jsonEncode({
-          'title': title,
-          'memo': memo,
-          'date': date,
-        }),
+        body: jsonEncode({'title': title, 'memo': memo, 'date': date}),
       );
       if (response.statusCode == 200) {
         _fetchSchedules();
       }
     } catch (e) {
       print("일정 수정 에러: $e");
+    }
+  }
+
+  Future<void> _deleteSchedule(int id) async {
+    try {
+      final response = await ApiClient.delete(
+        Uri.parse('${ApiConfig.baseUrl}/api/schedules/$id'),
+      );
+      if (response.statusCode == 200) {
+        _fetchSchedules();
+      }
+    } catch (e) {
+      print("일정 삭제 에러: $e");
+    }
+  }
+
+  Future<void> _deleteGoogleEvent(GoogleCalEvent event) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Google 일정 삭제'),
+            content: Text("'${event.title}'을(를) Google 캘린더에서 삭제할까요?"),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('삭제', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (confirmed) {
+      await GoogleCalendarService().deleteEvent(event.id);
+      await _fetchGoogleEvents();
     }
   }
 
@@ -467,7 +533,6 @@ class _CalendarPageState extends State<CalendarPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 날짜 선택
               GestureDetector(
                 onTap: () async {
                   final picked = await showDatePicker(
@@ -501,10 +566,7 @@ class _CalendarPageState extends State<CalendarPage> {
               const SizedBox(height: 12),
               TextField(
                 controller: titleController,
-                decoration: const InputDecoration(
-                  labelText: "제목",
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: "제목", border: OutlineInputBorder()),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -535,13 +597,14 @@ class _CalendarPageState extends State<CalendarPage> {
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B7E74)),
               onPressed: () async {
                 if (titleController.text.isNotEmpty) {
+                  final nav = Navigator.of(context);
                   await _updateSchedule(
                     schedule['id'],
                     titleController.text,
                     memoController.text,
                     _toDateStr(selectedDate),
                   );
-                  Navigator.pop(context);
+                  nav.pop();
                 }
               },
               child: const Text("저장", style: TextStyle(color: Colors.white)),
@@ -552,25 +615,62 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  Future<void> _deleteSchedule(int id) async {
-    try {
-      final response = await ApiClient.delete(
-        Uri.parse('${ApiConfig.baseUrl}/api/schedules/$id'),
-      );
-      if (response.statusCode == 200) {
-        _fetchSchedules();
-      }
-    } catch (e) {
-      print("일정 삭제 에러: $e");
+  // ─── 이벤트 바 계산 ──────────────────────────────────────────────────────
+
+  /// 해당 주에 걸치는 다기간 Google 이벤트의 바 목록 반환
+  List<_EventBar> _getBarsForWeek(List<DateTime?> weekDays, List<GoogleCalEvent> events) {
+    final weekFirst = weekDays.firstWhere((d) => d != null);
+    final weekLast = weekDays.lastWhere((d) => d != null);
+    if (weekFirst == null || weekLast == null) return [];
+
+    final bars = <_EventBar>[];
+    for (final event in events) {
+      // 단일일 이벤트는 점(dot)으로 표시하므로 바에서 제외
+      if (!event.isMultiDay) continue;
+      if (event.start.isAfter(weekLast) || event.end.isBefore(weekFirst)) continue;
+
+      final clippedStart = event.start.isBefore(weekFirst) ? weekFirst : event.start;
+      final clippedEnd = event.end.isAfter(weekLast) ? weekLast : event.end;
+
+      bars.add(_EventBar(
+        event: event,
+        // weekday % 7 → 일=0, 월=1, ..., 토=6
+        startCol: clippedStart.weekday % 7,
+        endCol: clippedEnd.weekday % 7,
+        capLeft: !event.start.isBefore(weekFirst),
+        capRight: !event.end.isAfter(weekLast),
+      ));
     }
+    return bars;
   }
+
+  /// 바들을 레인(행)에 배치 (겹치지 않게)
+  List<List<_EventBar>> _assignLanes(List<_EventBar> bars) {
+    bars.sort((a, b) => a.startCol.compareTo(b.startCol));
+    final lanes = <List<_EventBar>>[];
+
+    for (final bar in bars) {
+      bool placed = false;
+      for (final lane in lanes) {
+        final conflict = lane.any((b) => b.endCol >= bar.startCol && b.startCol <= bar.endCol);
+        if (!conflict) {
+          lane.add(bar);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) lanes.add([bar]);
+    }
+    return lanes;
+  }
+
+  // ─── Build ───────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
-          // 캘린더 영역
           GestureDetector(
             onHorizontalDragEnd: (details) {
               if (details.primaryVelocity! < 0) {
@@ -582,7 +682,6 @@ class _CalendarPageState extends State<CalendarPage> {
             child: _buildCalendar(),
           ),
           const Divider(height: 1),
-          // 선택된 날짜의 일정 목록
           Expanded(child: _buildScheduleList()),
         ],
       ),
@@ -604,153 +703,242 @@ class _CalendarPageState extends State<CalendarPage> {
     final startWeekday = firstDay.weekday % 7; // 일=0, 월=1 ...
 
     final holidays = _buildYearHolidays(year);
-    final days = <Widget>[];
 
-    // 빈 칸 채우기
-    for (int i = 0; i < startWeekday; i++) {
-      days.add(const SizedBox());
-    }
+    // 월을 주 단위로 분리
+    final weeks = <List<DateTime?>>[];
+    var currentWeek = List<DateTime?>.filled(7, null);
+    int col = startWeekday;
 
-    // 날짜 채우기
     for (int d = 1; d <= lastDay.day; d++) {
-      final date = DateTime(year, month, d);
-      final isSelected = _selectedDate != null &&
-          _selectedDate!.year == date.year &&
-          _selectedDate!.month == date.month &&
-          _selectedDate!.day == date.day;
-      final isToday = DateTime.now().year == date.year &&
-          DateTime.now().month == date.month &&
-          DateTime.now().day == date.day;
-      final hasSchedule = _hasSchedule(date);
-      final hasAnniversary = _hasAnniversary(date);
-      final holidayName = holidays[DateTime(year, month, d)];
-
-      days.add(
-        GestureDetector(
-          onTap: () => setState(() => _selectedDate = date),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFF8B7E74) : null,
-              shape: BoxShape.circle,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  "$d",
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected
-                        ? Colors.white
-                        : holidayName != null
-                            ? Colors.red.shade600
-                            : date.weekday == DateTime.sunday
-                                ? const Color(0xFF8B7E74)
-                                : date.weekday == DateTime.saturday
-                                    ? Colors.blue
-                                    : Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                if (holidayName != null || hasSchedule || hasAnniversary)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (holidayName != null)
-                        Container(
-                          width: 5,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: isSelected ? Colors.white : Colors.red.shade400,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      if (holidayName != null && (hasSchedule || hasAnniversary))
-                        const SizedBox(width: 2),
-                      if (hasSchedule)
-                        Container(
-                          width: 5,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: isSelected ? Colors.white : const Color(0xFF8B7E74),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      if (hasSchedule && hasAnniversary) const SizedBox(width: 2),
-                      if (hasAnniversary)
-                        Container(
-                          width: 5,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: isSelected ? Colors.white70 : Colors.pinkAccent,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ),
-      );
+      if (col == 7) {
+        weeks.add(List.from(currentWeek));
+        currentWeek = List<DateTime?>.filled(7, null);
+        col = 0;
+      }
+      currentWeek[col] = DateTime(year, month, d);
+      col++;
+    }
+    if (currentWeek.any((d) => d != null)) {
+      weeks.add(List.from(currentWeek));
     }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: [
-          // 월 네비게이션
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cellWidth = constraints.maxWidth / 7;
+          return Column(
             children: [
-              IconButton(onPressed: _prevMonth, icon: const Icon(Icons.chevron_left)),
-              GestureDetector(
-                onTap: () => _showYearMonthPicker(),
-                child: Text(
-                  "${year}년 ${month}월",
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+              // 월 네비게이션
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(onPressed: _prevMonth, icon: const Icon(Icons.chevron_left)),
+                  GestureDetector(
+                    onTap: _showYearMonthPicker,
+                    child: Text(
+                      "${year}년 ${month}월",
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(onPressed: _nextMonth, icon: const Icon(Icons.chevron_right)),
+                ],
               ),
-              IconButton(onPressed: _nextMonth, icon: const Icon(Icons.chevron_right)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // 요일 헤더
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: ['일', '월', '화', '수', '목', '금', '토']
-                .map((d) => SizedBox(
-                      width: 40,
-                      child: Center(
-                        child: Text(
-                          d,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: d == '일'
-                                ? const Color(0xFF8B7E74)
-                                : d == '토'
-                                    ? Colors.blue
-                                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              const SizedBox(height: 8),
+              // 요일 헤더
+              Row(
+                children: ['일', '월', '화', '수', '목', '금', '토']
+                    .map((d) => SizedBox(
+                          width: cellWidth,
+                          child: Center(
+                            child: Text(
+                              d,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: d == '일'
+                                    ? const Color(0xFF8B7E74)
+                                    : d == '토'
+                                        ? Colors.blue
+                                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ))
-                .toList(),
+                        ))
+                    .toList(),
+              ),
+              const SizedBox(height: 4),
+              // 주 단위 행 렌더링
+              ...weeks.map((week) => _buildWeekRow(week, cellWidth, holidays)),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// 한 주의 날짜 셀 + Google 이벤트 바를 Stack으로 렌더링
+  Widget _buildWeekRow(
+    List<DateTime?> weekDays,
+    double cellWidth,
+    Map<DateTime, String> holidays,
+  ) {
+    const dateCellHeight = 42.0;
+    const barHeight = 14.0;
+    const barSpacing = 2.0;
+
+    final bars = _getBarsForWeek(weekDays, _googleEvents);
+    final lanes = _assignLanes(bars);
+    final barsHeight = lanes.isEmpty ? 0.0 : lanes.length * (barHeight + barSpacing);
+
+    return SizedBox(
+      height: dateCellHeight + barsHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // 날짜 셀 행
+          Row(
+            children: weekDays.map((date) {
+              if (date == null) return SizedBox(width: cellWidth, height: dateCellHeight);
+              return _buildDateCell(date, cellWidth, dateCellHeight, holidays);
+            }).toList(),
           ),
-          const SizedBox(height: 4),
-          // 날짜 그리드
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 7,
-            childAspectRatio: 1.0,
-            children: days,
-          ),
+          // Google 이벤트 바 레인들
+          ...lanes.asMap().entries.expand((laneEntry) {
+            final laneIdx = laneEntry.key;
+            return laneEntry.value.map((bar) {
+              final left = bar.startCol * cellWidth + 2;
+              final width = (bar.endCol - bar.startCol + 1) * cellWidth - 4;
+              final top = dateCellHeight + laneIdx * (barHeight + barSpacing);
+              return Positioned(
+                left: left,
+                top: top,
+                width: width,
+                height: barHeight,
+                child: _buildEventBarWidget(bar),
+              );
+            });
+          }),
         ],
       ),
     );
   }
+
+  Widget _buildDateCell(
+    DateTime date,
+    double width,
+    double height,
+    Map<DateTime, String> holidays,
+  ) {
+    final isSelected = _selectedDate != null && _isSameDay(date, _selectedDate!);
+    final isToday = _isSameDay(date, DateTime.now());
+    final hasSchedule = _hasSchedule(date);
+    final hasAnniversary = _hasAnniversary(date);
+    final holidayName = holidays[DateTime(date.year, date.month, date.day)];
+    // 단일일 Google 이벤트만 점으로 표시 (다기간은 바로 표시)
+    final hasSingleDayGoogle =
+        _googleEventsForDate(date).where((e) => !e.isMultiDay).isNotEmpty;
+
+    Color dateColor() {
+      if (isSelected) return Colors.white;
+      if (holidayName != null) return Colors.red.shade600;
+      if (date.weekday == DateTime.sunday) return const Color(0xFF8B7E74);
+      if (date.weekday == DateTime.saturday) return Colors.blue;
+      return Theme.of(context).colorScheme.onSurface;
+    }
+
+    return GestureDetector(
+      onTap: () => setState(() => _selectedDate = date),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFF8B7E74) : null,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  "${date.day}",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                    color: dateColor(),
+                  ),
+                ),
+              ),
+            ),
+            if (holidayName != null ||
+                hasSchedule ||
+                hasAnniversary ||
+                hasSingleDayGoogle)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (holidayName != null)
+                    _dot(isSelected ? Colors.white : Colors.red.shade400),
+                  if (holidayName != null && (hasSchedule || hasAnniversary || hasSingleDayGoogle))
+                    const SizedBox(width: 2),
+                  if (hasSchedule)
+                    _dot(isSelected ? Colors.white : const Color(0xFF8B7E74)),
+                  if (hasSchedule && (hasAnniversary || hasSingleDayGoogle))
+                    const SizedBox(width: 2),
+                  if (hasAnniversary)
+                    _dot(isSelected ? Colors.white70 : Colors.pinkAccent),
+                  if (hasAnniversary && hasSingleDayGoogle) const SizedBox(width: 2),
+                  if (hasSingleDayGoogle)
+                    _dot(isSelected ? Colors.lightBlue.shade100 : Colors.blue.shade400),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dot(Color color) => Container(
+        width: 5,
+        height: 5,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      );
+
+  Widget _buildEventBarWidget(_EventBar bar) {
+    return GestureDetector(
+      onTap: () => setState(() {
+        // 바를 탭하면 이벤트 시작일 선택
+        _selectedDate = bar.event.start;
+      }),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.blue.shade400,
+          borderRadius: BorderRadius.horizontal(
+            left: bar.capLeft ? const Radius.circular(4) : Radius.zero,
+            right: bar.capRight ? const Radius.circular(4) : Radius.zero,
+          ),
+        ),
+        padding: EdgeInsets.only(
+          left: bar.capLeft ? 4 : 0,
+          right: bar.capRight ? 4 : 0,
+        ),
+        // 이벤트 제목은 시작 지점(capLeft)에만 표시
+        child: bar.capLeft
+            ? Text(
+                bar.event.title,
+                style: const TextStyle(fontSize: 9, color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              )
+            : null,
+      ),
+    );
+  }
+
+  // ─── 일정 목록 ────────────────────────────────────────────────────────────
 
   Widget _buildScheduleList() {
     if (_selectedDate == null) {
@@ -763,10 +951,14 @@ class _CalendarPageState extends State<CalendarPage> {
 
     final daySchedules = _schedulesForDate(_selectedDate!);
     final dayAnniversaries = _anniversariesForDate(_selectedDate!);
+    final dayGoogleEvents = _googleEventsForDate(_selectedDate!);
     final dayHoliday = _buildYearHolidays(_selectedDate!.year)[
         DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day)];
 
-    if (daySchedules.isEmpty && dayAnniversaries.isEmpty && dayHoliday == null) {
+    if (daySchedules.isEmpty &&
+        dayAnniversaries.isEmpty &&
+        dayGoogleEvents.isEmpty &&
+        dayHoliday == null) {
       return Center(
         child: Text(
           "${_selectedDate!.month}월 ${_selectedDate!.day}일 일정이 없습니다",
@@ -778,12 +970,10 @@ class _CalendarPageState extends State<CalendarPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // 공휴일 먼저 표시
         if (dayHoliday != null) _buildHolidayItem(dayHoliday),
-        // 기념일
         ...dayAnniversaries.map((a) => _buildAnniversaryItem(a)),
-        // 일반 일정
         ...daySchedules.map((s) => _buildScheduleItem(s)),
+        ...dayGoogleEvents.map((e) => _buildGoogleEventItem(e)),
       ],
     );
   }
@@ -817,10 +1007,7 @@ class _CalendarPageState extends State<CalendarPage> {
               color: Colors.red.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text(
-              "공휴일",
-              style: TextStyle(fontSize: 12, color: Colors.red.shade600),
-            ),
+            child: Text("공휴일", style: TextStyle(fontSize: 12, color: Colors.red.shade600)),
           ),
         ],
       ),
@@ -881,10 +1068,7 @@ class _CalendarPageState extends State<CalendarPage> {
               color: Colors.pinkAccent.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
-              "기념일",
-              style: TextStyle(fontSize: 12, color: Colors.pinkAccent),
-            ),
+            child: const Text("기념일", style: TextStyle(fontSize: 12, color: Colors.pinkAccent)),
           ),
         ],
       ),
@@ -907,68 +1091,123 @@ class _CalendarPageState extends State<CalendarPage> {
       ),
       confirmDismiss: (_) async {
         return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("삭제 확인"),
-            content: Text("'${schedule['title']}'을(를) 삭제할까요?"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text("취소"),
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text("삭제 확인"),
+                content: Text("'${schedule['title']}'을(를) 삭제할까요?"),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text("취소"),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text("삭제", style: TextStyle(color: Colors.red)),
+                  ),
+                ],
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text("삭제", style: TextStyle(color: Colors.red)),
-              ),
-            ],
-          ),
-        ) ?? false;
+            ) ??
+            false;
       },
       onDismissed: (_) => _deleteSchedule(schedule['id']),
       child: GestureDetector(
         onTap: () => _showScheduleDetailDialog(schedule),
         child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.event, size: 18, color: Color(0xFF8B7E74)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    schedule['title'] ?? "",
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.event, size: 18, color: Color(0xFF8B7E74)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      schedule['title'] ?? "",
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                     ),
                   ),
-                ),
-                if (schedule['writerNickname'] != null &&
-                    schedule['writerNickname'].toString().isNotEmpty)
-                  Text(
-                    schedule['writerNickname'],
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                  ),
-              ],
-            ),
-            if (schedule['memo'] != null &&
-                schedule['memo'].toString().isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                schedule['memo'],
-                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  if (schedule['writerNickname'] != null &&
+                      schedule['writerNickname'].toString().isNotEmpty)
+                    Text(
+                      schedule['writerNickname'],
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    ),
+                ],
               ),
+              if (schedule['memo'] != null && schedule['memo'].toString().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  schedule['memo'],
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildGoogleEventItem(GoogleCalEvent event) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.event, size: 18, color: Colors.blue.shade600),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+                if (event.isMultiDay) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '${_toDateStr(event.start)} ~ ${_toDateStr(event.end)}',
+                    style: TextStyle(fontSize: 12, color: Colors.blue.shade400),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Google',
+              style: TextStyle(fontSize: 12, color: Colors.blue.shade600),
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () => _deleteGoogleEvent(event),
+            child: Icon(Icons.delete_outline, size: 20, color: Colors.blue.shade300),
+          ),
+        ],
       ),
     );
   }
