@@ -30,6 +30,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   bool _isSaving = false;
   bool _hasUnsavedChanges = false;
+  bool _isNewNote = false;
   int _pendingUploads = 0;
   String? _lastSavedContent;
   String? _lastSavedTitle;
@@ -42,12 +43,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     final content = widget.note['content'] as String? ?? '';
     Document document;
     try {
-      document = content.isEmpty ? Document.blank() : markdownToDocument(content);
+      document = content.isEmpty ? Document.blank(withInitialText: true) : markdownToDocument(content);
     } catch (_) {
       document = Document.blank();
     }
 
     _editorState = EditorState(document: document);
+    _isNewNote = content.isEmpty;
     _lastSavedContent = content;
     _lastSavedTitle = widget.note['title'] ?? '';
 
@@ -72,16 +74,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       _scheduleAutoSave(); // [Fix 5] 제목 변경 시도 자동저장 예약
     });
 
-    // 새 메모(빈 내용)일 때 에디터에 자동 포커스 및 커서 설정
-    if (content.isEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _editorState.updateSelectionWithReason(
-          Selection.collapsed(Position(path: [0], offset: 0)),
-          reason: SelectionUpdateReason.uiEvent,
-        );
-      });
-    }
   }
 
   // [Fix 5] 자동저장: 타이핑 멈춘 후 3초 뒤 저장, 최대 30초 강제저장
@@ -351,6 +343,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           Expanded(
             child: AppFlowyEditor(
               editorState: _editorState,
+              autoFocus: _isNewNote,
               editorStyle: EditorStyle.mobile().copyWith(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 textStyleConfiguration: TextStyleConfiguration(
