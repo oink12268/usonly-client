@@ -4,6 +4,7 @@ import 'package:stomp_dart_client/stomp_dart_client.dart';
 import 'api_config.dart';
 import 'api_client.dart';
 import 'note_editor_page.dart';
+import 'utils/date_formatter.dart';
 
 class NotePage extends StatefulWidget {
   final int memberId;
@@ -155,19 +156,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
     }
   }
 
-  String _formatDate(String? dateStr) {
-    if (dateStr == null) return '';
-    try {
-      final dt = DateTime.parse(dateStr);
-      final now = DateTime.now();
-      if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
-        return '오늘 ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-      }
-      return '${dt.month}/${dt.day}';
-    } catch (_) {
-      return '';
-    }
-  }
+  String _formatDate(String? dateStr) => DateFormatter.formatRelative(dateStr);
 
   @override
   Widget build(BuildContext context) {

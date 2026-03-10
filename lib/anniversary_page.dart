@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'api_config.dart';
 import 'api_client.dart';
+import 'widgets/confirm_delete_dialog.dart';
 
 class AnniversaryPage extends StatefulWidget {
   final int memberId;
@@ -265,25 +266,10 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
         ),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
-      confirmDismiss: (_) async {
-        return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("삭제 확인"),
-            content: Text("'${item['title']}'을(를) 삭제할까요?"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text("취소"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text("삭제", style: TextStyle(color: Colors.red)),
-              ),
-            ],
-          ),
-        ) ?? false;
-      },
+      confirmDismiss: (_) async => ConfirmDeleteDialog.show(
+        context,
+        content: "'${item['title']}'을(를) 삭제할까요?",
+      ),
       onDismissed: (_) => _deleteAnniversary(item['id']),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),

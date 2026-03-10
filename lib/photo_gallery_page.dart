@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'api_config.dart';
 import 'api_client.dart';
+import 'widgets/confirm_delete_dialog.dart';
 
 class PhotoGalleryPage extends StatefulWidget {
   final int memberId;
@@ -199,26 +200,14 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
             ListTile(
               leading: const Icon(Icons.delete_outline, color: Colors.red),
               title: const Text("삭제", style: TextStyle(color: Colors.red)),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text("사진 삭제"),
-                    content: const Text("이 사진을 삭제할까요?"),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(context), child: const Text("취소")),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _deleteMedia(photo['id']);
-                        },
-                        child: const Text("삭제", style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                  ),
+                final confirmed = await ConfirmDeleteDialog.show(
+                  context,
+                  title: '사진 삭제',
+                  content: '이 사진을 삭제할까요?',
                 );
+                if (confirmed) _deleteMedia(photo['id']);
               },
             ),
           ],
@@ -382,25 +371,13 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.white),
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text("사진 삭제"),
-                  content: const Text("이 사진을 삭제할까요?"),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text("취소")),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        widget.onDelete(widget.photos[_currentIndex]);
-                      },
-                      child: const Text("삭제", style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
+            onPressed: () async {
+              final confirmed = await ConfirmDeleteDialog.show(
+                context,
+                title: '사진 삭제',
+                content: '이 사진을 삭제할까요?',
               );
+              if (confirmed) widget.onDelete(widget.photos[_currentIndex]);
             },
           ),
         ],

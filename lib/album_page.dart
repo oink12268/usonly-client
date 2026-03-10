@@ -5,6 +5,7 @@ import 'album_detail_page.dart';
 import 'photo_gallery_page.dart';
 import 'api_config.dart';
 import 'api_client.dart';
+import 'widgets/confirm_delete_dialog.dart';
 
 // ─────────────────────────────────────────────
 // AlbumPage: 앨범/사진 전환 + FAB 관리 루트 위젯
@@ -311,28 +312,17 @@ class _AlbumListContentState extends State<_AlbumListContent> {
     );
   }
 
-  void _confirmDeleteAlbum(int albumId) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("앨범 삭제"),
-        content: const Text("앨범과 사진이 모두 삭제됩니다. 정말 삭제할까요?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("취소")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              final response = await ApiClient.delete(
-                Uri.parse('${ApiConfig.baseUrl}/api/archives/$albumId'),
-              );
-              if (response.statusCode == 200) _fetchAlbums();
-              if (mounted) Navigator.pop(context);
-            },
-            child: const Text("삭제", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+  Future<void> _confirmDeleteAlbum(int albumId) async {
+    final confirmed = await ConfirmDeleteDialog.show(
+      context,
+      title: '앨범 삭제',
+      content: '앨범과 사진이 모두 삭제됩니다. 정말 삭제할까요?',
     );
+    if (!confirmed || !mounted) return;
+    final response = await ApiClient.delete(
+      Uri.parse('${ApiConfig.baseUrl}/api/archives/$albumId'),
+    );
+    if (response.statusCode == 200) _fetchAlbums();
   }
 
   @override

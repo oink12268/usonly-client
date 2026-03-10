@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
 import 'api_config.dart';
 import 'api_client.dart';
+import 'widgets/confirm_delete_dialog.dart';
 
 class AlbumDetailPage extends StatefulWidget {
   final int albumId;
@@ -183,25 +184,13 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   }
 
   // 사진 롱프레스 → 삭제 확인
-  void _showDeleteDialog(dynamic photo) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("사진 삭제"),
-        content: const Text("이 사진을 삭제할까요?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("취소")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              Navigator.pop(context);
-              _deleteMedia(photo['id']);
-            },
-            child: const Text("삭제", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+  Future<void> _showDeleteDialog(dynamic photo) async {
+    final confirmed = await ConfirmDeleteDialog.show(
+      context,
+      title: '사진 삭제',
+      content: '이 사진을 삭제할까요?',
     );
+    if (confirmed) _deleteMedia(photo['id']);
   }
 
   // 사진 탭 → 전체화면 뷰어
@@ -364,25 +353,13 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.white),
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text("사진 삭제"),
-                  content: const Text("이 사진을 삭제할까요?"),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text("취소")),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        widget.onDelete(widget.photos[_currentIndex]);
-                      },
-                      child: const Text("삭제", style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
+            onPressed: () async {
+              final confirmed = await ConfirmDeleteDialog.show(
+                context,
+                title: '사진 삭제',
+                content: '이 사진을 삭제할까요?',
               );
+              if (confirmed) widget.onDelete(widget.photos[_currentIndex]);
             },
           ),
         ],
