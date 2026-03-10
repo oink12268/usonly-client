@@ -218,9 +218,9 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
           ? const Center(child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircularProgressIndicator(color: Color(0xFF8B7E74)),
+                CircularProgressIndicator(color: Colors.black),
                 SizedBox(height: 16),
-                Text("업로드 중...", style: TextStyle(color: Color(0xFF8B7E74))),
+                Text("업로드 중...", style: TextStyle(color: Colors.black)),
               ],
             ))
           : _photos.isEmpty
@@ -256,7 +256,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _pickAndUploadImage,
-        backgroundColor: const Color(0xFF8B7E74),
+        backgroundColor: Colors.black,
         child: const Icon(Icons.add_a_photo, color: Colors.white),
       ),
     );

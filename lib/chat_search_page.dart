@@ -68,9 +68,9 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 hintText: '검색어를 입력해주세요.',
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF8B7E74)),
+                prefixIcon: const Icon(Icons.search, color: Colors.black),
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.send, color: Color(0xFF8B7E74)),
+                  icon: const Icon(Icons.send, color: Colors.black),
                   onPressed: () => _search(_controller.text),
                 ),
                 filled: true,
@@ -94,13 +94,13 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '${_results.length}개',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF8B7E74)),
+                  style: const TextStyle(fontSize: 12, color: Colors.black),
                 ),
               ),
             ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B7E74)))
+                ? const Center(child: CircularProgressIndicator(color: Colors.black))
                 : _controller.text.isNotEmpty && _results.isEmpty
                     ? const Center(
                         child: Text('검색 결과가 없어', style: TextStyle(color: Colors.grey)),
@@ -119,10 +119,10 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
                             },
                             leading: CircleAvatar(
                               radius: 18,
-                              backgroundColor: const Color(0xFF8B7E74).withOpacity(0.15),
+                              backgroundColor: Colors.black.withOpacity(0.15),
                               child: Icon(
                                 isMe ? Icons.person : Icons.person_outline,
-                                color: const Color(0xFF8B7E74),
+                                color: Colors.black,
                                 size: 18,
                               ),
                             ),
@@ -206,7 +206,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
         ],
       ),
       body: _isLoading && _countByDate.isEmpty
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B7E74)))
+          ? const Center(child: CircularProgressIndicator(color: Colors.black))
           : GestureDetector(
               behavior: HitTestBehavior.opaque,
               onHorizontalDragEnd: (details) {
@@ -227,7 +227,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.chevron_left, color: Color(0xFF8B7E74)),
+                        icon: const Icon(Icons.chevron_left, color: Colors.black),
                         onPressed: () => setState(() {
                           _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
                         }),
@@ -237,7 +237,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.chevron_right, color: Color(0xFF8B7E74)),
+                        icon: const Icon(Icons.chevron_right, color: Colors.black),
                         onPressed: () => setState(() {
                           _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
                         }),
@@ -248,13 +248,13 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                     padding: EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
                       children: [
-                        Expanded(child: Center(child: Text('일', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold)))),
+                        Expanded(child: Center(child: Text('일', style: TextStyle(fontSize: 12, color: Colors.grey[400], fontWeight: FontWeight.bold)))),
                         Expanded(child: Center(child: Text('월', style: TextStyle(fontSize: 12)))),
                         Expanded(child: Center(child: Text('화', style: TextStyle(fontSize: 12)))),
                         Expanded(child: Center(child: Text('수', style: TextStyle(fontSize: 12)))),
                         Expanded(child: Center(child: Text('목', style: TextStyle(fontSize: 12)))),
                         Expanded(child: Center(child: Text('금', style: TextStyle(fontSize: 12)))),
-                        Expanded(child: Center(child: Text('토', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)))),
+                        Expanded(child: Center(child: Text('토', style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.bold)))),
                       ],
                     ),
                   ),
@@ -302,7 +302,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
           child: Container(
             height: 60,
             decoration: BoxDecoration(
-              border: isToday ? Border.all(color: const Color(0xFF8B7E74), width: 1.5) : null,
+              border: isToday ? Border.all(color: Colors.black, width: 1.5) : null,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -313,7 +313,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                    color: isSunday ? Colors.red : isSaturday ? Colors.blue : null,
+                    color: isSunday ? Colors.grey[400] : isSaturday ? Colors.grey[600] : null,
                   ),
                 ),
                 if (count > 0) ...[
@@ -321,7 +321,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF8B7E74),
+                      color: Colors.black,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -394,7 +394,7 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
         backgroundColor: Theme.of(context).colorScheme.surface,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B7E74)))
+          ? const Center(child: CircularProgressIndicator(color: Colors.black))
           : ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
               itemCount: _chats.length,
@@ -418,7 +418,7 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
                           child: CircleAvatar(
                             radius: 16,
                             backgroundColor: Color(0xFFEEEEEE),
-                            child: Icon(Icons.person, size: 16, color: Color(0xFF8B7E74)),
+                            child: Icon(Icons.person, size: 16, color: Colors.black),
                           ),
                         ),
                       if (isMe)
@@ -434,7 +434,7 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: isMe ? const Color(0xFF8B7E74) : Theme.of(context).colorScheme.surface,
+                            color: isMe ? Colors.black : Theme.of(context).colorScheme.surface,
                             borderRadius: BorderRadius.only(
                               topLeft: const Radius.circular(15),
                               topRight: const Radius.circular(15),

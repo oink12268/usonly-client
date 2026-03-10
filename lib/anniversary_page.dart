@@ -72,7 +72,7 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text("음력 날짜"),
-                  activeColor: const Color(0xFF8B7E74),
+                  activeColor: Colors.black,
                   value: isLunar,
                   onChanged: (val) => setDialogState(() => isLunar = val),
                 ),
@@ -80,7 +80,7 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                   // 양력: 날짜 피커
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.calendar_today, color: Color(0xFF8B7E74)),
+                    leading: const Icon(Icons.calendar_today, color: Colors.black),
                     title: Text(
                       "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}",
                     ),
@@ -96,14 +96,14 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                           setDialogState(() => selectedDate = picked);
                         }
                       },
-                      child: const Text("날짜 선택", style: TextStyle(color: Color(0xFF8B7E74))),
+                      child: const Text("날짜 선택", style: TextStyle(color: Colors.black)),
                     ),
                   ),
                 ] else ...[
                   // 음력: 월/일 드롭다운
                   Row(
                     children: [
-                      const Icon(Icons.calendar_month, color: Color(0xFF8B7E74), size: 20),
+                      const Icon(Icons.calendar_month, color: Colors.black, size: 20),
                       const SizedBox(width: 8),
                       const Text("음력 ", style: TextStyle(fontSize: 14)),
                       DropdownButton<int>(
@@ -127,7 +127,7 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text("매년 반복"),
-                  activeColor: const Color(0xFF8B7E74),
+                  activeColor: Colors.black,
                   value: recurring,
                   onChanged: (val) => setDialogState(() => recurring = val),
                 ),
@@ -140,7 +140,7 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
               child: const Text("취소"),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B7E74)),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
               onPressed: () async {
                 if (titleController.text.isNotEmpty) {
                   await _createAnniversary(
@@ -218,10 +218,10 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
   }
 
   Color _ddayColor(int dday) {
-    if (dday == 0) return const Color(0xFF8B7E74);
-    if (dday > 0 && dday <= 7) return Colors.orange;
+    if (dday == 0) return Colors.black;
+    if (dday > 0 && dday <= 7) return Colors.grey[600]!;
     if (dday > 0) return Colors.grey[700]!;
-    return Colors.blueGrey;
+    return Colors.grey[500]!;
   }
 
   @override
@@ -242,7 +242,7 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddDialog,
-        backgroundColor: const Color(0xFF8B7E74),
+        backgroundColor: Colors.black,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
@@ -261,7 +261,7 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
         padding: const EdgeInsets.only(right: 20),
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF8B7E74),
+          color: Colors.black,
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Icon(Icons.delete, color: Colors.white),
@@ -279,7 +279,7 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
             ? Theme.of(context).colorScheme.primaryContainer
             : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: dday == 0 ? Border.all(color: const Color(0xFF8B7E74), width: 1.5) : null,
+          border: dday == 0 ? Border.all(color: Colors.black, width: 1.5) : null,
         ),
         child: Row(
           children: [

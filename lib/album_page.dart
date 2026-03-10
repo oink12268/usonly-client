@@ -95,7 +95,7 @@ class _AlbumPageState extends State<AlbumPage> {
                   await _albumListKey.currentState?._saveOrder();
                   setState(() => _isReorderMode = false);
                 },
-                backgroundColor: const Color(0xFF8B7E74),
+                backgroundColor: Colors.black,
                 icon: const Icon(Icons.check, color: Colors.white),
                 label: const Text("완료", style: TextStyle(color: Colors.white)),
               ),
@@ -125,7 +125,7 @@ class _AlbumPageState extends State<AlbumPage> {
                 onPressed: _showPhotos
                     ? () => _galleryKey.currentState?.pickAndUploadImage()
                     : _showCreateAlbumDialog,
-                backgroundColor: const Color(0xFF8B7E74),
+                backgroundColor: Colors.black,
                 child: Icon(
                   _showPhotos ? Icons.add_a_photo : Icons.add,
                   color: Colors.white,
@@ -253,7 +253,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.swap_vert, color: Color(0xFF8B7E74)),
+              leading: const Icon(Icons.swap_vert, color: Colors.black),
               title: const Text("순서 변경"),
               onTap: () {
                 Navigator.pop(context);
@@ -261,7 +261,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.edit, color: Color(0xFF8B7E74)),
+              leading: const Icon(Icons.edit, color: Colors.black),
               title: const Text("앨범 이름 수정"),
               onTap: () {
                 Navigator.pop(context);
@@ -351,7 +351,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
         if (_isLoadingMore && !widget.isReorderMode)
           const Padding(
             padding: EdgeInsets.all(16),
-            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74)),
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
           ),
       ],
     );

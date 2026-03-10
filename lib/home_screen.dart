@@ -182,7 +182,7 @@ class _MorePageState extends State<_MorePage> {
                           padding: const EdgeInsets.all(3),
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Color(0xFF8B7E74),
+                            color: Colors.black,
                           ),
                           child: const Icon(Icons.edit, size: 11, color: Colors.white),
                         ),
@@ -213,8 +213,8 @@ class _MorePageState extends State<_MorePage> {
           const Divider(height: 40),
           // 기념일
           ListTile(
-            leading: const Icon(Icons.favorite, color: Color(0xFF8B7E74)),
-            title: const Text('기념일', style: TextStyle(color: Color(0xFF8B7E74))),
+            leading: const Icon(Icons.favorite, color: Colors.black),
+            title: const Text('기념일', style: TextStyle(color: Colors.black)),
             onTap: () {
               Navigator.push(
                 context,
@@ -226,8 +226,8 @@ class _MorePageState extends State<_MorePage> {
           ),
           // 미니 게임
           ListTile(
-            leading: const Icon(Icons.sports_esports, color: Color(0xFF8B7E74)),
-            title: const Text('디노 런 🦖', style: TextStyle(color: Color(0xFF8B7E74))),
+            leading: const Icon(Icons.sports_esports, color: Colors.black),
+            title: const Text('디노 런 🦖', style: TextStyle(color: Colors.black)),
             onTap: () {
               Navigator.push(
                 context,
@@ -238,16 +238,16 @@ class _MorePageState extends State<_MorePage> {
           const Divider(height: 20),
           // 다크모드
           SwitchListTile(
-            secondary: const Icon(Icons.dark_mode_outlined, color: Color(0xFF8B7E74)),
-            title: const Text('다크모드', style: TextStyle(color: Color(0xFF8B7E74))),
+            secondary: const Icon(Icons.dark_mode_outlined, color: Colors.black),
+            title: const Text('다크모드', style: TextStyle(color: Colors.black)),
             value: themeNotifier.isDark,
-            activeColor: const Color(0xFF8B7E74),
+            activeColor: Colors.black,
             onChanged: (_) => themeNotifier.toggle(),
           ),
           // 글자 크기
           ListTile(
-            leading: const Icon(Icons.text_fields, color: Color(0xFF8B7E74)),
-            title: const Text('글자 크기', style: TextStyle(color: Color(0xFF8B7E74))),
+            leading: const Icon(Icons.text_fields, color: Colors.black),
+            title: const Text('글자 크기', style: TextStyle(color: Colors.black)),
             trailing: SegmentedButton<double>(
               segments: const [
                 ButtonSegment(value: 0.85, label: Text('작게')),
@@ -264,11 +264,11 @@ class _MorePageState extends State<_MorePage> {
                 foregroundColor: WidgetStateProperty.resolveWith((states) =>
                   states.contains(WidgetState.selected)
                     ? Colors.white
-                    : const Color(0xFF8B7E74),
+                    : Colors.black,
                 ),
                 backgroundColor: WidgetStateProperty.resolveWith((states) =>
                   states.contains(WidgetState.selected)
-                    ? const Color(0xFF8B7E74)
+                    ? Colors.black
                     : Colors.transparent,
                 ),
               ),
@@ -278,8 +278,8 @@ class _MorePageState extends State<_MorePage> {
           // 로그아웃
           if (widget.user != null)
             ListTile(
-              leading: const Icon(Icons.logout, color: Color(0xFF8B7E74)),
-              title: const Text('로그아웃', style: TextStyle(color: Color(0xFF8B7E74))),
+              leading: const Icon(Icons.logout, color: Colors.black),
+              title: const Text('로그아웃', style: TextStyle(color: Colors.black)),
               onTap: () async {
                 await AuthService().signOut();
               },
