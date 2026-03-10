@@ -2,8 +2,8 @@
 
 ## 프로젝트 개요
 커플 전용 Flutter 앱 (Android / iOS / Windows)
-- 백엔드: `usonly.iptime.org:30080` (K8s NodePort)
-- WebSocket: `ws://usonly.iptime.org:30080/ws`
+- 백엔드: `usonly.duckdns.org` (HTTPS / DDNS)
+- WebSocket: `wss://usonly.duckdns.org/ws`
 
 ## 지원 플랫폼
 - Android / iOS (주 타겟)
@@ -34,6 +34,56 @@
   - Google token endpoint에서 토큰 교환
   - `client_secret` 필요 (Desktop 클라이언트는 PKCE만으로 불충분)
 - 관련 상수: `_windowsClientId`, `_windowsClientSecret` (`auth_service.dart` 상단)
+
+---
+
+## 코드 구조 (lib/)
+
+### 디렉토리
+```
+lib/
+├── utils/
+│   ├── date_formatter.dart      # 날짜/시간 포맷 유틸 (DateFormatter)
+│   └── korean_holidays.dart     # 한국 공휴일 계산 (KoreanHolidays)
+├── widgets/
+│   └── confirm_delete_dialog.dart  # 공통 삭제 확인 다이얼로그 + 스와이프 배경
+└── (페이지 파일들)
+```
+
+### 주요 파일
+| 파일 | 역할 |
+|------|------|
+| `main.dart` | 앱 진입점, Firebase 초기화, 라우팅 |
+| `api_client.dart` | HTTP 싱글턴 클라이언트 (토큰 자동 첨부) |
+| `api_config.dart` | 서버 URL 설정 (`_host`, `_port`) |
+| `auth_service.dart` | Firebase/Google 로그인, Windows OAuth PKCE |
+| `home_screen.dart` | 하단 탭 네비게이션 |
+| `chat_page.dart` | 채팅 메인 (WebSocket STOMP, 이미지/파일 전송) |
+| `chat_search_page.dart` | 채팅 검색·달력·날짜별·전체화면 이미지 |
+| `calendar_page.dart` | 월간 캘린더 (일정·기념일·Google 이벤트) |
+| `album_page.dart` | 앨범 목록 + 갤러리 전환 |
+| `note_page.dart` | 메모 목록 (WebSocket 실시간 동기화) |
+| `anniversary_page.dart` | 기념일 D-day 관리 |
+
+### 공통 유틸 사용법
+```dart
+// 날짜 포맷
+DateFormatter.formatTime('2024-01-01T15:05:00')  // → '오후 3:05'
+DateFormatter.formatDate(DateTime.now())           // → '2024-01-01'
+DateFormatter.formatRelative(dateStr)             // → '오늘 15:05' or '1/1'
+
+// 공휴일
+KoreanHolidays.buildYearHolidays(2025)  // → Map<DateTime, String>
+
+// 삭제 확인 다이얼로그
+final ok = await ConfirmDeleteDialog.show(context, content: '삭제할까요?');
+```
+
+### 상태 관리 패턴
+- 대부분 `setState` 기반 (단순 화면)
+- 전역 상태: `fontSizeNotifier`, `themeNotifier` (ChangeNotifier)
+- 실시간 동기화: STOMP WebSocket (`chat_page.dart`, `note_page.dart`)
+- 성능 최적화: `ValueNotifier`로 일부 위젯만 rebuild (타이핑 인디케이터, 포커스 상태)
 
 ---
 
