@@ -328,6 +328,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       final t = e['endTime'] as String?;
       return (t != null && t.isNotEmpty) ? t : null;
     }).toList();
+    final locations = events.map((e) {
+      final t = e['location'] as String?;
+      return (t != null && t.isNotEmpty) ? t : null;
+    }).toList();
 
     await showDialog<void>(
       context: context,
@@ -370,6 +374,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     memo: desc.isEmpty ? null : desc,
                     startTime: startTimes[i],
                     endTime: endTimes[i],
+                    location: locations[i],
                   );
                   if (id != null) saved++;
                 }

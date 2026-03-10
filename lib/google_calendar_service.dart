@@ -99,6 +99,7 @@ class GoogleCalendarService {
     String? memo,
     String? startTime, // HH:mm
     String? endTime,   // HH:mm
+    String? location,
   }) async {
     final headers = await _headers();
     if (headers.isEmpty) return null;
@@ -124,6 +125,7 @@ class GoogleCalendarService {
         body: jsonEncode({
           'summary': title,
           if (memo != null && memo.isNotEmpty) 'description': memo,
+          if (location != null && location.isNotEmpty) 'location': location,
           'start': startObj,
           'end': endObj,
         }),
