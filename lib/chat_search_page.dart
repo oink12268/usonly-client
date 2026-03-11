@@ -244,16 +244,16 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                       ),
                     ],
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
                       children: [
                         Expanded(child: Center(child: Text('일', style: TextStyle(fontSize: 12, color: Colors.grey[400], fontWeight: FontWeight.bold)))),
-                        Expanded(child: Center(child: Text('월', style: TextStyle(fontSize: 12)))),
-                        Expanded(child: Center(child: Text('화', style: TextStyle(fontSize: 12)))),
-                        Expanded(child: Center(child: Text('수', style: TextStyle(fontSize: 12)))),
-                        Expanded(child: Center(child: Text('목', style: TextStyle(fontSize: 12)))),
-                        Expanded(child: Center(child: Text('금', style: TextStyle(fontSize: 12)))),
+                        const Expanded(child: Center(child: Text('월', style: TextStyle(fontSize: 12)))),
+                        const Expanded(child: Center(child: Text('화', style: TextStyle(fontSize: 12)))),
+                        const Expanded(child: Center(child: Text('수', style: TextStyle(fontSize: 12)))),
+                        const Expanded(child: Center(child: Text('목', style: TextStyle(fontSize: 12)))),
+                        const Expanded(child: Center(child: Text('금', style: TextStyle(fontSize: 12)))),
                         Expanded(child: Center(child: Text('토', style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.bold)))),
                       ],
                     ),
