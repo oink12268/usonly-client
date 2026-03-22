@@ -210,7 +210,7 @@ class _CalendarPageState extends State<CalendarPage> {
                             style: TextStyle(
                               fontSize: y == selectedYear ? 18 : 14,
                               fontWeight: y == selectedYear ? FontWeight.bold : FontWeight.normal,
-                              color: y == selectedYear ? Colors.black : Colors.grey,
+                              color: y == selectedYear ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.outline,
                             ),
                           ),
                         );
@@ -239,7 +239,7 @@ class _CalendarPageState extends State<CalendarPage> {
                             style: TextStyle(
                               fontSize: m == selectedMonth ? 18 : 14,
                               fontWeight: m == selectedMonth ? FontWeight.bold : FontWeight.normal,
-                              color: m == selectedMonth ? Colors.black : Colors.grey,
+                              color: m == selectedMonth ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.outline,
                             ),
                           ),
                         );
@@ -256,7 +256,7 @@ class _CalendarPageState extends State<CalendarPage> {
               child: const Text("취소"),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
               onPressed: () {
                 setState(() {
                   _focusedMonth = DateTime(selectedYear, selectedMonth);
@@ -265,7 +265,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 _fetchData();
                 Navigator.pop(context);
               },
-              child: const Text("확인", style: TextStyle(color: Colors.white)),
+              child: Text("확인", style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
             ),
           ],
         ),
@@ -311,7 +311,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 children: [
                   Checkbox(
                     value: syncToGoogle,
-                    activeColor: Colors.black,
+                    activeColor: Theme.of(context).colorScheme.primary,
                     onChanged: (v) => setDialogState(() => syncToGoogle = v ?? true),
                   ),
                   const Text("Google 캘린더에도 추가", style: TextStyle(fontSize: 13)),
@@ -325,7 +325,7 @@ class _CalendarPageState extends State<CalendarPage> {
               child: const Text("취소"),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
               onPressed: () async {
                 if (titleController.text.isNotEmpty) {
                   final nav = Navigator.of(context);
@@ -337,7 +337,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   nav.pop();
                 }
               },
-              child: const Text("추가", style: TextStyle(color: Colors.white)),
+              child: Text("추가", style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
             ),
           ],
         ),
@@ -436,12 +436,12 @@ class _CalendarPageState extends State<CalendarPage> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade400),
+                    border: Border.all(color: Theme.of(context).colorScheme.outline),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_today, size: 16, color: Colors.black),
+                      Icon(Icons.calendar_today, size: 16, color: Theme.of(context).colorScheme.onSurface),
                       const SizedBox(width: 8),
                       Text(
                         "${selectedDate.year}년 ${selectedDate.month}월 ${selectedDate.day}일",
@@ -471,7 +471,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 const SizedBox(height: 10),
                 Text(
                   "작성자: ${schedule['writerNickname']}",
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ],
             ],
@@ -482,7 +482,7 @@ class _CalendarPageState extends State<CalendarPage> {
               child: const Text("취소"),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
               onPressed: () async {
                 if (titleController.text.isNotEmpty) {
                   final nav = Navigator.of(context);
@@ -495,7 +495,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   nav.pop();
                 }
               },
-              child: const Text("저장", style: TextStyle(color: Colors.white)),
+              child: Text("저장", style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
             ),
           ],
         ),
@@ -576,8 +576,8 @@ class _CalendarPageState extends State<CalendarPage> {
       floatingActionButton: _selectedDate != null
           ? FloatingActionButton(
               onPressed: _showAddScheduleDialog,
-              backgroundColor: Colors.black,
-              child: const Icon(Icons.add, color: Colors.white),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              child: Icon(Icons.add, color: Theme.of(context).colorScheme.onPrimary),
             )
           : null,
     );
@@ -645,9 +645,9 @@ class _CalendarPageState extends State<CalendarPage> {
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                                 color: d == '일'
-                                    ? Colors.black
+                                    ? Colors.red
                                     : d == '토'
-                                        ? Colors.grey[600]
+                                        ? Colors.blue
                                         : Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
@@ -728,10 +728,10 @@ class _CalendarPageState extends State<CalendarPage> {
         _googleEventsForDate(date).where((e) => !e.isMultiDay).isNotEmpty;
 
     Color dateColor() {
-      if (isSelected) return Colors.white;
-      if (holidayName != null) return Colors.grey[700]!;
-      if (date.weekday == DateTime.sunday) return Colors.black;
-      if (date.weekday == DateTime.saturday) return Colors.grey[600]!;
+      if (isSelected) return Theme.of(context).colorScheme.onPrimary;
+      if (holidayName != null) return Theme.of(context).colorScheme.onSurfaceVariant;
+      if (date.weekday == DateTime.sunday) return Colors.red;
+      if (date.weekday == DateTime.saturday) return Colors.blue;
       return Theme.of(context).colorScheme.onSurface;
     }
 
@@ -747,7 +747,7 @@ class _CalendarPageState extends State<CalendarPage> {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: isSelected ? Colors.black : null,
+                color: isSelected ? Theme.of(context).colorScheme.primary : null,
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -769,18 +769,18 @@ class _CalendarPageState extends State<CalendarPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (holidayName != null)
-                    _dot(isSelected ? Colors.white : Colors.grey[600]!),
+                    _dot(isSelected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurfaceVariant),
                   if (holidayName != null && (hasSchedule || hasAnniversary || hasSingleDayGoogle))
                     const SizedBox(width: 2),
                   if (hasSchedule)
-                    _dot(isSelected ? Colors.white : Colors.black),
+                    _dot(isSelected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface),
                   if (hasSchedule && (hasAnniversary || hasSingleDayGoogle))
                     const SizedBox(width: 2),
                   if (hasAnniversary)
-                    _dot(isSelected ? Colors.white70 : Colors.grey[600]!),
+                    _dot(isSelected ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.7) : Theme.of(context).colorScheme.onSurfaceVariant),
                   if (hasAnniversary && hasSingleDayGoogle) const SizedBox(width: 2),
                   if (hasSingleDayGoogle)
-                    _dot(isSelected ? Colors.grey[300]! : Colors.grey[500]!),
+                    _dot(isSelected ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.6) : Theme.of(context).colorScheme.outline),
                 ],
               ),
           ],
@@ -803,7 +803,7 @@ class _CalendarPageState extends State<CalendarPage> {
       }),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.grey[500],
+          color: Theme.of(context).colorScheme.outline,
           borderRadius: BorderRadius.horizontal(
             left: bar.capLeft ? const Radius.circular(4) : Radius.zero,
             right: bar.capRight ? const Radius.circular(4) : Radius.zero,
@@ -817,7 +817,7 @@ class _CalendarPageState extends State<CalendarPage> {
         child: bar.capLeft
             ? Text(
                 bar.event.title,
-                style: const TextStyle(fontSize: 9, color: Colors.white),
+                style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.onInverseSurface),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               )
@@ -871,13 +871,13 @@ class _CalendarPageState extends State<CalendarPage> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[400]!.withOpacity(0.3)),
+        border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.flag, size: 18, color: Colors.grey[700]),
+          Icon(Icons.flag, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -885,17 +885,17 @@ class _CalendarPageState extends State<CalendarPage> {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[700],
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.grey[400]!.withOpacity(0.1),
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text("공휴일", style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+            child: Text("공휴일", style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ),
         ],
       ),
@@ -912,13 +912,13 @@ class _CalendarPageState extends State<CalendarPage> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[600]!.withOpacity(0.3)),
+        border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.favorite, size: 18, color: Colors.grey[600]),
+          Icon(Icons.favorite, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -931,12 +931,12 @@ class _CalendarPageState extends State<CalendarPage> {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: Colors.grey[600],
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     if (recurring) ...[
                       const SizedBox(width: 4),
-                      Icon(Icons.repeat, size: 14, color: Colors.grey[600]),
+                      Icon(Icons.repeat, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ],
                   ],
                 ),
@@ -944,7 +944,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   const SizedBox(height: 2),
                   Text(
                     "음력 $lunarMonth월 $lunarDay일",
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ],
               ],
@@ -953,10 +953,10 @@ class _CalendarPageState extends State<CalendarPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.grey[600]!.withOpacity(0.1),
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text("기념일", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            child: Text("기념일", style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ),
         ],
       ),
@@ -972,10 +972,10 @@ class _CalendarPageState extends State<CalendarPage> {
         padding: const EdgeInsets.only(right: 20),
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-          color: Colors.black,
+          color: Theme.of(context).colorScheme.primary,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(Icons.delete, color: Colors.white),
+        child: Icon(Icons.delete, color: Theme.of(context).colorScheme.onPrimary),
       ),
       confirmDismiss: (_) async => ConfirmDeleteDialog.show(
         context,
@@ -996,7 +996,7 @@ class _CalendarPageState extends State<CalendarPage> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.event, size: 18, color: Colors.black),
+                  Icon(Icons.event, size: 18, color: Theme.of(context).colorScheme.onSurface),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1008,7 +1008,7 @@ class _CalendarPageState extends State<CalendarPage> {
                       schedule['writerNickname'].toString().isNotEmpty)
                     Text(
                       schedule['writerNickname'],
-                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                 ],
               ),
@@ -1033,13 +1033,13 @@ class _CalendarPageState extends State<CalendarPage> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
-          Icon(Icons.event, size: 18, color: Colors.grey[700]),
+          Icon(Icons.event, size: 18, color: Theme.of(context).colorScheme.onSurface),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -1050,14 +1050,14 @@ class _CalendarPageState extends State<CalendarPage> {
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 if (event.isMultiDay) ...[
                   const SizedBox(height: 2),
                   Text(
                     '${_toDateStr(event.start)} ~ ${_toDateStr(event.end)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ],
               ],
@@ -1066,18 +1066,18 @@ class _CalendarPageState extends State<CalendarPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.grey[200],
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               'Google',
-              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface),
             ),
           ),
           const SizedBox(width: 4),
           GestureDetector(
             onTap: () => _deleteGoogleEvent(event),
-            child: Icon(Icons.delete_outline, size: 20, color: Colors.grey[400]),
+            child: Icon(Icons.delete_outline, size: 20, color: Theme.of(context).colorScheme.outline),
           ),
         ],
       ),

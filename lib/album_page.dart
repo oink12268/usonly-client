@@ -95,27 +95,41 @@ class _AlbumPageState extends State<AlbumPage> {
                   await _albumListKey.currentState?._saveOrder();
                   setState(() => _isReorderMode = false);
                 },
-                backgroundColor: Colors.black,
-                icon: const Icon(Icons.check, color: Colors.white),
-                label: const Text("완료", style: TextStyle(color: Colors.white)),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                icon: Icon(Icons.check, color: Theme.of(context).colorScheme.onPrimary),
+                label: Text("완료", style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
               ),
             )
           else ...[
             // 상단 소형 FAB: 앨범 ↔ 사진 전환
             Positioned(
-              bottom: 92,
+              bottom: _showPhotos ? 160 : 92,
               right: 16,
-              child: FloatingActionButton.small(
+              child: FloatingActionButton(
                 heroTag: 'viewToggle',
                 onPressed: () => setState(() => _showPhotos = !_showPhotos),
-                backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-                foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+                backgroundColor: Colors.grey.shade300,
+                foregroundColor: Colors.grey.shade800,
                 elevation: 2,
                 child: Icon(
                   _showPhotos ? Icons.auto_stories_rounded : Icons.collections_rounded,
                 ),
               ),
             ),
+            // 슬라이드쇼 FAB (사진 뷰에서만)
+            if (_showPhotos)
+              Positioned(
+                bottom: 92,
+                right: 16,
+                child: FloatingActionButton(
+                  heroTag: 'slideshow',
+                  onPressed: () => _galleryKey.currentState?.startSlideshow(),
+                  backgroundColor: Colors.grey.shade300,
+                  foregroundColor: Colors.grey.shade800,
+                  elevation: 2,
+                  child: const Icon(Icons.slideshow_rounded),
+                ),
+              ),
             // 하단 메인 FAB: 새 앨범 / 사진 추가
             Positioned(
               bottom: 24,
@@ -125,10 +139,10 @@ class _AlbumPageState extends State<AlbumPage> {
                 onPressed: _showPhotos
                     ? () => _galleryKey.currentState?.pickAndUploadImage()
                     : _showCreateAlbumDialog,
-                backgroundColor: Colors.black,
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 child: Icon(
                   _showPhotos ? Icons.add_a_photo : Icons.add,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                 ),
               ),
             ),
@@ -253,7 +267,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.swap_vert, color: Colors.black),
+              leading: const Icon(Icons.swap_vert),
               title: const Text("순서 변경"),
               onTap: () {
                 Navigator.pop(context);
@@ -261,7 +275,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.edit, color: Colors.black),
+              leading: const Icon(Icons.edit),
               title: const Text("앨범 이름 수정"),
               onTap: () {
                 Navigator.pop(context);
@@ -349,9 +363,9 @@ class _AlbumListContentState extends State<_AlbumListContent> {
                 ),
         ),
         if (_isLoadingMore && !widget.isReorderMode)
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary),
           ),
       ],
     );
@@ -395,10 +409,10 @@ class _AlbumListContentState extends State<_AlbumListContent> {
                           color: Theme.of(context).colorScheme.surfaceContainerHighest,
                         ),
                         errorWidget: (context, url, error) =>
-                            const Center(child: Icon(Icons.error, color: Colors.grey)),
+                            Center(child: Icon(Icons.error, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ),
                     )
-                  : const Center(child: Icon(Icons.image, size: 40, color: Colors.grey)),
+                  : Center(child: Icon(Icons.image, size: 40, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
           ),
           Padding(
@@ -449,7 +463,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
                       width: 56,
                       height: 56,
                       color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: const Icon(Icons.image, color: Colors.grey),
+                      child: Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   )
                 : Container(
@@ -459,14 +473,14 @@ class _AlbumListContentState extends State<_AlbumListContent> {
                       color: Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.image, color: Colors.grey),
+                    child: Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
           ),
           title: Text(
             album['title'] ?? "무제",
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
           ),
-          trailing: const Icon(Icons.drag_handle, color: Colors.grey),
+          trailing: Icon(Icons.drag_handle, color: Theme.of(context).colorScheme.onSurfaceVariant),
         );
       },
     );

@@ -16,12 +16,12 @@ class LoginScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
+            Text(
               "UsOnly",
               style: TextStyle(
                 fontSize: 40,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF8B7E74),
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
             const SizedBox(height: 10),
@@ -45,7 +45,7 @@ class LoginScreen extends StatelessWidget {
                     }
                   }
                 },
-                child: const Text('[DEV] 자동 로그인', style: TextStyle(color: Colors.grey)),
+                child: Text('[DEV] 자동 로그인', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ),
               const SizedBox(height: 10),
             ],

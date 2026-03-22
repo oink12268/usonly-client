@@ -16,8 +16,8 @@ class DinoGamePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('디노 런 🦖'),
-        backgroundColor: const Color(0xFF8B7E74),
-        foregroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
       ),
       body: GameWidget<DinoGame>(
         game: DinoGame(),
@@ -314,15 +314,15 @@ class _StartOverlay extends StatelessWidget {
               style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Text('탭 or 스페이스바로 점프!',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () => game._start(),
             icon: const Icon(Icons.play_arrow),
             label: const Text('시작하기'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8B7E74),
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding:
                   const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
@@ -353,8 +353,8 @@ class _GameOverOverlay extends StatelessWidget {
             icon: const Icon(Icons.refresh),
             label: const Text('다시 시작'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8B7E74),
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding:
                   const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),

@@ -174,12 +174,12 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.note_outlined, size: 64, color: Colors.grey),
+                      Icon(Icons.note_outlined, size: 64, color: Color(0xFF9E9E9E)),
                       SizedBox(height: 16),
                       Text(
                         '아직 메모가 없어요\n+ 버튼을 눌러 첫 메모를 작성해보세요',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey),
+                        style: TextStyle(color: Color(0xFF9E9E9E)),
                       ),
                     ],
                   ),
@@ -255,7 +255,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                             note['title']?.isEmpty == true
                                 ? '(제목 없음)'
                                 : note['title'],
-                            style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -264,8 +264,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                                   note['content'],
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white, fontSize: 13),
+                                  style: const TextStyle(fontSize: 13),
                                 )
                               : null,
                           trailing: Row(
@@ -277,15 +276,15 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                                 children: [
                                   Text(
                                     _formatDate(note['updatedAt']),
-                                    style: const TextStyle(
-                                      fontSize: 11, color: Colors.white),
+                                    style: TextStyle(
+                                      fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                   ),
                                   if (note['lastEditedByNickname'] != null) ...[
                                     const SizedBox(height: 2),
                                     Text(
                                       note['lastEditedByNickname'],
-                                      style: const TextStyle(
-                                        fontSize: 11, color: Colors.white),
+                                      style: TextStyle(
+                                        fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                     ),
                                   ],
                                 ],
@@ -302,12 +301,11 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                                           ? Icons.folder
                                           : Icons.folder_outlined,
                                       size: 20,
-                                      color: Colors.white,
                                     ),
                                     if ((note['childCount'] ?? 0) > 0)
                                       Text(
                                         '${note['childCount']}',
-                                        style: const TextStyle(fontSize: 10, color: Colors.white),
+                                        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurface),
                                       ),
                                   ],
                                 ),
@@ -337,8 +335,8 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                 ),
       floatingActionButton: FloatingActionButton(
         onPressed: _createNote,
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         child: const Icon(Icons.add),
       ),
     );

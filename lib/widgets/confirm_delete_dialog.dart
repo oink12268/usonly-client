@@ -47,7 +47,7 @@ class DismissDeleteBackground extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Icon(Icons.delete, color: Colors.white),
+      child: Icon(Icons.delete, color: Theme.of(context).colorScheme.onPrimary),
     );
   }
 }

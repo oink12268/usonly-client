@@ -180,11 +180,11 @@ class _MorePageState extends State<_MorePage> {
                         right: 0,
                         child: Container(
                           padding: const EdgeInsets.all(3),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Colors.black,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
-                          child: const Icon(Icons.edit, size: 11, color: Colors.white),
+                          child: Icon(Icons.edit, size: 11, color: Theme.of(context).colorScheme.onPrimary),
                         ),
                       ),
                     ],
@@ -205,7 +205,7 @@ class _MorePageState extends State<_MorePage> {
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: Colors.grey),
+                  Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ],
               ),
             ),
@@ -213,8 +213,8 @@ class _MorePageState extends State<_MorePage> {
           const Divider(height: 40),
           // 기념일
           ListTile(
-            leading: const Icon(Icons.favorite, color: Colors.black),
-            title: const Text('기념일', style: TextStyle(color: Colors.black)),
+            leading: const Icon(Icons.favorite),
+            title: const Text('기념일'),
             onTap: () {
               Navigator.push(
                 context,
@@ -226,8 +226,8 @@ class _MorePageState extends State<_MorePage> {
           ),
           // 미니 게임
           ListTile(
-            leading: const Icon(Icons.sports_esports, color: Colors.black),
-            title: const Text('디노 런 🦖', style: TextStyle(color: Colors.black)),
+            leading: const Icon(Icons.sports_esports),
+            title: const Text('디노 런 🦖'),
             onTap: () {
               Navigator.push(
                 context,
@@ -238,16 +238,16 @@ class _MorePageState extends State<_MorePage> {
           const Divider(height: 20),
           // 다크모드
           SwitchListTile(
-            secondary: const Icon(Icons.dark_mode_outlined, color: Colors.black),
-            title: const Text('다크모드', style: TextStyle(color: Colors.black)),
+            secondary: const Icon(Icons.dark_mode_outlined),
+            title: const Text('다크모드'),
             value: themeNotifier.isDark,
-            activeColor: Colors.black,
+            activeColor: Theme.of(context).colorScheme.primary,
             onChanged: (_) => themeNotifier.toggle(),
           ),
           // 글자 크기
           ListTile(
-            leading: const Icon(Icons.text_fields, color: Colors.black),
-            title: const Text('글자 크기', style: TextStyle(color: Colors.black)),
+            leading: const Icon(Icons.text_fields),
+            title: const Text('글자 크기'),
             trailing: SegmentedButton<double>(
               segments: const [
                 ButtonSegment(value: 0.85, label: Text('작게')),
@@ -263,12 +263,12 @@ class _MorePageState extends State<_MorePage> {
                 visualDensity: VisualDensity.compact,
                 foregroundColor: WidgetStateProperty.resolveWith((states) =>
                   states.contains(WidgetState.selected)
-                    ? Colors.white
-                    : Colors.black,
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onSurface,
                 ),
                 backgroundColor: WidgetStateProperty.resolveWith((states) =>
                   states.contains(WidgetState.selected)
-                    ? Colors.black
+                    ? Theme.of(context).colorScheme.primary
                     : Colors.transparent,
                 ),
               ),
@@ -278,8 +278,8 @@ class _MorePageState extends State<_MorePage> {
           // 로그아웃
           if (widget.user != null)
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.black),
-              title: const Text('로그아웃', style: TextStyle(color: Colors.black)),
+              leading: const Icon(Icons.logout),
+              title: const Text('로그아웃'),
               onTap: () async {
                 await AuthService().signOut();
               },

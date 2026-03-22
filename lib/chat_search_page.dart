@@ -68,9 +68,9 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 hintText: '검색어를 입력해주세요.',
-                prefixIcon: const Icon(Icons.search, color: Colors.black),
+                prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.send, color: Colors.black),
+                  icon: const Icon(Icons.send),
                   onPressed: () => _search(_controller.text),
                 ),
                 filled: true,
@@ -94,16 +94,16 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '${_results.length}개',
-                  style: const TextStyle(fontSize: 12, color: Colors.black),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface),
                 ),
               ),
             ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.black))
+                ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
                 : _controller.text.isNotEmpty && _results.isEmpty
-                    ? const Center(
-                        child: Text('검색 결과가 없어', style: TextStyle(color: Colors.grey)),
+                    ? Center(
+                        child: Text('검색 결과가 없어', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       )
                     : ListView.builder(
                         itemCount: _results.length,
@@ -119,10 +119,10 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
                             },
                             leading: CircleAvatar(
                               radius: 18,
-                              backgroundColor: Colors.black.withOpacity(0.15),
+                              backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.15),
                               child: Icon(
                                 isMe ? Icons.person : Icons.person_outline,
-                                color: Colors.black,
+                                color: Theme.of(context).colorScheme.primary,
                                 size: 18,
                               ),
                             ),
@@ -138,7 +138,7 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
                             ),
                             trailing: Text(
                               DateFormatter.formatDateTime(createdAt),
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
                           );
                         },
@@ -206,7 +206,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
         ],
       ),
       body: _isLoading && _countByDate.isEmpty
-          ? const Center(child: CircularProgressIndicator(color: Colors.black))
+          ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
           : GestureDetector(
               behavior: HitTestBehavior.opaque,
               onHorizontalDragEnd: (details) {
@@ -227,7 +227,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.chevron_left, color: Colors.black),
+                        icon: const Icon(Icons.chevron_left),
                         onPressed: () => setState(() {
                           _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
                         }),
@@ -237,7 +237,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.chevron_right, color: Colors.black),
+                        icon: const Icon(Icons.chevron_right),
                         onPressed: () => setState(() {
                           _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
                         }),
@@ -248,13 +248,13 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
                       children: [
-                        Expanded(child: Center(child: Text('일', style: TextStyle(fontSize: 12, color: Colors.grey[400], fontWeight: FontWeight.bold)))),
+                        Expanded(child: Center(child: Text('일', style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.bold)))),
                         const Expanded(child: Center(child: Text('월', style: TextStyle(fontSize: 12)))),
                         const Expanded(child: Center(child: Text('화', style: TextStyle(fontSize: 12)))),
                         const Expanded(child: Center(child: Text('수', style: TextStyle(fontSize: 12)))),
                         const Expanded(child: Center(child: Text('목', style: TextStyle(fontSize: 12)))),
                         const Expanded(child: Center(child: Text('금', style: TextStyle(fontSize: 12)))),
-                        Expanded(child: Center(child: Text('토', style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.bold)))),
+                        Expanded(child: Center(child: Text('토', style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)))),
                       ],
                     ),
                   ),
@@ -302,7 +302,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
           child: Container(
             height: 60,
             decoration: BoxDecoration(
-              border: isToday ? Border.all(color: Colors.black, width: 1.5) : null,
+              border: isToday ? Border.all(color: Theme.of(context).colorScheme.primary, width: 1.5) : null,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -313,7 +313,7 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                    color: isSunday ? Colors.grey[400] : isSaturday ? Colors.grey[600] : null,
+                    color: isSunday ? Colors.red : isSaturday ? Colors.blue : null,
                   ),
                 ),
                 if (count > 0) ...[
@@ -321,12 +321,12 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     decoration: BoxDecoration(
-                      color: Colors.black,
+                      color: Theme.of(context).colorScheme.primary,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       '$count',
-                      style: const TextStyle(fontSize: 10, color: Colors.white),
+                      style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onPrimary),
                     ),
                   ),
                 ],
@@ -394,7 +394,7 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
         backgroundColor: Theme.of(context).colorScheme.surface,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.black))
+          ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
           : ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
               itemCount: _chats.length,
@@ -413,12 +413,12 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       if (!isMe)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
                           child: CircleAvatar(
                             radius: 16,
-                            backgroundColor: Color(0xFFEEEEEE),
-                            child: Icon(Icons.person, size: 16, color: Colors.black),
+                            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            child: Icon(Icons.person, size: 16, color: Theme.of(context).colorScheme.onSurface),
                           ),
                         ),
                       if (isMe)
@@ -426,7 +426,7 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
                           padding: const EdgeInsets.only(right: 4, bottom: 2),
                           child: Text(
                             DateFormatter.formatTime(createdAt),
-                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           ),
                         ),
                       ConstrainedBox(
@@ -434,7 +434,7 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: isMe ? Colors.black : Theme.of(context).colorScheme.surface,
+                            color: isMe ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surface,
                             borderRadius: BorderRadius.only(
                               topLeft: const Radius.circular(15),
                               topRight: const Radius.circular(15),
@@ -460,7 +460,7 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
                                   content,
                                   style: TextStyle(
                                     fontSize: 15,
-                                    color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                                    color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
                                   ),
                                 ),
                         ),
@@ -470,7 +470,7 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
                           padding: const EdgeInsets.only(left: 4, bottom: 2),
                           child: Text(
                             DateFormatter.formatTime(createdAt),
-                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                            style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           ),
                         ),
                     ],
@@ -483,34 +483,81 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
 }
 
 // ─────────────────────────────────────────────
-// 전체화면 이미지 뷰어
+// 전체화면 이미지 뷰어 (슬라이드 갤러리)
 // ─────────────────────────────────────────────
-class FullScreenImageView extends StatelessWidget {
-  final String imageUrl;
-  const FullScreenImageView({super.key, required this.imageUrl});
+class FullScreenImageView extends StatefulWidget {
+  final List<String> imageUrls;
+  final int initialIndex;
+
+  const FullScreenImageView({
+    super.key,
+    required this.imageUrls,
+    this.initialIndex = 0,
+  });
+
+  /// 단일 이미지용 편의 생성자
+  factory FullScreenImageView.single({Key? key, required String imageUrl}) {
+    return FullScreenImageView(key: key, imageUrls: [imageUrl], initialIndex: 0);
+  }
+
+  @override
+  State<FullScreenImageView> createState() => _FullScreenImageViewState();
+}
+
+class _FullScreenImageViewState extends State<FullScreenImageView> {
+  late final PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final total = widget.imageUrls.length;
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
+        title: total > 1
+            ? Text(
+                '${_currentIndex + 1} / $total',
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              )
+            : null,
+        centerTitle: true,
       ),
-      body: Center(
-        child: InteractiveViewer(
-          minScale: 0.5,
-          maxScale: 4.0,
-          child: CachedNetworkImage(
-            imageUrl: imageUrl,
-            fit: BoxFit.contain,
-            placeholder: (context, url) =>
-                const CircularProgressIndicator(color: Colors.white),
-            errorWidget: (context, url, error) =>
-                const Icon(Icons.error, color: Colors.white),
-          ),
-        ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: total,
+        onPageChanged: (i) => setState(() => _currentIndex = i),
+        itemBuilder: (context, index) {
+          return InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Center(
+              child: CachedNetworkImage(
+                imageUrl: widget.imageUrls[index],
+                fit: BoxFit.contain,
+                placeholder: (context, url) =>
+                    const CircularProgressIndicator(color: Colors.white),
+                errorWidget: (context, url, error) =>
+                    const Icon(Icons.error, color: Colors.white),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

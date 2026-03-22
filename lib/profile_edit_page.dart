@@ -116,15 +116,15 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             child: TextButton(
               onPressed: _isSaving ? null : _save,
               child: _isSaving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF8B7E74)),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary),
                     )
-                  : const Text(
+                  : Text(
                       '저장',
                       style: TextStyle(
-                        color: Color(0xFF8B7E74),
+                        color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
@@ -149,11 +149,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                     right: 0,
                     child: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Color(0xFF8B7E74),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
-                      child: const Icon(Icons.camera_alt, size: 18, color: Colors.white),
+                      child: Icon(Icons.camera_alt, size: 18, color: Theme.of(context).colorScheme.onPrimary),
                     ),
                   ),
                 ],
@@ -164,16 +164,16 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             TextField(
               controller: _nicknameController,
               maxLength: 20,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: '이름',
-                labelStyle: TextStyle(color: Color(0xFF8B7E74)),
-                border: OutlineInputBorder(),
+                labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
+                border: const OutlineInputBorder(),
                 focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFF8B7E74)),
+                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                 ),
-                counterStyle: TextStyle(color: Colors.grey),
+                counterStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
-              cursorColor: const Color(0xFF8B7E74),
+              cursorColor: Theme.of(context).colorScheme.primary,
             ),
           ],
         ),
@@ -197,7 +197,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     return CircleAvatar(
       radius: 60,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: const Icon(Icons.person, size: 60, color: Colors.grey),
+      child: Icon(Icons.person, size: 60, color: Theme.of(context).colorScheme.onSurfaceVariant),
     );
   }
 }

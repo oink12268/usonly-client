@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
+import 'package:flutter/gestures.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flutter_quill/flutter_quill.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
 import 'api_client.dart';
@@ -22,20 +24,20 @@ class NoteEditorPage extends StatefulWidget {
 }
 
 class _NoteEditorPageState extends State<NoteEditorPage> {
-  late EditorState _editorState;
+  late QuillController _controller;
   late TextEditingController _titleController;
-  late final MobileToolbarItem _imagePickerToolbarItem; // [Fix 4] 매 빌드마다 재생성 방지
-  StreamSubscription? _transactionSubscription;        // [Fix 1] 메모리 누수 방지
-  Timer? _autoSaveDebounce;                            // [Fix 5] 자동저장 디바운스 타이머
-  Timer? _autoSaveForceTimer;                          // [Fix 5] 최대 30초 강제저장 타이머
+  final FocusNode _focusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
 
-  bool _isSaving = false;
-  bool _hasUnsavedChanges = false;
-  bool _isNewNote = false;
-  bool _isExtractingSchedule = false;
-  int _pendingUploads = 0;
+  // ValueNotifier로 UI 상태 관리 → setState 없이 AppBar만 갱신 (한글 IME 조합 보호)
+  final ValueNotifier<bool> _isSaving = ValueNotifier(false);
+  final ValueNotifier<bool> _hasUnsavedChanges = ValueNotifier(false);
+  final ValueNotifier<bool> _isExtractingSchedule = ValueNotifier(false);
+  final ValueNotifier<int> _pendingUploads = ValueNotifier(0);
+
   String? _lastSavedContent;
   String? _lastSavedTitle;
+  bool _applyingLink = false;
 
   @override
   void initState() {
@@ -43,120 +45,145 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     _titleController = TextEditingController(text: widget.note['title'] ?? '');
 
     final content = widget.note['content'] as String? ?? '';
-    Document document;
-    try {
-      document = content.isEmpty ? Document.blank(withInitialText: true) : markdownToDocument(content);
-    } catch (_) {
-      document = Document.blank();
-    }
+    _controller = QuillController(
+      document: _buildDocument(content),
+      selection: const TextSelection.collapsed(offset: 0),
+    );
 
-    _editorState = EditorState(document: document);
-    _isNewNote = content.isEmpty;
-    _lastSavedContent = content;
+    // 변환된 Delta JSON 기준으로 비교 (불필요한 자동저장 방지)
+    _lastSavedContent = _getContent();
     _lastSavedTitle = widget.note['title'] ?? '';
 
-    // [Fix 4] 한 번만 생성
-    _imagePickerToolbarItem = _buildImagePickerToolbarItem();
-
-    // [Fix 1] subscription 저장 → dispose에서 cancel
-    _transactionSubscription = _editorState.transactionStream.listen((event) {
-      if (event.$1 == TransactionTime.after) {
-        if (mounted && !_hasUnsavedChanges) {
-          setState(() => _hasUnsavedChanges = true);
-        }
-        _handleImageUpload(event.$2);
-        _scheduleAutoSave(); // [Fix 5] 변경 시 자동저장 예약
-      }
+    _controller.addListener(() {
+      if (!_hasUnsavedChanges.value) _hasUnsavedChanges.value = true;
+      _autoLinkUrl();
     });
-
     _titleController.addListener(() {
-      if (mounted && !_hasUnsavedChanges) {
-        setState(() => _hasUnsavedChanges = true);
-      }
-      _scheduleAutoSave(); // [Fix 5] 제목 변경 시도 자동저장 예약
-    });
-
-  }
-
-  // [Fix 5] 자동저장: 타이핑 멈춘 후 3초 뒤 저장, 최대 30초 강제저장
-  void _scheduleAutoSave() {
-    // 디바운스: 타이핑 중엔 계속 리셋, 멈추면 3초 후 저장
-    _autoSaveDebounce?.cancel();
-    _autoSaveDebounce = Timer(const Duration(seconds: 3), () {
-      if (_pendingUploads == 0) _saveInternal();
-      _autoSaveForceTimer?.cancel();
-      _autoSaveForceTimer = null;
-    });
-
-    // 강제저장: 첫 변경 후 30초가 지나면 무조건 저장 (앱 강제종료 대비)
-    _autoSaveForceTimer ??= Timer(const Duration(seconds: 30), () {
-      _autoSaveDebounce?.cancel();
-      _autoSaveDebounce = null;
-      _autoSaveForceTimer = null;
-      if (_pendingUploads == 0) _saveInternal();
+      if (!_hasUnsavedChanges.value) _hasUnsavedChanges.value = true;
     });
   }
 
-  MobileToolbarItem _buildImagePickerToolbarItem() => MobileToolbarItem.action(
-        itemIconBuilder: (_, __, ___) =>
-            const Icon(Icons.image_outlined, size: 22),
-        actionHandler: (context, editorState) async {
-          final xFile = await ImagePicker().pickImage(
-            source: ImageSource.gallery,
-          );
-          if (xFile == null) return;
+  /// 커서 앞 단어가 http/https URL이면 자동으로 링크 속성 적용
+  void _autoLinkUrl() {
+    if (_applyingLink) return;
 
-          final selection = editorState.selection;
-          final imagePath = selection != null
-              ? selection.end.path.next
-              : [editorState.document.root.children.length];
-          final paraPath = imagePath.next;
+    final selection = _controller.selection;
+    if (!selection.isCollapsed) return;
 
-          final txn = editorState.transaction;
-          txn.insertNode(
-            imagePath,
-            Node(
-              type: ImageBlockKeys.type,
-              attributes: {ImageBlockKeys.url: xFile.path},
-            ),
-          );
-          txn.insertNode(paraPath, paragraphNode());
-          txn.afterSelection = Selection.collapsed(
-            Position(path: paraPath, offset: 0),
-          );
-          await editorState.apply(txn);
+    final offset = selection.baseOffset;
+    if (offset < 8) return; // 최소 'http://' 길이
 
-          await Future.delayed(const Duration(milliseconds: 100));
-          final newSel = editorState.selection;
-          if (newSel != null) {
-            await editorState.updateSelectionWithReason(
-              newSel,
-              reason: SelectionUpdateReason.uiEvent,
-            );
-          }
-        },
-      );
+    final text = _controller.document.toPlainText();
+    if (offset > text.length) return;
 
-  void _handleImageUpload(Transaction transaction) {
-    for (final op in transaction.operations) {
-      if (op is InsertOperation) {
-        for (final node in op.nodes) {
-          if (node.type == ImageBlockKeys.type) {
-            final url = node.attributes[ImageBlockKeys.url] as String?;
-            if (url != null && !url.startsWith('http')) {
-              _uploadImage(node, url);
-            }
-          }
+    // 공백/개행 다음에만 트리거 (단어가 끝났을 때)
+    final charBefore = text[offset - 1];
+    if (charBefore != ' ' && charBefore != '\n') return;
+
+    // 커서 바로 앞 단어 추출
+    final textBefore = text.substring(0, offset - 1);
+    final lastDelim = textBefore.lastIndexOf(RegExp(r'[ \n]'));
+    final wordStart = lastDelim + 1;
+    final word = textBefore.substring(wordStart);
+
+    if (!word.startsWith('http://') && !word.startsWith('https://')) return;
+
+    // 이미 링크 속성이 있으면 중복 적용 방지
+    final style = _controller.document.collectStyle(wordStart, word.length);
+    if (style.containsKey('link')) return;
+
+    debugPrint('[autoLink] applying link: $word at $wordStart len=${word.length}');
+    _applyingLink = true;
+    _controller.formatText(wordStart, word.length, LinkAttribute(word));
+    _applyingLink = false;
+    debugPrint('[autoLink] done. delta: ${_getContent().substring(0, 100)}');
+  }
+
+  /// 저장된 내용 로드:
+  /// 1. Delta JSON (flutter_quill 형식) → 그대로 파싱
+  /// 2. AppFlowy 마크다운 → heading/list 구조 보존 변환
+  Document _buildDocument(String content) {
+    if (content.isEmpty) return Document();
+
+    // Delta JSON 형식 (이전 flutter_quill 저장본 호환)
+    if (content.trimLeft().startsWith('[')) {
+      try {
+        return Document.fromJson(jsonDecode(content) as List);
+      } catch (_) {}
+    }
+    // 이후는 마크다운 (AppFlowy 저장본 or 신규 저장본) → 아래에서 파싱
+
+    // 마크다운 → Quill Delta JSON ops 변환 (Delta 클래스 없이 raw JSON 사용)
+    final ops = <Map<String, dynamic>>[];
+    for (final line in content.split('\n')) {
+      if (line.startsWith('### ')) {
+        ops.add({'insert': _stripInline(line.substring(4))});
+        ops.add({'insert': '\n', 'attributes': {'header': 3}});
+      } else if (line.startsWith('## ')) {
+        ops.add({'insert': _stripInline(line.substring(3))});
+        ops.add({'insert': '\n', 'attributes': {'header': 2}});
+      } else if (line.startsWith('# ')) {
+        ops.add({'insert': _stripInline(line.substring(2))});
+        ops.add({'insert': '\n', 'attributes': {'header': 1}});
+      } else if (line.startsWith('- [x] ')) {
+        ops.add({'insert': _stripInline(line.substring(6))});
+        ops.add({'insert': '\n', 'attributes': {'list': 'checked'}});
+      } else if (line.startsWith('- [ ] ')) {
+        ops.add({'insert': _stripInline(line.substring(6))});
+        ops.add({'insert': '\n', 'attributes': {'list': 'unchecked'}});
+      } else if (line.startsWith('- ') || line.startsWith('* ')) {
+        ops.add({'insert': _stripInline(line.substring(2))});
+        ops.add({'insert': '\n', 'attributes': {'list': 'bullet'}});
+      } else if (RegExp(r'^\d+\. ').hasMatch(line)) {
+        ops.add({'insert': _stripInline(line.replaceFirst(RegExp(r'^\d+\. '), ''))});
+        ops.add({'insert': '\n', 'attributes': {'list': 'ordered'}});
+      } else if (line.startsWith('![')) {
+        final match = RegExp(r'!\[.*?\]\((.+?)\)').firstMatch(line);
+        if (match != null) {
+          ops.add({'insert': <String, dynamic>{'image': match.group(1)!}});
         }
+        ops.add({'insert': '\n'});
+      } else {
+        ops.add({'insert': _stripInline(line)});
+        ops.add({'insert': '\n'});
       }
+    }
+
+    try {
+      return Document.fromJson(ops);
+    } catch (_) {
+      return Document()..insert(0, content);
     }
   }
 
-  Future<void> _uploadImage(Node node, String localPath) async {
-    if (mounted) setState(() => _pendingUploads++);
+  /// 인라인 마크다운 기호 제거 (**bold**, *italic*, `code`, [link](url))
+  String _stripInline(String text) {
+    return text
+        .replaceAllMapped(RegExp(r'\*\*(.+?)\*\*'), (m) => m.group(1)!)
+        .replaceAllMapped(RegExp(r'\*(.+?)\*'), (m) => m.group(1)!)
+        .replaceAllMapped(RegExp(r'`(.+?)`'), (m) => m.group(1)!)
+        .replaceAllMapped(RegExp(r'\[(.+?)\]\(.+?\)'), (m) => m.group(1)!);
+  }
+
+
+  // Delta JSON으로 저장 (링크·볼드·이탤릭 등 모든 속성 보존)
+  String _getContent() {
+    return jsonEncode(_controller.document.toDelta().toJson());
+  }
+
+  // 일정 추출 등 순수 텍스트만 필요할 때
+  String _getPlainText() {
+    return _controller.document.toPlainText().trim();
+  }
+
+  Future<void> _pickAndInsertImage() async {
+    final xFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
+    if (xFile == null) return;
+
+    if (mounted) _pendingUploads.value++;
     try {
-      final bytes = await File(localPath).readAsBytes();
-      final filename = localPath.split('/').last;
+      final bytes = await File(xFile.path).readAsBytes();
+      final filename = xFile.path.split('/').last;
 
       final request = http.MultipartRequest(
         'POST',
@@ -169,17 +196,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         final data = jsonDecode(await response.stream.bytesToString());
         final serverUrl = data['imageUrl'] as String;
 
-        final transaction = _editorState.transaction;
-        transaction.updateNode(node, {ImageBlockKeys.url: serverUrl});
-        await _editorState.apply(transaction);
+        final offset = _controller.selection.baseOffset;
+        final safeOffset = offset < 0 ? _controller.document.length - 1 : offset;
+        _controller.replaceText(safeOffset, 0, BlockEmbed.image(serverUrl), null);
 
         await _saveInternal();
       } else {
-        // [Fix 3] 업로드 실패 시 깨진 이미지 노드 제거 + 유저에게 알림
         if (mounted) {
-          final transaction = _editorState.transaction;
-          transaction.deleteNode(node);
-          await _editorState.apply(transaction);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('이미지 업로드에 실패했습니다. 다시 시도해주세요.')),
           );
@@ -187,28 +210,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       }
     } catch (e) {
       debugPrint('이미지 업로드 에러: $e');
-      // [Fix 3] 예외 발생 시에도 깨진 노드 제거 + 유저에게 알림
       if (mounted) {
-        try {
-          final transaction = _editorState.transaction;
-          transaction.deleteNode(node);
-          await _editorState.apply(transaction);
-        } catch (_) {}
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('이미지 업로드에 실패했습니다. 다시 시도해주세요.')),
         );
       }
     } finally {
-      if (mounted) setState(() => _pendingUploads--);
+      if (mounted) _pendingUploads.value--;
     }
   }
 
-  String _getMarkdown() {
-    return documentToMarkdown(_editorState.document);
-  }
-
   Future<void> _save() async {
-    if (_pendingUploads > 0) {
+    if (_pendingUploads.value > 0) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -223,14 +236,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   }
 
   Future<void> _saveInternal() async {
-    if (_isSaving) return;
-    final content = _getMarkdown();
+    if (_isSaving.value) return;
+    final content = _getContent();
     final title = _titleController.text;
     if (content == _lastSavedContent && title == _lastSavedTitle) {
-      if (mounted) setState(() => _hasUnsavedChanges = false);
+      _hasUnsavedChanges.value = false;
       return;
     }
-    if (mounted) setState(() => _isSaving = true);
+    _isSaving.value = true;
     try {
       await ApiClient.put(
         Uri.parse('${ApiConfig.baseUrl}/api/notes/${widget.note['id']}'),
@@ -238,27 +251,26 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       );
       _lastSavedContent = content;
       _lastSavedTitle = title;
-      if (mounted) setState(() => _hasUnsavedChanges = false);
+      _hasUnsavedChanges.value = false;
     } catch (e) {
       debugPrint('메모 저장 에러: $e');
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      _isSaving.value = false;
     }
   }
 
   Future<void> _forceSave() async {
-    _autoSaveDebounce?.cancel();   // 예약된 자동저장 취소 후 즉시 저장
-    _autoSaveForceTimer?.cancel();
-    _autoSaveForceTimer = null;
-    final content = _getMarkdown();
+    final content = _getContent();
     final title = _titleController.text;
+    debugPrint('[forceSave] content starts: ${content.substring(0, content.length.clamp(0, 80))}');
+    debugPrint('[forceSave] changed: ${content != _lastSavedContent}');
     if (content == _lastSavedContent && title == _lastSavedTitle) return;
     try {
-      await ApiClient.put(
+      final res = await ApiClient.put(
         Uri.parse('${ApiConfig.baseUrl}/api/notes/${widget.note['id']}'),
         body: jsonEncode({'title': title, 'content': content}),
       );
-      // [Fix 2] 저장 성공 후 기준값 갱신
+      debugPrint('[forceSave] status: ${res.statusCode}');
       _lastSavedContent = content;
       _lastSavedTitle = title;
     } catch (e) {
@@ -267,19 +279,19 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   }
 
   Future<void> _extractAndSaveToCalendar() async {
-    final content = _getMarkdown();
-    if (content.trim().isEmpty) {
+    final plainText = _getPlainText();
+    if (plainText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('메모 내용이 없습니다.')),
       );
       return;
     }
 
-    setState(() => _isExtractingSchedule = true);
+    _isExtractingSchedule.value = true;
     try {
       final response = await ApiClient.post(
         Uri.parse('${ApiConfig.baseUrl}/api/notes/extract-schedule'),
-        body: jsonEncode({'content': content}),
+        body: jsonEncode({'content': plainText}),
       );
 
       if (!mounted) return;
@@ -298,9 +310,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         return;
       }
 
-      final events = (jsonDecode(response.body) as List)
-          .cast<Map<String, dynamic>>();
-
+      final events = (jsonDecode(response.body) as List).cast<Map<String, dynamic>>();
       await _showScheduleListDialog(events);
     } catch (e) {
       if (!mounted) return;
@@ -308,12 +318,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         SnackBar(content: Text('오류가 발생했습니다: $e')),
       );
     } finally {
-      if (mounted) setState(() => _isExtractingSchedule = false);
+      if (mounted) _isExtractingSchedule.value = false;
     }
   }
 
   Future<void> _showScheduleListDialog(List<Map<String, dynamic>> events) async {
-    // 각 이벤트별 컨트롤러와 날짜 상태
     final titleCtrls = events.map((e) => TextEditingController(text: e['title'] as String? ?? '')).toList();
     final descCtrls = events.map((e) => TextEditingController(text: e['description'] as String? ?? '')).toList();
     final dates = events.map((e) {
@@ -415,10 +424,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           children: [
             TextField(
               controller: titleCtrl,
-              decoration: const InputDecoration(
-                labelText: '일정 제목',
-                isDense: true,
-              ),
+              decoration: const InputDecoration(labelText: '일정 제목', isDense: true),
             ),
             const SizedBox(height: 8),
             InkWell(
@@ -448,10 +454,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             const SizedBox(height: 8),
             TextField(
               controller: descCtrl,
-              decoration: const InputDecoration(
-                labelText: '설명 (선택)',
-                isDense: true,
-              ),
+              decoration: const InputDecoration(labelText: '설명 (선택)', isDense: true),
               maxLines: 2,
             ),
           ],
@@ -462,18 +465,28 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   @override
   void dispose() {
-    _autoSaveDebounce?.cancel();        // [Fix 5]
-    _autoSaveForceTimer?.cancel();      // [Fix 5]
-    _transactionSubscription?.cancel(); // [Fix 1]
+    _controller.dispose();
     _titleController.dispose();
-    _editorState.dispose();
+    _focusNode.dispose();
+    _scrollController.dispose();
+    _isSaving.dispose();
+    _hasUnsavedChanges.dispose();
+    _isExtractingSchedule.dispose();
+    _pendingUploads.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: false, // AppFlowyEditor + MobileToolbar이 keyboard inset을 내부적으로 처리함
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _forceSave();
+        if (mounted) Navigator.pop(context);
+      },
+      child: Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -493,21 +506,19 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         actions: [
-          if (_isExtractingSchedule)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.auto_awesome),
-              tooltip: 'AI로 구글 캘린더에 저장',
-              onPressed: _extractAndSaveToCalendar,
-            ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _isExtractingSchedule,
+            builder: (_, extracting, __) => extracting
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.auto_awesome),
+                    tooltip: 'AI로 구글 캘린더에 저장',
+                    onPressed: _extractAndSaveToCalendar,
+                  ),
+          ),
           IconButton(
             icon: const Icon(Icons.folder_open),
             tooltip: '하위 메모',
@@ -521,63 +532,142 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     memberId: widget.memberId ?? 0,
                     coupleId: widget.coupleId,
                     parentNoteId: widget.note['id'],
-                    parentTitle: _titleController.text.isEmpty
-                        ? '(제목 없음)'
-                        : _titleController.text,
+                    parentTitle: _titleController.text.isEmpty ? '(제목 없음)' : _titleController.text,
                   ),
                 ),
               );
             },
           ),
-          if (_isSaving || _pendingUploads > 0)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            IconButton(
-              icon: Icon(
-                _hasUnsavedChanges ? Icons.save : Icons.cloud_done_outlined,
-                color: _hasUnsavedChanges ? const Color(0xFF8B7E74) : Colors.grey,
-              ),
-              tooltip: _hasUnsavedChanges ? '저장' : '저장됨',
-              onPressed: _hasUnsavedChanges ? _save : null,
+          ValueListenableBuilder<bool>(
+            valueListenable: _isSaving,
+            builder: (_, saving, __) => ValueListenableBuilder<int>(
+              valueListenable: _pendingUploads,
+              builder: (_, uploads, __) {
+                if (saving || uploads > 0) {
+                  return const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                  );
+                }
+                return ValueListenableBuilder<bool>(
+                  valueListenable: _hasUnsavedChanges,
+                  builder: (_, unsaved, __) => IconButton(
+                    icon: Icon(
+                      unsaved ? Icons.save : Icons.cloud_done_outlined,
+                      color: unsaved ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    tooltip: unsaved ? '저장' : '저장됨',
+                    onPressed: unsaved ? _save : null,
+                  ),
+                );
+              },
             ),
+          ),
         ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: AppFlowyEditor(
-              editorState: _editorState,
-              autoFocus: _isNewNote,
-              editorStyle: EditorStyle.mobile().copyWith(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                textStyleConfiguration: TextStyleConfiguration(
-                  text: const TextStyle(color: Colors.white),
-                ),
+            child: QuillEditor(
+              controller: _controller,
+              focusNode: _focusNode,
+              scrollController: _scrollController,
+              config: QuillEditorConfig(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                placeholder: '내용을 입력하세요...',
+                textCapitalization: TextCapitalization.none,
+                characterShortcutEvents: standardCharactersShortcutEvents,
+                spaceShortcutEvents: standardSpaceShorcutEvents,
+                onLaunchUrl: (url) async {
+                  final uri = Uri.tryParse(url);
+                  if (uri != null && await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+                customRecognizerBuilder: (attribute, leaf) {
+                  if (attribute.key == Attribute.link.key && attribute.value != null) {
+                    final url = attribute.value as String;
+                    return TapGestureRecognizer()
+                      ..onTap = () async {
+                        final uri = Uri.tryParse(url);
+                        if (uri != null && await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      };
+                  }
+                  return null;
+                },
+                embedBuilders: [NoteImageEmbedBuilder()],
               ),
             ),
           ),
-          MobileToolbar(
-            editorState: _editorState,
-            toolbarItems: [
-              textDecorationMobileToolbarItem,
-              headingMobileToolbarItem,
-              todoListMobileToolbarItem,
-              listMobileToolbarItem,
-              linkMobileToolbarItem,
-              quoteMobileToolbarItem,
-              codeMobileToolbarItem,
-              _imagePickerToolbarItem,
-            ],
+          const Divider(height: 1),
+          QuillSimpleToolbar(
+            controller: _controller,
+            config: QuillSimpleToolbarConfig(
+              multiRowsDisplay: false,
+              iconTheme: QuillIconTheme(
+                iconButtonUnselectedData: IconButtonData(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                iconButtonSelectedData: IconButtonData(color: Theme.of(context).colorScheme.primary),
+              ),
+              showFontFamily: false,
+              showFontSize: false,
+              showStrikeThrough: false,
+              showInlineCode: false,
+              showColorButton: false,
+              showBackgroundColorButton: false,
+              showClearFormat: false,
+              showAlignmentButtons: false,
+              showCodeBlock: false,
+              showQuote: false,
+              showIndent: false,
+              showSearchButton: false,
+              showSubscript: false,
+              showSuperscript: false,
+              showClipboardCut: false,
+              showClipboardCopy: false,
+              showClipboardPaste: false,
+              customButtons: [
+                QuillToolbarCustomButtonOptions(
+                  icon: const Icon(Icons.image_outlined),
+                  tooltip: '사진 첨부',
+                  onPressed: _pickAndInsertImage,
+                ),
+              ],
+            ),
           ),
         ],
       ),
+    ), // Scaffold
+    ); // PopScope
+  }
+}
+
+/// 서버 이미지 URL → CachedNetworkImage / 로컬 파일 미리보기
+class NoteImageEmbedBuilder extends EmbedBuilder {
+  @override
+  String get key => BlockEmbed.imageType;
+
+  @override
+  bool get expanded => false;
+
+  @override
+  Widget build(BuildContext context, EmbedContext embedContext) {
+    final imageUrl = embedContext.node.value.data as String;
+    if (imageUrl.startsWith('http')) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: CachedNetworkImage(
+          imageUrl: imageUrl,
+          fit: BoxFit.contain,
+          placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+          errorWidget: (context, url, error) => const Icon(Icons.broken_image, size: 48),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Image.file(File(imageUrl), fit: BoxFit.contain),
     );
   }
 }

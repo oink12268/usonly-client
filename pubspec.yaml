@@ -49,9 +49,10 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   shared_preferences: ^2.3.4
   file_picker: ^10.3.10
+  video_player: ^2.9.2
   any_link_preview: ^3.0.3
   flame: ^1.21.0
-  appflowy_editor: ^6.2.0
+  flutter_quill: ^11.5.0
 
 dev_dependencies:
   flutter_test:

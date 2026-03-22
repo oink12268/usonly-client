@@ -155,23 +155,23 @@ class _MatchingScreenState extends State<MatchingScreen> {
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF8B7E74).withValues(alpha: 0.5)),
+                    border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
                   ),
                   child: Column(
                     children: [
                       Text(
                         widget.myCode,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 4,
-                          color: Color(0xFF8B7E74),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         "터치해서 복사하기",
-                        style: TextStyle(fontSize: 12, color: Color(0xFFD4C5B9)),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline),
                       ),
                     ],
                   ),
@@ -198,13 +198,13 @@ class _MatchingScreenState extends State<MatchingScreen> {
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
                   hintText: "코드를 입력하세요",
-                  prefixIcon: const Icon(Icons.favorite, color: Colors.grey),
+                  prefixIcon: Icon(Icons.favorite, color: Theme.of(context).colorScheme.outline),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF8B7E74)),
+                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
                   ),
                   counterText: "",
                 ),
@@ -219,20 +219,20 @@ class _MatchingScreenState extends State<MatchingScreen> {
                 child: ElevatedButton(
                   onPressed: _isConnecting ? null : _connectCouple,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8B7E74),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     elevation: 2,
                   ),
                   child: _isConnecting
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
+                      ? CircularProgressIndicator(color: Theme.of(context).colorScheme.onPrimary)
+                      : Text(
                           "연결하기",
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         ),
                 ),

@@ -67,10 +67,10 @@ class _ChatMediaPageState extends State<ChatMediaPage> {
                       child: CachedNetworkImage(
                         imageUrl: url,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(color: Colors.grey[200]),
+                        placeholder: (_, __) => Container(color: Theme.of(context).colorScheme.surfaceContainerHighest),
                         errorWidget: (_, __, ___) => Container(
-                          color: Colors.grey[200],
-                          child: const Icon(Icons.broken_image, color: Colors.grey),
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          child: Icon(Icons.broken_image, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                       ),
                     );

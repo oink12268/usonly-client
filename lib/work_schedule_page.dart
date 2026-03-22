@@ -165,14 +165,14 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
                         fit: BoxFit.contain,
                       ),
                     )
-                  : const Center(
+                  : Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.image_outlined, size: 48, color: Colors.grey),
-                          SizedBox(height: 8),
+                          Icon(Icons.image_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          const SizedBox(height: 8),
                           Text('근무 스케쥴표 사진을 선택해주세요',
-                              style: TextStyle(color: Colors.grey)),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                         ],
                       ),
                     ),
@@ -188,8 +188,8 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
                     icon: const Icon(Icons.photo_library),
                     label: const Text('갤러리'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF8B7E74),
-                      side: const BorderSide(color: Color(0xFF8B7E74)),
+                      foregroundColor: Theme.of(context).colorScheme.primary,
+                      side: BorderSide(color: Theme.of(context).colorScheme.primary),
                     ),
                   ),
                 ),
@@ -200,8 +200,8 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
                     icon: const Icon(Icons.camera_alt),
                     label: const Text('카메라'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF8B7E74),
-                      side: const BorderSide(color: Color(0xFF8B7E74)),
+                      foregroundColor: Theme.of(context).colorScheme.primary,
+                      side: BorderSide(color: Theme.of(context).colorScheme.primary),
                     ),
                   ),
                 ),
@@ -211,8 +211,8 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
 
             // 분석 중 표시
             if (_isAnalyzing)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -221,11 +221,11 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
                       width: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Color(0xFF8B7E74),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
-                    SizedBox(width: 10),
-                    Text('분석 중...', style: TextStyle(color: Color(0xFF8B7E74))),
+                    const SizedBox(width: 10),
+                    Text('분석 중...', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
                   ],
                 ),
               ),
@@ -278,7 +278,7 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
                         display,
                         style: TextStyle(
                           fontWeight: FontWeight.w500,
-                          color: isOff ? Colors.grey : const Color(0xFF8B7E74),
+                          color: isOff ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.primary,
                         ),
                       )),
                     ]);

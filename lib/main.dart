@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -47,6 +48,7 @@ class MyApp extends StatelessWidget {
       builder: (context, _) => MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'UsOnly',
+      localizationsDelegates: const [FlutterQuillLocalizations.delegate],
       themeMode: themeNotifier.themeMode,
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(
@@ -204,22 +206,22 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.wifi_off, size: 64, color: Colors.grey),
+              Icon(Icons.wifi_off, size: 64, color: Theme.of(context).colorScheme.outline),
               const SizedBox(height: 16),
               const Text('서버 연결에 실패했습니다', style: TextStyle(fontSize: 16)),
               const SizedBox(height: 8),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B7E74)),
+                style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
                 onPressed: () {
                   setState(() { _hasError = false; _isLoading = true; });
                   _checkBackendStatus();
                 },
-                child: const Text('다시 시도', style: TextStyle(color: Colors.white)),
+                child: Text('다시 시도', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
               ),
               const SizedBox(height: 8),
               TextButton(
                 onPressed: () => AuthService().signOut(),
-                child: const Text('로그아웃', style: TextStyle(color: Colors.grey)),
+                child: Text('로그아웃', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ),
             ],
           ),

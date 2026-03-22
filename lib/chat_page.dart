@@ -427,7 +427,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.photo_library, color: Colors.black),
+              leading: const Icon(Icons.photo_library),
               title: const Text('갤러리'),
               onTap: () {
                 Navigator.pop(context);
@@ -435,7 +435,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
               },
             ),
             ListTile(
-              leading: const Icon(Icons.camera_alt, color: Colors.black),
+              leading: const Icon(Icons.camera_alt),
               title: const Text('카메라'),
               onTap: () {
                 Navigator.pop(context);
@@ -443,7 +443,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
               },
             ),
             ListTile(
-              leading: const Icon(Icons.attach_file, color: Colors.black),
+              leading: const Icon(Icons.attach_file),
               title: const Text('파일 첨부'),
               onTap: () {
                 Navigator.pop(context);
@@ -652,7 +652,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.reply, color: Colors.black),
+              leading: const Icon(Icons.reply),
               title: const Text("답장"),
               onTap: () {
                 Navigator.pop(context);
@@ -661,7 +661,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
             ),
             if (!isImage && !isFile)
               ListTile(
-                leading: const Icon(Icons.copy, color: Colors.black),
+                leading: const Icon(Icons.copy),
                 title: const Text("복사"),
                 onTap: () {
                   Navigator.pop(context);
@@ -708,16 +708,16 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           bodyMaxLines: 2,
           bodyTextOverflow: TextOverflow.ellipsis,
           titleStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          bodyStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
+          bodyStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
           errorWidget: const SizedBox.shrink(),
           placeholderWidget: Container(
             height: 60,
             decoration: BoxDecoration(
-              color: Colors.grey[200],
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
           ),
-          backgroundColor: isMe ? Colors.black87 : Colors.grey[100]!,
+          backgroundColor: isMe ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: 8,
           removeElevation: true,
         ),
@@ -734,7 +734,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     if (matches.isEmpty) {
       return Text(
         text,
-        style: TextStyle(fontSize: 16, color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface),
+        style: TextStyle(fontSize: 16, color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface),
       );
     }
 
@@ -748,9 +748,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       spans.add(TextSpan(
         text: url,
         style: TextStyle(
-          color: isMe ? Colors.white : Colors.black,
+          color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
           decoration: TextDecoration.underline,
-          decorationColor: isMe ? Colors.white : Colors.black,
+          decorationColor: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
         ),
         recognizer: TapGestureRecognizer()
           ..onTap = () async {
@@ -768,7 +768,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
     return RichText(
       text: TextSpan(
-        style: TextStyle(fontSize: 16, color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface),
+        style: TextStyle(fontSize: 16, color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface),
         children: spans,
       ),
     );
@@ -930,9 +930,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.black, size: 24),
+            Icon(icon, color: Theme.of(context).colorScheme.onSurface, size: 24),
             const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontSize: 11, color: Colors.black)),
+            Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface)),
           ],
         ),
       ),
@@ -969,7 +969,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           children: [
             const Row(
               children: [
-                Icon(Icons.auto_awesome, color: Colors.black, size: 20),
+                Icon(Icons.auto_awesome, size: 20),
                 SizedBox(width: 8),
                 Text('AI 채팅 검색', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ],
@@ -1001,8 +1001,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -1026,10 +1026,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const AlertDialog(
+      builder: (_) => AlertDialog(
         content: Row(
           children: [
-            CircularProgressIndicator(color: Colors.black),
+            CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
             SizedBox(width: 16),
             Text('AI가 채팅을 분석 중...'),
           ],
@@ -1060,11 +1060,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.auto_awesome, color: Colors.black, size: 18),
-            SizedBox(width: 8),
-            Text('AI 검색 결과', style: TextStyle(fontSize: 16)),
+            Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.onSurface, size: 18),
+            const SizedBox(width: 8),
+            const Text('AI 검색 결과', style: TextStyle(fontSize: 16)),
           ],
         ),
         content: SingleChildScrollView(
@@ -1075,10 +1075,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.grey[200]!,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(query, style: const TextStyle(fontSize: 13, color: Colors.black)),
+                child: Text(query, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface)),
               ),
               const SizedBox(height: 12),
               Text(result, style: const TextStyle(fontSize: 14, height: 1.5)),
@@ -1088,7 +1088,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         actions: [
           IconButton(
             tooltip: '복사',
-            icon: const Icon(Icons.copy, size: 20, color: Colors.black),
+            icon: const Icon(Icons.copy, size: 20),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: result));
               Navigator.pop(context);
@@ -1099,7 +1099,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           ),
           IconButton(
             tooltip: '채팅으로 전송',
-            icon: const Icon(Icons.send, size: 20, color: Colors.black),
+            icon: const Icon(Icons.send, size: 20),
             onPressed: () {
               Navigator.pop(context);
               _controller.text = result;
@@ -1109,7 +1109,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('닫기', style: TextStyle(color: Colors.black)),
+            child: const Text('닫기'),
           ),
         ],
       ),
@@ -1148,7 +1148,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: Border(
-                  bottom: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                  bottom: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
                 ),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -1163,7 +1163,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatMediaPage()));
                   }),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.black),
+                    icon: const Icon(Icons.close),
                     onPressed: () => setState(() => _showChatSearchMenu = false),
                     visualDensity: VisualDensity.compact,
                   ),
@@ -1183,9 +1183,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                 itemBuilder: (context, index) {
                   // 맨 위 로딩 인디케이터 (reverse이므로 가장 높은 index = 화면 맨 위)
                   if (_isLoadingMore && index == _chats.length) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
                     );
                   }
                   // reverse: true → index 0 = 최신(_chats.last), index n = 오래된(_chats.first)
@@ -1242,12 +1242,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.2),
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
                                 createdAt.split('T')[0],
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 12),
                               ),
                             ),
                           ),
@@ -1259,10 +1259,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.15),
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text('검색된 메시지', style: TextStyle(fontSize: 11, color: Colors.black)),
+                          child: Text('검색된 메시지', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface)),
                         ),
                       Dismissible(
                         key: ValueKey(chat['id'] ?? index),
@@ -1274,7 +1274,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                         background: Container(
                           alignment: Alignment.centerLeft,
                           padding: const EdgeInsets.only(left: 20),
-                          child: const Icon(Icons.reply, color: Colors.black),
+                          child: Icon(Icons.reply, color: Theme.of(context).colorScheme.onSurface),
                         ),
                         child: GestureDetector(
                           onLongPress: () => _showMessageOptions(chat),
@@ -1373,7 +1373,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                                               color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                               borderRadius: BorderRadius.circular(10),
                                               border: Border(
-                                                left: BorderSide(color: Colors.black, width: 3),
+                                                left: BorderSide(color: Theme.of(context).colorScheme.primary, width: 3),
                                               ),
                                             ),
                                             child: Column(
@@ -1383,10 +1383,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                                                   replyToUid != null && replyToUid == widget.uid
                                                       ? "나"
                                                       : _nicknameCache[replyToUid] ?? replyToUid?.substring(0, 4) ?? "",
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 11,
                                                     fontWeight: FontWeight.bold,
-                                                    color: Colors.black,
+                                                    color: Theme.of(context).colorScheme.onSurface,
                                                   ),
                                                 ),
                                                 const SizedBox(height: 2),
@@ -1403,12 +1403,43 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
                                       if (isImage)
                                         GestureDetector(
-                                          onTap: () => Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => FullScreenImageView(imageUrl: content),
-                                            ),
-                                          ),
+                                          onTap: () async {
+                                            // 전체 채팅 이미지 목록을 서버에서 가져와 슬라이드 열기
+                                            List<String> imageUrls;
+                                            try {
+                                              final response = await ApiClient.get(
+                                                Uri.parse('${ApiConfig.baseUrl}/api/chats/images'),
+                                              );
+                                              if (response.statusCode == 200) {
+                                                final chats = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+                                                imageUrls = chats
+                                                    .map((c) => (c['message'] as String).replaceFirst('IMAGE:', ''))
+                                                    .where((url) => url.isNotEmpty)
+                                                    .toList();
+                                              } else {
+                                                imageUrls = _chats
+                                                    .where((c) => (c['message'] as String? ?? '').startsWith('IMAGE:'))
+                                                    .map((c) => (c['message'] as String).replaceFirst('IMAGE:', ''))
+                                                    .toList();
+                                              }
+                                            } catch (_) {
+                                              imageUrls = _chats
+                                                  .where((c) => (c['message'] as String? ?? '').startsWith('IMAGE:'))
+                                                  .map((c) => (c['message'] as String).replaceFirst('IMAGE:', ''))
+                                                  .toList();
+                                            }
+                                            final initialIndex = imageUrls.indexOf(content).clamp(0, imageUrls.length - 1);
+                                            if (!context.mounted) return;
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => FullScreenImageView(
+                                                  imageUrls: imageUrls,
+                                                  initialIndex: initialIndex,
+                                                ),
+                                              ),
+                                            );
+                                          },
                                           child: ClipRRect(
                                             borderRadius: BorderRadius.circular(15),
                                             child: CachedNetworkImage(
@@ -1429,7 +1460,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                                           child: Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                             decoration: BoxDecoration(
-                                              color: isMe ? Colors.black : Theme.of(context).colorScheme.surface,
+                                              color: isMe ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surface,
                                               borderRadius: BorderRadius.circular(15),
                                               boxShadow: [
                                                 BoxShadow(
@@ -1443,20 +1474,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                                               children: [
                                                 Icon(Icons.insert_drive_file,
                                                     size: 28,
-                                                    color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface),
+                                                    color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface),
                                                 const SizedBox(width: 8),
                                                 Flexible(
                                                   child: Text(
                                                     fileName,
                                                     style: TextStyle(
                                                         fontSize: 13,
-                                                        color: isMe ? Colors.white : Theme.of(context).colorScheme.onSurface),
+                                                        color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface),
                                                   ),
                                                 ),
                                                 const SizedBox(width: 6),
                                                 Icon(Icons.download,
                                                     size: 18,
-                                                    color: isMe ? Colors.white70 : Theme.of(context).colorScheme.onSurfaceVariant),
+                                                    color: isMe ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.7) : Theme.of(context).colorScheme.onSurfaceVariant),
                                               ],
                                             ),
                                           ),
@@ -1468,7 +1499,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                               decoration: BoxDecoration(
-                                                color: isMe ? Colors.black : Theme.of(context).colorScheme.surface,
+                                                color: isMe ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surface,
                                                 borderRadius: BorderRadius.only(
                                                   topLeft: const Radius.circular(15),
                                                   topRight: const Radius.circular(15),
@@ -1537,11 +1568,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)),
+                  SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
                   const SizedBox(width: 10),
                   Text(
                     _uploadProgress.isEmpty ? "전송 중..." : "전송 중... ($_uploadProgress)",
-                    style: const TextStyle(fontSize: 13, color: Colors.black),
+                    style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface),
                   ),
                 ],
               ),
@@ -1557,7 +1588,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                   Container(
                     width: 3,
                     height: 36,
-                    color: Colors.black,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -1569,15 +1600,15 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                           _replyTarget!['writerUid'] == widget.uid
                               ? "나에게 답장"
                               : "${_replyTarget!['writerUid'].toString().substring(0, 4)}에게 답장",
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                         Text(
                           _replyPreviewText(_replyTarget!['message']),
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1628,10 +1659,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                 ScaleTransition(
                   scale: _sendScaleAnim,
                   child: CircleAvatar(
-                    backgroundColor: Colors.black,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     radius: 20,
                     child: IconButton(
-                      icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                      icon: Icon(Icons.send, color: Theme.of(context).colorScheme.onPrimary, size: 18),
                       onPressed: () {
                         _sendAnimController.forward(from: 0.0);
                         _sendMessage();
