@@ -51,10 +51,11 @@ class ApiClient {
   }
 
   // MultipartRequest 전송 (이미지 업로드 등)
-  static Future<http.StreamedResponse> sendMultipart(http.MultipartRequest request) async {
-    final token = await _getToken();
-    if (token != null) {
-      request.headers['Authorization'] = 'Bearer $token';
+  // token을 직접 넘기면 재사용 (다건 업로드 시 토큰을 한 번만 가져오기 위해)
+  static Future<http.StreamedResponse> sendMultipart(http.MultipartRequest request, {String? token}) async {
+    final t = token ?? await _getToken();
+    if (t != null) {
+      request.headers['Authorization'] = 'Bearer $t';
     }
     return _client.send(request);
   }

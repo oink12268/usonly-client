@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:exif/exif.dart';
 import 'package:http/http.dart' as http;
@@ -63,6 +64,9 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
     int success = 0;
     int fail = 0;
 
+    // 토큰을 루프 전에 한 번만 가져와서 재사용 (Windows에서 매번 갱신 시 401 오류 방지)
+    final uploadToken = await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
     for (final file in mediaFiles) {
       try {
         final isVideo = _isVideoFile(file.name);
@@ -103,7 +107,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
         }
         request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: file.name));
 
-        final streamed = await ApiClient.sendMultipart(request);
+        final streamed = await ApiClient.sendMultipart(request, token: uploadToken);
         final response = await http.Response.fromStream(streamed);
 
         if (response.statusCode == 200) {

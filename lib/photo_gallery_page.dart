@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
@@ -122,6 +123,9 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
     int success = 0;
     int fail = 0;
 
+    // 토큰을 루프 전에 한 번만 가져와서 재사용 (Windows에서 매번 갱신 시 401 오류 방지)
+    final uploadToken = await FirebaseAuth.instance.currentUser?.getIdToken(true);
+
     for (final file in mediaFiles) {
       try {
         final isVideo = _isVideoFile(file.name);
@@ -160,7 +164,7 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
         }
         request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: file.name));
 
-        final streamed = await ApiClient.sendMultipart(request);
+        final streamed = await ApiClient.sendMultipart(request, token: uploadToken);
         final response = await http.Response.fromStream(streamed);
         if (response.statusCode == 200) {
           success++;
