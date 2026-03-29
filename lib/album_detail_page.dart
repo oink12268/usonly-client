@@ -103,14 +103,14 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
         }
         request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: file.name));
 
-        var response = await ApiClient.sendMultipart(request);
+        final streamed = await ApiClient.sendMultipart(request);
+        final response = await http.Response.fromStream(streamed);
 
         if (response.statusCode == 200) {
           success++;
         } else {
           fail++;
-          var responseBody = await response.stream.bytesToString();
-          print("업로드 실패: ${response.statusCode} / $responseBody");
+          print("업로드 실패: ${response.statusCode} / ${response.body}");
         }
       } catch (e) {
         fail++;

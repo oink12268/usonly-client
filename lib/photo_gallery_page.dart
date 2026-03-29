@@ -160,7 +160,8 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
         }
         request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: file.name));
 
-        final response = await ApiClient.sendMultipart(request);
+        final streamed = await ApiClient.sendMultipart(request);
+        final response = await http.Response.fromStream(streamed);
         if (response.statusCode == 200) {
           success++;
         } else {
