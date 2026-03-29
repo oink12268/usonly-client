@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:exif/exif.dart';
@@ -130,7 +132,21 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
       try {
         final isVideo = _isVideoFile(file.name);
         final type = isVideo ? 'VIDEO' : 'IMAGE';
-        final bytes = await file.readAsBytes();
+        Uint8List bytes = await file.readAsBytes();
+
+        // Windows는 imageQuality/maxWidth가 무시되므로 직접 압축
+        if (!isVideo && defaultTargetPlatform == TargetPlatform.windows) {
+          try {
+            final ext = file.name.toLowerCase().split('.').last;
+            final format = ext == 'png' ? CompressFormat.png
+                         : ext == 'webp' ? CompressFormat.webp
+                         : CompressFormat.jpeg;
+            final compressed = await FlutterImageCompress.compressWithList(
+              bytes, minWidth: 2000, minHeight: 2000, quality: 85, format: format,
+            );
+            if (compressed != null && compressed.isNotEmpty) bytes = compressed;
+          } catch (_) {}
+        }
 
         DateTime? takenAt;
         if (!isVideo) {
