@@ -11,7 +11,7 @@ import 'home_screen.dart';
 import 'login_screen.dart';
 import 'matching_screen.dart';
 import 'fcm_service.dart';
-import 'api_config.dart';
+import 'api_endpoints.dart';
 import 'firebase_options.dart';
 import 'font_size_notifier.dart';
 import 'theme_notifier.dart';
@@ -150,7 +150,7 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
   Future<void> _checkBackendStatus() async {
     try {
       final response = await ApiClient.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/auth/login'),
+        Uri.parse(ApiEndpoints.login),
         body: jsonEncode({
           "email": widget.user.email,
           "nickname": widget.user.displayName ?? "이름없음",
@@ -162,11 +162,11 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
 
       if (response.statusCode == 200) {
         // 한글 깨짐 방지 디코딩
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        
+        final data = ApiClient.decodeBody(response) as Map<String, dynamic>;
+
         setState(() {
           _myCode = data['invitationCode'] ?? "CODE_ERR";
-          _isCouple = data['coupleId'] != null; // 커플 ID가 있으면 커플임
+          _isCouple = data['coupleId'] != null;
           _serverMemberId = data['memberId'];
           _coupleId = data['coupleId']?.toInt();
           _isLoading = false;
@@ -176,7 +176,7 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
         // FCM 초기화
         FcmService().initialize();
       } else {
-        print("서버 에러: ${response.statusCode} / ${response.body}");
+        debugPrint("서버 에러: ${response.statusCode} / ${response.body}");
         // [FIX #5] 에러 상태로 전환 (빈 코드로 MatchingScreen 진입 방지)
         setState(() {
           _isLoading = false;
@@ -184,7 +184,7 @@ class _AuthCheckWrapperState extends State<AuthCheckWrapper> {
         });
       }
     } catch (e) {
-      print("서버 통신 실패: $e");
+      debugPrint("서버 통신 실패: $e");
       // [FIX #5] 에러 상태로 전환
       setState(() {
         _isLoading = false;

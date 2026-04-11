@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:typed_data';
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 
 class WorkSchedulePage extends StatefulWidget {
   final String? nickname;
@@ -104,7 +104,7 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('${ApiConfig.baseUrl}/api/work-schedule/analyze'),
+        Uri.parse(ApiEndpoints.workScheduleAnalyze),
       );
       request.fields['name'] = _name.trim();
       request.files.add(

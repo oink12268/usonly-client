@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 
 class ChatMediaPage extends StatefulWidget {
   const ChatMediaPage({super.key});
@@ -24,10 +24,10 @@ class _ChatMediaPageState extends State<ChatMediaPage> {
   Future<void> _fetchImages() async {
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/chats/images'),
+        Uri.parse(ApiEndpoints.chatImages),
       );
       if (response.statusCode == 200) {
-        final chats = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        final chats = ApiClient.decodeBody(response) as List;
         final urls = chats
             .map((c) => (c['message'] as String).replaceFirst('IMAGE:', ''))
             .where((url) => url.isNotEmpty)

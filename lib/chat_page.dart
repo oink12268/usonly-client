@@ -6,19 +6,20 @@ import 'package:http/http.dart' as http;
 import 'package:stomp_dart_client/stomp_dart_client.dart'; // 소켓 라이브러리
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:any_link_preview/any_link_preview.dart';
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 import 'fcm_service.dart';
 import 'share_intent_service.dart';
 import 'chat_media_page.dart';
 import 'chat_search_page.dart';
 import 'utils/date_formatter.dart';
+import 'widgets/chat_bubble.dart';
+import 'widgets/chat_search_toolbar.dart';
+import 'widgets/chat_typing_indicator.dart';
+import 'widgets/chat_reply_preview.dart';
+import 'widgets/chat_input_bar.dart';
 
 class ChatPage extends StatefulWidget {
   final String uid; // 내 아이디
@@ -74,8 +75,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   final Map<String, String> _nicknameCache = {};
   final Map<String, String?> _profileImageCache = {};
 
-  final String socketUrl = ApiConfig.wsUrl;
-  final String httpUrl = '${ApiConfig.baseUrl}/api/chats';
+  final String socketUrl = ApiEndpoints.wsUrl;
+  final String httpUrl = ApiEndpoints.chats;
 
   @override
   void initState() {
@@ -149,10 +150,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     if (_nicknameCache.containsKey(uid)) return;
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/members/info?providerId=$uid'),
+        Uri.parse(ApiEndpoints.memberInfo(uid)),
       );
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        final data = ApiClient.decodeBody(response) as Map<String, dynamic>;
         _nicknameCache[uid] = data['nickname'] ?? uid.substring(0, 4);
         _profileImageCache[uid] = data['profileImageUrl'];
       }
@@ -185,7 +186,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     try {
       final response = await ApiClient.get(Uri.parse('$httpUrl?size=50'));
       if (response.statusCode == 200) {
-        final chats = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        final chats = ApiClient.decodeBody(response) as List;
         setState(() {
           _chats = chats;
           _hasMore = chats.length >= 50;
@@ -206,7 +207,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         _scrollToBottom();
       }
     } catch (e) {
-      print("❌ 지난 대화 로딩 실패: $e");
+      debugPrint("❌ 지난 대화 로딩 실패: $e");
     }
   }
 
@@ -222,7 +223,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         Uri.parse('$httpUrl?before=$firstId&size=50'),
       );
       if (response.statusCode == 200) {
-        final older = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        final older = ApiClient.decodeBody(response) as List;
 
         // 새로 로드한 메시지의 닉네임 병렬 조회
         final partnerUids = older
@@ -241,7 +242,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         });
       }
     } catch (e) {
-      print("❌ 이전 메시지 로딩 실패: $e");
+      debugPrint("❌ 이전 메시지 로딩 실패: $e");
     } finally {
       setState(() => _isLoadingMore = false);
     }
@@ -259,7 +260,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         Uri.parse('$httpUrl?after=$lastId&size=50'),
       );
       if (response.statusCode == 200) {
-        final newer = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        final newer = ApiClient.decodeBody(response) as List;
 
         final partnerUids = newer
             .map((c) => c['writerUid']?.toString() ?? '')
@@ -292,7 +293,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         url: socketUrl,
         stompConnectHeaders: connectHeaders,
         onConnect: (StompFrame frame) {
-          print("✅ 소켓 연결 성공!");
+          debugPrint("✅ 소켓 연결 성공!");
 
           // 타이핑 이벤트 구독
           stompClient!.subscribe(
@@ -355,12 +356,33 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
             },
           );
         },
-        onWebSocketError: (dynamic error) => print("🚨 소켓 에러: $error"),
+        onWebSocketError: (dynamic error) {
+          debugPrint("🚨 소켓 에러: $error");
+          _scheduleReconnect();
+        },
+        onDisconnect: (StompFrame frame) {
+          debugPrint("🔌 소켓 연결 끊김, 재연결 예약...");
+          _scheduleReconnect();
+        },
       ),
     );
 
     // 연결 활성화
     stompClient!.activate();
+  }
+
+  // --- 소켓 재연결 ---
+  void _scheduleReconnect() {
+    if (!mounted) return;
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      if (stompClient == null || !stompClient!.connected) {
+        debugPrint("🔄 소켓 재연결 시도...");
+        stompClient?.deactivate();
+        stompClient = null;
+        _connectSocket();
+      }
+    });
   }
 
   // --- 타이핑 이벤트 전송 ---
@@ -405,6 +427,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           const SnackBar(content: Text('서버 연결 중입니다. 잠시 후 다시 시도해주세요.')),
         );
       }
+      _scheduleReconnect();
       return;
     }
     stompClient!.send(
@@ -472,23 +495,22 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         setState(() => _uploadProgress = '${i + 1}/${images.length}');
         var request = http.MultipartRequest(
           'POST',
-          Uri.parse('${ApiConfig.baseUrl}/api/chat/image'),
+          Uri.parse(ApiEndpoints.chatImageUpload),
         );
         final bytes = await image.readAsBytes();
         request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: image.name));
 
         var response = await ApiClient.sendMultipart(request);
         if (response.statusCode == 200) {
-          final respBody = await response.stream.bytesToString();
-          final data = jsonDecode(respBody);
+          final data = await ApiClient.decodeStreamedBody(response);
           _sendImageMessage(data['imageUrl']);
           successCount++;
         } else {
-          print("❌ 이미지 업로드 실패: ${response.statusCode}");
+          debugPrint("❌ 이미지 업로드 실패: ${response.statusCode}");
         }
       }
     } catch (e) {
-      print("❌ 이미지 업로드 에러: $e");
+      debugPrint("❌ 이미지 업로드 에러: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('사진 전송 중 오류가 발생했습니다.')),
@@ -525,13 +547,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
         var request = http.MultipartRequest(
           'POST',
-          Uri.parse('${ApiConfig.baseUrl}/api/chat/image'),
+          Uri.parse(ApiEndpoints.chatImageUpload),
         );
         request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
 
         final response = await ApiClient.sendMultipart(request);
         if (response.statusCode == 200) {
-          final data = jsonDecode(await response.stream.bytesToString());
+          final data = await ApiClient.decodeStreamedBody(response);
           _sendImageMessage(data['imageUrl']);
         } else {
           throw Exception('업로드 실패: ${response.statusCode}');
@@ -561,21 +583,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('${ApiConfig.baseUrl}/api/chat/image'),
+        Uri.parse(ApiEndpoints.chatImageUpload),
       );
       final bytes = await image.readAsBytes();
       request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: image.name));
 
       var response = await ApiClient.sendMultipart(request);
       if (response.statusCode == 200) {
-        final respBody = await response.stream.bytesToString();
-        final data = jsonDecode(respBody);
+        final data = await ApiClient.decodeStreamedBody(response);
         _sendImageMessage(data['imageUrl']);
       } else {
         throw Exception('업로드 실패: ${response.statusCode}');
       }
     } catch (e) {
-      print("❌ 이미지 업로드 실패: $e");
+      debugPrint("❌ 이미지 업로드 실패: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('사진 전송 실패!')),
       );
@@ -613,11 +634,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       _uploadProgress = '';
     });
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/api/chat/file'));
+      var request = http.MultipartRequest('POST', Uri.parse(ApiEndpoints.chatFileUpload));
       request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: picked.name));
       var response = await ApiClient.sendMultipart(request);
       if (response.statusCode == 200) {
-        final data = jsonDecode(await response.stream.bytesToString());
+        final data = await ApiClient.decodeStreamedBody(response);
         _sendFileMessage(data['fileUrl'], data['originalName']);
       }
     } catch (e) {
@@ -686,94 +707,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     );
   }
 
-  // URL 파싱 후 클릭 가능한 위젯으로 렌더링
-  String? _extractFirstUrl(String text) {
-    final urlRegex = RegExp(r'(https?://[^\s]+)', caseSensitive: false);
-    return urlRegex.firstMatch(text)?.group(0);
-  }
-
-  Widget _buildLinkPreview(String url, bool isMe) {
-    return GestureDetector(
-      onTap: () async {
-        final uri = Uri.tryParse(url);
-        if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
-      },
-      child: Container(
-        margin: const EdgeInsets.only(top: 6),
-        constraints: const BoxConstraints(maxWidth: 280),
-        child: AnyLinkPreview(
-          link: url,
-          displayDirection: UIDirection.uiDirectionVertical,
-          showMultimedia: true,
-          bodyMaxLines: 2,
-          bodyTextOverflow: TextOverflow.ellipsis,
-          titleStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          bodyStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
-          errorWidget: const SizedBox.shrink(),
-          placeholderWidget: Container(
-            height: 60,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          backgroundColor: isMe ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: 8,
-          removeElevation: true,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMessageContent(String text, bool isMe) {
-    final urlRegex = RegExp(
-      r'(https?://[^\s]+)',
-      caseSensitive: false,
-    );
-    final matches = urlRegex.allMatches(text);
-    if (matches.isEmpty) {
-      return Text(
-        text,
-        style: TextStyle(fontSize: 16, color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface),
-      );
-    }
-
-    final spans = <InlineSpan>[];
-    int last = 0;
-    for (final m in matches) {
-      if (m.start > last) {
-        spans.add(TextSpan(text: text.substring(last, m.start)));
-      }
-      final url = m.group(0)!;
-      spans.add(TextSpan(
-        text: url,
-        style: TextStyle(
-          color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
-          decoration: TextDecoration.underline,
-          decorationColor: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
-        ),
-        recognizer: TapGestureRecognizer()
-          ..onTap = () async {
-            final uri = Uri.tryParse(url);
-            if (uri != null) {
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
-            }
-          },
-      ));
-      last = m.end;
-    }
-    if (last < text.length) {
-      spans.add(TextSpan(text: text.substring(last)));
-    }
-
-    return RichText(
-      text: TextSpan(
-        style: TextStyle(fontSize: 16, color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface),
-        children: spans,
-      ),
-    );
-  }
-
   // --- 메시지 삭제 ---
   void _showDeleteDialog(dynamic chat) {
     // 자기 메시지만 삭제 가능
@@ -809,13 +742,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     });
     try {
       final response = await ApiClient.delete(
-        Uri.parse('${ApiConfig.baseUrl}/api/chats/$chatId'),
+        Uri.parse(ApiEndpoints.chatDelete(chatId)),
       );
       if (response.statusCode != 200) {
-        print("메시지 삭제 실패: ${response.statusCode}");
+        debugPrint("메시지 삭제 실패: ${response.statusCode}");
       }
     } catch (e) {
-      print("메시지 삭제 에러: $e");
+      debugPrint("메시지 삭제 에러: $e");
     }
   }
 
@@ -832,14 +765,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     setState(() {
       _replyTarget = null;
     });
-  }
-
-  // 답장 미리보기 텍스트
-  String _replyPreviewText(String message) {
-    if (message.startsWith('IMAGE:')) return '사진';
-    if (message.startsWith('FILE:')) return '파일';
-    if (message.length > 30) return '${message.substring(0, 30)}...';
-    return message;
   }
 
   // --- 채팅 검색 메뉴 ---
@@ -866,9 +791,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       ]);
 
       if (responses[0].statusCode == 200) {
-        final older = jsonDecode(utf8.decode(responses[0].bodyBytes)) as List;
+        final older = ApiClient.decodeBody(responses[0]) as List;
         final newer = responses[1].statusCode == 200
-            ? jsonDecode(utf8.decode(responses[1].bodyBytes)) as List
+            ? ApiClient.decodeBody(responses[1]) as List
             : <dynamic>[];
 
         // 닉네임 일괄 조회
@@ -914,27 +839,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       context,
       MaterialPageRoute(
         builder: (_) => ChatCalendarPage(uid: widget.uid),
-      ),
-    );
-  }
-
-  Widget _searchMenuButton(IconData icon, String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: () {
-        setState(() => _showChatSearchMenu = false);
-        onTap();
-      },
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Theme.of(context).colorScheme.onSurface, size: 24),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface)),
-          ],
-        ),
       ),
     );
   }
@@ -1039,12 +943,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/chat/ai-search?q=${Uri.encodeComponent(query)}'),
+        Uri.parse(ApiEndpoints.aiSearchQuery(query)),
       );
       Navigator.pop(context); // 로딩 닫기
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        final data = ApiClient.decodeBody(response) as Map<String, dynamic>;
         final result = data['result'] as String;
         _showAiResult(query, result);
       } else {
@@ -1125,50 +1029,27 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   bool _isSameDate(String? date1, String? date2) =>
       DateFormatter.isSameDate(date1, date2);
 
-  String _formatTime(String? dateTime) =>
-      DateFormatter.formatTime(dateTime);
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: !_showChatSearchMenu,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        if (_showChatSearchMenu) {
-          setState(() {
-            _showChatSearchMenu = false;
-          });
-        }
+        if (_showChatSearchMenu) setState(() => _showChatSearchMenu = false);
       },
       child: Column(
         children: [
-          // 채팅 검색 메뉴 툴바 (롱프레스 시 표시)
+          // 채팅 검색 메뉴 툴바
           if (_showChatSearchMenu)
-            Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                border: Border(
-                  bottom: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _searchMenuButton(Icons.search, '검색', _openWordSearch),
-                  _searchMenuButton(Icons.calendar_month, '날짜', _openCalendarSearch),
-                  _searchMenuButton(Icons.auto_awesome, 'AI 검색', _showAiSearch),
-                  _searchMenuButton(Icons.photo_library_outlined, '사진 모음', () {
-                    setState(() => _showChatSearchMenu = false);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatMediaPage()));
-                  }),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => setState(() => _showChatSearchMenu = false),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ],
-              ),
+            ChatSearchToolbar(
+              onSearch: _openWordSearch,
+              onCalendar: _openCalendarSearch,
+              onAiSearch: _showAiSearch,
+              onMediaGallery: () {
+                setState(() => _showChatSearchMenu = false);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatMediaPage()));
+              },
+              onClose: () => setState(() => _showChatSearchMenu = false),
             ),
 
           // 채팅 리스트 영역
@@ -1177,25 +1058,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
               onLongPress: () => setState(() => _showChatSearchMenu = true),
               child: ListView.builder(
                 controller: _scrollController,
-                reverse: true, // 최신 메시지(index 0)가 맨 아래에 표시됨
+                reverse: true,
                 padding: const EdgeInsets.fromLTRB(8, 16, 8, 4),
                 itemCount: _chats.length + (_isLoadingMore ? 1 : 0),
                 itemBuilder: (context, index) {
-                  // 맨 위 로딩 인디케이터 (reverse이므로 가장 높은 index = 화면 맨 위)
                   if (_isLoadingMore && index == _chats.length) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
                     );
                   }
-                  // reverse: true → index 0 = 최신(_chats.last), index n = 오래된(_chats.first)
                   final chatIndex = _chats.length - 1 - index;
                   final chat = _chats[chatIndex];
-                  final message = chat['message'] as String;
                   final String? createdAt = chat['created_at'] ?? chat['createdAt'];
-                  final isMe = chat['writerUid'] == widget.uid;
 
-                  // ★ 날짜 구분선 표시 여부 판단
                   bool showDateDivider = false;
                   if (chatIndex == 0) {
                     showDateDivider = true;
@@ -1205,362 +1081,29 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                     showDateDivider = !_isSameDate(createdAt, prevDate);
                   }
 
-                  // 메시지 내용 처리 (사진 vs 파일 vs 텍스트)
-                  final isImage = message.startsWith('IMAGE:');
-                  final isFile = message.startsWith('FILE:');
-                  final String content = isImage
-                      ? message.replaceFirst('IMAGE:', '')
-                      : isFile
-                          ? message.replaceFirst('FILE:', '')
-                          : message;
-
-                  // 파일인 경우 url과 파일명 분리
-                  String fileUrl = '';
-                  String fileName = '';
-                  if (isFile) {
-                    final parts = content.split('|||');
-                    fileUrl = parts[0];
-                    fileName = parts.length > 1 ? parts[1] : '파일';
-                  }
-
-                  // 답장 정보
-                  final hasReply = chat['replyToId'] != null;
-                  final String? replyToMessage = chat['replyToMessage'];
-                  final String? replyToUid = chat['replyToUid'];
-
                   final isTarget = _highlightedMessageId != null && chat['id'] == _highlightedMessageId;
 
-                  return KeyedSubtree(
-                    key: isTarget ? _targetMessageKey : ValueKey('chat_${chat['id'] ?? index}'),
-                    child: Column(
-                    children: [
-                      // [1] 날짜 구분선
-                      if (showDateDivider && createdAt != null)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 20),
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                createdAt.split('T')[0],
-                                style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 12),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                      // [2] 말풍선 (스와이프 or 롱프레스로 답장)
-                      if (_highlightedMessageId != null && chat['id'] == _highlightedMessageId)
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text('검색된 메시지', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface)),
-                        ),
-                      Dismissible(
-                        key: ValueKey(chat['id'] ?? index),
-                        direction: DismissDirection.startToEnd,
-                        confirmDismiss: (_) async {
-                          _setReplyTarget(chat);
-                          return false;
-                        },
-                        background: Container(
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.only(left: 20),
-                          child: Icon(Icons.reply, color: Theme.of(context).colorScheme.onSurface),
-                        ),
-                        child: GestureDetector(
-                          onLongPress: () => _showMessageOptions(chat),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-                            child: Row(
-                              mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                if (!isMe)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 8.0),
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        final imageUrl = _profileImageCache[chat['writerUid']?.toString()];
-                                        if (imageUrl != null) {
-                                          showDialog(
-                                            context: context,
-                                            builder: (_) => Dialog(
-                                              backgroundColor: Colors.black,
-                                              insetPadding: EdgeInsets.zero,
-                                              child: Stack(
-                                                children: [
-                                                  SizedBox.expand(
-                                                    child: InteractiveViewer(
-                                                      child: Center(
-                                                        child: CachedNetworkImage(imageUrl: imageUrl),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Positioned(
-                                                    top: 40,
-                                                    right: 16,
-                                                    child: IconButton(
-                                                      icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                                                      onPressed: () => Navigator.of(context).pop(),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                      },
-                                      child: CircleAvatar(
-                                        backgroundColor: Theme.of(context).colorScheme.surface,
-                                        backgroundImage: _profileImageCache[chat['writerUid']?.toString()] != null
-                                            ? CachedNetworkImageProvider(
-                                                _profileImageCache[chat['writerUid']!.toString()]!,
-                                              )
-                                            : null,
-                                        child: _profileImageCache[chat['writerUid']?.toString()] == null
-                                            ? Icon(Icons.person, color: Theme.of(context).colorScheme.onSurfaceVariant)
-                                            : null,
-                                      ),
-                                    ),
-                                  ),
-                                // 내 메시지: 시간 왼쪽 + 말풍선 오른쪽
-                                if (isMe)
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 4, top: 4),
-                                    child: Align(
-                                      alignment: Alignment.bottomRight,
-                                      child: Text(
-                                        _formatTime(createdAt),
-                                        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                      ),
-                                    ),
-                                  ),
-                                Flexible(
-                                  child: Column(
-                                    crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                    children: [
-                                      if (!isMe)
-                                        Padding(
-                                          padding: const EdgeInsets.only(bottom: 4, left: 2),
-                                          child: Text(
-                                            _nicknameCache[chat['writerUid']?.toString()] ?? chat['writerUid'].toString().substring(0, 4),
-                                            style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                          ),
-                                        ),
-
-                                      // 답장 인용 표시
-                                      if (hasReply && replyToMessage != null)
-                                        GestureDetector(
-                                          onTap: () {
-                                            final replyId = chat['replyToId'];
-                                            if (replyId != null) {
-                                              _loadAndScrollToMessage(int.tryParse(replyId.toString()) ?? 0);
-                                            }
-                                          },
-                                          child: Container(
-                                            margin: const EdgeInsets.only(bottom: 4),
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border(
-                                                left: BorderSide(color: Theme.of(context).colorScheme.primary, width: 3),
-                                              ),
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  replyToUid != null && replyToUid == widget.uid
-                                                      ? "나"
-                                                      : _nicknameCache[replyToUid] ?? replyToUid?.substring(0, 4) ?? "",
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Theme.of(context).colorScheme.onSurface,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  _replyPreviewText(replyToMessage),
-                                                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-
-                                      if (isImage)
-                                        GestureDetector(
-                                          onTap: () async {
-                                            // 전체 채팅 이미지 목록을 서버에서 가져와 슬라이드 열기
-                                            List<String> imageUrls;
-                                            try {
-                                              final response = await ApiClient.get(
-                                                Uri.parse('${ApiConfig.baseUrl}/api/chats/images'),
-                                              );
-                                              if (response.statusCode == 200) {
-                                                final chats = jsonDecode(utf8.decode(response.bodyBytes)) as List;
-                                                imageUrls = chats
-                                                    .map((c) => (c['message'] as String).replaceFirst('IMAGE:', ''))
-                                                    .where((url) => url.isNotEmpty)
-                                                    .toList();
-                                              } else {
-                                                imageUrls = _chats
-                                                    .where((c) => (c['message'] as String? ?? '').startsWith('IMAGE:'))
-                                                    .map((c) => (c['message'] as String).replaceFirst('IMAGE:', ''))
-                                                    .toList();
-                                              }
-                                            } catch (_) {
-                                              imageUrls = _chats
-                                                  .where((c) => (c['message'] as String? ?? '').startsWith('IMAGE:'))
-                                                  .map((c) => (c['message'] as String).replaceFirst('IMAGE:', ''))
-                                                  .toList();
-                                            }
-                                            final initialIndex = imageUrls.indexOf(content).clamp(0, imageUrls.length - 1);
-                                            if (!context.mounted) return;
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => FullScreenImageView(
-                                                  imageUrls: imageUrls,
-                                                  initialIndex: initialIndex,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(15),
-                                            child: CachedNetworkImage(
-                                              imageUrl: content,
-                                              width: 200,
-                                              height: 200,
-                                              fit: BoxFit.cover,
-                                              memCacheWidth: 300,
-                                              placeholder: (context, url) => Container(
-                                                  width: 200, height: 200, color: Theme.of(context).colorScheme.surfaceContainerHighest),
-                                              errorWidget: (context, url, error) => const Icon(Icons.error),
-                                            ),
-                                          ),
-                                        )
-                                      else if (isFile)
-                                        GestureDetector(
-                                          onTap: () => launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                            decoration: BoxDecoration(
-                                              color: isMe ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surface,
-                                              borderRadius: BorderRadius.circular(15),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                    color: Colors.black.withOpacity(0.05),
-                                                    blurRadius: 1,
-                                                    offset: const Offset(1, 1))
-                                              ],
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(Icons.insert_drive_file,
-                                                    size: 28,
-                                                    color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface),
-                                                const SizedBox(width: 8),
-                                                Flexible(
-                                                  child: Text(
-                                                    fileName,
-                                                    style: TextStyle(
-                                                        fontSize: 13,
-                                                        color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Icon(Icons.download,
-                                                    size: 18,
-                                                    color: isMe ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.7) : Theme.of(context).colorScheme.onSurfaceVariant),
-                                              ],
-                                            ),
-                                          ),
-                                        )
-                                      else
-                                        Column(
-                                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                              decoration: BoxDecoration(
-                                                color: isMe ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surface,
-                                                borderRadius: BorderRadius.only(
-                                                  topLeft: const Radius.circular(15),
-                                                  topRight: const Radius.circular(15),
-                                                  bottomLeft: isMe ? const Radius.circular(15) : const Radius.circular(0),
-                                                  bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(15),
-                                                ),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                      color: Colors.black.withOpacity(0.05),
-                                                      blurRadius: 1,
-                                                      offset: const Offset(1, 1))
-                                                ],
-                                              ),
-                                              child: _buildMessageContent(content, isMe),
-                                            ),
-                                            if (_extractFirstUrl(content) != null)
-                                              _buildLinkPreview(_extractFirstUrl(content)!, isMe),
-                                          ],
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                // 상대 메시지: 말풍선 왼쪽 + 시간 오른쪽
-                                if (!isMe)
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 4, top: 4),
-                                    child: Align(
-                                      alignment: Alignment.bottomLeft,
-                                      child: Text(
-                                        _formatTime(createdAt),
-                                        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),   // Column
-                  );   // KeyedSubtree
+                  return ChatBubble(
+                    key: ValueKey('chat_${chat['id'] ?? index}'),
+                    chat: Map<String, dynamic>.from(chat),
+                    myUid: widget.uid,
+                    showDateDivider: showDateDivider,
+                    isHighlighted: isTarget,
+                    targetKey: isTarget ? _targetMessageKey : null,
+                    nicknameCache: _nicknameCache,
+                    profileImageCache: _profileImageCache,
+                    allChats: _chats,
+                    onReply: _setReplyTarget,
+                    onLongPress: _showMessageOptions,
+                    onScrollToReply: _loadAndScrollToMessage,
+                  );
                 },
               ),
             ),
           ),
 
-          // 상대방 입력 중 표시 (ValueListenableBuilder: 전체 리빌드 없이 이 위젯만 업데이트)
-          ValueListenableBuilder<bool>(
-            valueListenable: _partnerTypingNotifier,
-            builder: (context, isTyping, _) {
-              if (!isTyping) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text("입력 중...", style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                ),
-              );
-            },
-          ),
+          // 상대방 입력 중 표시
+          ChatTypingIndicator(typingNotifier: _partnerTypingNotifier),
 
           // 사진 업로드 중 표시
           if (_isUploadingImage)
@@ -1580,98 +1123,22 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
           // 답장 미리보기 바
           if (_replyTarget != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: Row(
-                children: [
-                  Container(
-                    width: 3,
-                    height: 36,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _replyTarget!['writerUid'] == widget.uid
-                              ? "나에게 답장"
-                              : "${_replyTarget!['writerUid'].toString().substring(0, 4)}에게 답장",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        Text(
-                          _replyPreviewText(_replyTarget!['message']),
-                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _cancelReply,
-                    child: Icon(Icons.close, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
+            ChatReplyPreview(
+              replyTarget: Map<String, dynamic>.from(_replyTarget!),
+              myUid: widget.uid,
+              nicknameCache: _nicknameCache,
+              onCancel: _cancelReply,
             ),
 
-          // 입력창 영역
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.add, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 22),
-                  onPressed: _showAttachmentSheet,
-                  padding: const EdgeInsets.all(2),
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                  visualDensity: VisualDensity.compact,
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    decoration: InputDecoration(
-                      hintText: "",
-                      filled: true,
-                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      isDense: true,
-                    ),
-                    onChanged: _onTypingChanged,
-                    onSubmitted: (_) => _sendMessage(), // 엔터 치면 전송
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ScaleTransition(
-                  scale: _sendScaleAnim,
-                  child: CircleAvatar(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    radius: 20,
-                    child: IconButton(
-                      icon: Icon(Icons.send, color: Theme.of(context).colorScheme.onPrimary, size: 18),
-                      onPressed: () {
-                        _sendAnimController.forward(from: 0.0);
-                        _sendMessage();
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          // 입력창
+          ChatInputBar(
+            controller: _controller,
+            focusNode: _focusNode,
+            onTypingChanged: _onTypingChanged,
+            onSend: _sendMessage,
+            onAttachment: _showAttachmentSheet,
+            sendScaleAnim: _sendScaleAnim,
+            sendAnimController: _sendAnimController,
           ),
         ],
       ),

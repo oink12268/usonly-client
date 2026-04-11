@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 import 'utils/date_formatter.dart';
 
 // ─────────────────────────────────────────────
@@ -31,7 +31,7 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
 
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/chats/search?q=${Uri.encodeComponent(query.trim())}'),
+        Uri.parse(ApiEndpoints.chatSearchQuery(query.trim())),
       );
       if (response.statusCode == 200) {
         setState(() {
@@ -177,12 +177,14 @@ class _ChatCalendarPageState extends State<ChatCalendarPage> {
     setState(() => _isLoading = true);
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/chats/calendar'),
+        Uri.parse(ApiEndpoints.chatCalendar),
       );
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+        final List<dynamic> data = ApiClient.decodeBody(response) as List;
         setState(() {
-          _countByDate = data.map((key, value) => MapEntry(key, (value as num).toInt()));
+          _countByDate = {
+            for (final e in data) e['date'] as String: (e['count'] as num).toInt()
+          };
         });
       }
     } catch (e) {
@@ -372,11 +374,11 @@ class _ChatDayListPageState extends State<ChatDayListPage> {
     setState(() => _isLoading = true);
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/chats/by-date?date=${widget.date}'),
+        Uri.parse(ApiEndpoints.chatsByDateQuery(widget.date)),
       );
       if (response.statusCode == 200) {
         setState(() {
-          _chats = json.decode(utf8.decode(response.bodyBytes)) as List;
+          _chats = ApiClient.decodeBody(response) as List;
         });
       }
     } catch (e) {

@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'api_config.dart';
+import 'package:flutter/material.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 import 'widgets/confirm_delete_dialog.dart';
 
 class AnniversaryPage extends StatefulWidget {
@@ -25,20 +25,17 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
 
   Future<void> _fetchAnniversaries() async {
     try {
-      final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/anniversaries'),
-      );
+      final response = await ApiClient.get(Uri.parse(ApiEndpoints.anniversaries));
       if (response.statusCode == 200) {
         setState(() {
-          _anniversaries = jsonDecode(utf8.decode(response.bodyBytes));
-          // D-day 기준 정렬 (가까운 순)
+          _anniversaries = ApiClient.decodeBody(response) as List;
           _anniversaries.sort((a, b) =>
               (a['dday'] as int).abs().compareTo((b['dday'] as int).abs()));
           _isLoading = false;
         });
       }
     } catch (e) {
-      print("기념일 로딩 에러: $e");
+      debugPrint("기념일 로딩 에러: $e");
       setState(() => _isLoading = false);
     }
   }
@@ -68,7 +65,6 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // 음력 토글
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text("음력 날짜"),
@@ -77,7 +73,6 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                   onChanged: (val) => setDialogState(() => isLunar = val),
                 ),
                 if (!isLunar) ...[
-                  // 양력: 날짜 피커
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.calendar_today),
@@ -100,7 +95,6 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                     ),
                   ),
                 ] else ...[
-                  // 음력: 월/일 드롭다운
                   Row(
                     children: [
                       const Icon(Icons.calendar_month, size: 20),
@@ -187,27 +181,23 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
 
     try {
       final response = await ApiClient.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/anniversaries'),
+        Uri.parse(ApiEndpoints.anniversaries),
         body: jsonEncode(body),
       );
-      if (response.statusCode == 200) {
-        _fetchAnniversaries();
-      }
+      if (response.statusCode == 200) _fetchAnniversaries();
     } catch (e) {
-      print("기념일 추가 에러: $e");
+      debugPrint("기념일 추가 에러: $e");
     }
   }
 
   Future<void> _deleteAnniversary(int id) async {
     try {
       final response = await ApiClient.delete(
-        Uri.parse('${ApiConfig.baseUrl}/api/anniversaries/$id'),
+        Uri.parse(ApiEndpoints.anniversaryById(id)),
       );
-      if (response.statusCode == 200) {
-        _fetchAnniversaries();
-      }
+      if (response.statusCode == 200) _fetchAnniversaries();
     } catch (e) {
-      print("기념일 삭제 에러: $e");
+      debugPrint("기념일 삭제 에러: $e");
     }
   }
 
@@ -218,7 +208,6 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
   }
 
   Color _ddayColor(int dday) {
-    // context가 없으므로 고정 색상 유지 (의미 있는 색상)
     if (dday == 0) return const Color(0xFF5C4A44);
     if (dday > 0 && dday <= 7) return Colors.grey[600]!;
     if (dday > 0) return Colors.grey[700]!;
@@ -230,7 +219,8 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     return Scaffold(
-      body: _anniversaries.isEmpty
+      body: SafeArea(
+        child: _anniversaries.isEmpty
           ? const Center(child: Text("우리만의 기념일을 추가해보세요!"))
           : ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -241,6 +231,7 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                 return _buildAnniversaryCard(item, dday);
               },
             ),
+        ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddDialog,
         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -284,7 +275,6 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
         ),
         child: Row(
           children: [
-            // 왼쪽: 기념일 정보
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -293,15 +283,8 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                     children: [
                       Text(
                         item['title'] ?? "",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
-                      // if (item['recurring'] == true) ...[
-                      //   const SizedBox(width: 6),
-                      //   Icon(Icons.repeat, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      // ],
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -309,7 +292,6 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                     item['date'] ?? "",
                     style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
-                  // 음력 표시
                   if (isLunar && lunarMonth != null && lunarDay != null) ...[
                     const SizedBox(height: 2),
                     Text(
@@ -320,7 +302,6 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
                 ],
               ),
             ),
-            // 오른쪽: D-day
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(

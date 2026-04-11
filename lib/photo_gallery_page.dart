@@ -14,8 +14,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 import 'widgets/confirm_delete_dialog.dart';
 import 'widgets/film_filters.dart';
 
@@ -64,10 +64,10 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
     _currentPage = 0;
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/media?page=0&size=$_pageSize'),
+        Uri.parse(ApiEndpoints.archiveMediaPaged(page: 0, size: _pageSize)),
       );
       if (response.statusCode == 200) {
-        final photos = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        final photos = ApiClient.decodeBody(response) as List;
         setState(() {
           _photos = photos;
           _hasMore = photos.length >= _pageSize;
@@ -85,10 +85,10 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
     _currentPage++;
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/media?page=$_currentPage&size=$_pageSize'),
+        Uri.parse(ApiEndpoints.archiveMediaPaged(page: _currentPage, size: _pageSize)),
       );
       if (response.statusCode == 200) {
-        final more = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        final more = ApiClient.decodeBody(response) as List;
         setState(() {
           _photos = [..._photos, ...more];
           _hasMore = more.length >= _pageSize;
@@ -169,7 +169,7 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
 
         var request = http.MultipartRequest(
           'POST',
-          Uri.parse('${ApiConfig.baseUrl}/api/archives/upload'),
+          Uri.parse(ApiEndpoints.archiveUpload),
         );
         request.fields['type'] = type;
         if (takenAt != null) {
@@ -210,7 +210,7 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
   Future<void> _deleteMedia(int mediaId) async {
     try {
       final response = await ApiClient.delete(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/media/$mediaId'),
+        Uri.parse(ApiEndpoints.archiveMediaDelete(mediaId)),
       );
       if (response.statusCode == 200) {
         _fetchPhotos();
@@ -465,7 +465,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
       // 3. 필터 적용된 이미지를 서버에 업로드
       final uploadRequest = http.MultipartRequest(
         'POST',
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/upload'),
+        Uri.parse(ApiEndpoints.archiveUpload),
       );
       final albumId = photo['albumId'] as int?;
       if (albumId != null) uploadRequest.fields['albumId'] = albumId.toString();
@@ -487,7 +487,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
 
       // 4. 원본 삭제
       await ApiClient.delete(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/media/${photo['id']}'),
+        Uri.parse(ApiEndpoints.archiveMediaDelete(photo['id'])),
       );
 
       if (mounted) {

@@ -12,8 +12,8 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 import 'widgets/confirm_delete_dialog.dart';
 import 'widgets/film_filters.dart';
 import 'photo_gallery_page.dart';
@@ -42,10 +42,10 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
 
   Future<void> _fetchPhotos() async {
     final response = await ApiClient.get(
-      Uri.parse('${ApiConfig.baseUrl}/api/archives/${widget.albumId}'),
+      Uri.parse(ApiEndpoints.archiveAlbumById(widget.albumId)),
     );
     if (response.statusCode == 200) {
-      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      final data = ApiClient.decodeBody(response) as Map<String, dynamic>;
       setState(() {
         _albumTitle = data['title'] ?? "추억 보기";
         _photos = data['mediaList'];
@@ -110,7 +110,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
 
         var request = http.MultipartRequest(
           'POST',
-          Uri.parse('${ApiConfig.baseUrl}/api/archives/upload'),
+          Uri.parse(ApiEndpoints.archiveUpload),
         );
 
         request.fields['albumId'] = widget.albumId.toString();
@@ -134,11 +134,11 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
           success++;
         } else {
           fail++;
-          print("업로드 실패: ${response.statusCode} / ${response.body}");
+          debugPrint("업로드 실패: ${response.statusCode} / ${response.body}");
         }
       } catch (e) {
         fail++;
-        print("업로드 에러: $e");
+        debugPrint("업로드 에러: $e");
       }
     }
 
@@ -157,7 +157,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   Future<void> _deleteMedia(int mediaId) async {
     try {
       final response = await ApiClient.delete(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/media/$mediaId'),
+        Uri.parse(ApiEndpoints.archiveMediaDelete(mediaId)),
       );
       if (response.statusCode == 200) {
         _fetchPhotos();
@@ -167,7 +167,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
         }
       }
     } catch (e) {
-      print("사진 삭제 에러: $e");
+      debugPrint("사진 삭제 에러: $e");
     }
   }
 
@@ -205,7 +205,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   Future<void> _setCoverImage(int mediaId) async {
     try {
       final response = await ApiClient.put(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/${widget.albumId}/cover?mediaId=$mediaId'),
+        Uri.parse('${ApiEndpoints.archiveAlbumCover(widget.albumId)}?mediaId=$mediaId'),
       );
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -213,7 +213,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
         );
       }
     } catch (e) {
-      print("커버 변경 에러: $e");
+      debugPrint("커버 변경 에러: $e");
     }
   }
 
@@ -495,7 +495,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
       // 3. 필터 적용된 이미지를 서버에 업로드
       final uploadRequest = http.MultipartRequest(
         'POST',
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/upload'),
+        Uri.parse(ApiEndpoints.archiveUpload),
       );
       final albumId = widget.albumId ?? (photo['albumId'] as int?);
       if (albumId != null) uploadRequest.fields['albumId'] = albumId.toString();
@@ -517,7 +517,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
 
       // 4. 원본 삭제
       await ApiClient.delete(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/media/${photo['id']}'),
+        Uri.parse(ApiEndpoints.archiveMediaDelete(photo['id'])),
       );
 
       if (mounted) {

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
@@ -71,5 +72,26 @@ class ApiClient {
     return {
       if (token != null) 'Authorization': 'Bearer $token',
     };
+  }
+
+  /// 응답 body를 디코딩합니다.
+  /// 백엔드가 ApiResponse 형태({code, message, data})로 응답하면 data 필드를 반환하고,
+  /// 그 외 형태(순수 List/Map)이면 그대로 반환합니다.
+  static dynamic decodeBody(http.Response response) {
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    if (decoded is Map && decoded.containsKey('data')) {
+      return decoded['data'];
+    }
+    return decoded;
+  }
+
+  /// decodeBody의 StreamedResponse 버전 (multipart 응답용)
+  static Future<dynamic> decodeStreamedBody(http.StreamedResponse response) async {
+    final bodyStr = await response.stream.bytesToString();
+    final decoded = jsonDecode(bodyStr);
+    if (decoded is Map && decoded.containsKey('data')) {
+      return decoded['data'];
+    }
+    return decoded;
   }
 }

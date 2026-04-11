@@ -1,8 +1,8 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 
 bool get _isMobile => !kIsWeb && (
   defaultTargetPlatform == TargetPlatform.android ||
@@ -28,14 +28,14 @@ class FcmService {
   bool _isChatActive = false;
   void setChatActive(bool active) => _isChatActive = active;
 
-  // 알림 탭 → 탭 이동 콜백 (HomeScreen이 등록)
-  void Function(int)? onNavigateToTab;
+  // 알림 탭 → 네비게이션 콜백 (HomeScreen이 등록, type: 'chat' | 'anniversary')
+  void Function(String type)? onNavigate;
   // 앱이 종료 상태에서 알림 탭으로 열린 경우 pending 저장
-  int? _pendingNavigationTab;
-  int? consumePendingNavigation() {
-    final tab = _pendingNavigationTab;
-    _pendingNavigationTab = null;
-    return tab;
+  String? _pendingNavigationType;
+  String? consumePendingNavigation() {
+    final type = _pendingNavigationType;
+    _pendingNavigationType = null;
+    return type;
   }
 
   // 채팅 읽음 처리: 알림 영역 + 앱 아이콘 배지 초기화
@@ -114,14 +114,15 @@ class FcmService {
     // 4-1. 앱이 완전히 종료된 상태에서 알림 탭
     final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
-      _pendingNavigationTab = 2; // 채팅 탭
+      _pendingNavigationType = initialMessage.data['type'] ?? 'chat';
     }
     // 4-2. 앱이 백그라운드 상태에서 알림 탭
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      if (onNavigateToTab != null) {
-        onNavigateToTab!(2);
+      final type = message.data['type'] ?? 'chat';
+      if (onNavigate != null) {
+        onNavigate!(type);
       } else {
-        _pendingNavigationTab = 2;
+        _pendingNavigationType = type;
       }
     });
 
@@ -156,7 +157,7 @@ class FcmService {
   Future<void> _sendTokenToServer(String token) async {
     try {
       await ApiClient.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/members/fcm-token?token=$token'),
+        Uri.parse('${ApiEndpoints.fcmToken}?token=$token'),
       );
       print("FCM 토큰 서버 전송 완료");
     } catch (e) {

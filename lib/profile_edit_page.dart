@@ -3,8 +3,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:typed_data';
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 
 class ProfileEditPage extends StatefulWidget {
   final int memberId;
@@ -70,7 +70,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       // 닉네임 변경
       if (nickname != widget.initialNickname) {
         await ApiClient.put(
-          Uri.parse('${ApiConfig.baseUrl}/api/members/nickname?nickname=${Uri.encodeComponent(nickname)}'),
+          Uri.parse('${ApiEndpoints.nickname}?nickname=${Uri.encodeComponent(nickname)}'),
         );
       }
 
@@ -78,7 +78,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       if (_pickedImage != null && _pickedImageBytes != null) {
         final request = http.MultipartRequest(
           'POST',
-          Uri.parse('${ApiConfig.baseUrl}/api/members/profile-image'),
+          Uri.parse(ApiEndpoints.profileImage),
         );
         request.files.add(http.MultipartFile.fromBytes(
           'file',

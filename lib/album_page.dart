@@ -1,15 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:convert';
 import 'album_detail_page.dart';
 import 'photo_gallery_page.dart';
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 import 'widgets/confirm_delete_dialog.dart';
 
-// ─────────────────────────────────────────────
-// AlbumPage: 앨범/사진 전환 + FAB 관리 루트 위젯
-// ─────────────────────────────────────────────
 class AlbumPage extends StatefulWidget {
   final int memberId;
 
@@ -26,7 +23,6 @@ class _AlbumPageState extends State<AlbumPage> {
   final _albumListKey = GlobalKey<_AlbumListContentState>();
   final _galleryKey = GlobalKey<PhotoGalleryPageState>();
 
-  // ── 앨범 생성 다이얼로그 ──
   void _showCreateAlbumDialog() {
     final controller = TextEditingController();
     showDialog(
@@ -44,7 +40,7 @@ class _AlbumPageState extends State<AlbumPage> {
             onPressed: () async {
               if (controller.text.isNotEmpty) {
                 final response = await ApiClient.post(
-                  Uri.parse('${ApiConfig.baseUrl}/api/archives/create?title=${controller.text}'),
+                  Uri.parse(ApiEndpoints.archiveCreateWithTitle(controller.text)),
                 );
                 if (response.statusCode == 200) {
                   _albumListKey.currentState?._fetchAlbums();
@@ -64,7 +60,6 @@ class _AlbumPageState extends State<AlbumPage> {
     return Scaffold(
       body: Stack(
         children: [
-          // ── 콘텐츠 영역 (IndexedStack으로 상태 보존) ──
           Positioned.fill(
             child: IndexedStack(
               index: _showPhotos ? 1 : 0,
@@ -82,10 +77,7 @@ class _AlbumPageState extends State<AlbumPage> {
               ],
             ),
           ),
-
-          // ── FAB 영역 ──
           if (_isReorderMode)
-            // 순서 변경 모드: 완료 버튼만 표시
             Positioned(
               bottom: 24,
               right: 16,
@@ -101,7 +93,6 @@ class _AlbumPageState extends State<AlbumPage> {
               ),
             )
           else ...[
-            // 상단 소형 FAB: 앨범 ↔ 사진 전환
             Positioned(
               bottom: _showPhotos ? 160 : 92,
               right: 16,
@@ -116,7 +107,6 @@ class _AlbumPageState extends State<AlbumPage> {
                 ),
               ),
             ),
-            // 슬라이드쇼 FAB (사진 뷰에서만)
             if (_showPhotos)
               Positioned(
                 bottom: 92,
@@ -130,7 +120,6 @@ class _AlbumPageState extends State<AlbumPage> {
                   child: const Icon(Icons.slideshow_rounded),
                 ),
               ),
-            // 하단 메인 FAB: 새 앨범 / 사진 추가
             Positioned(
               bottom: 24,
               right: 16,
@@ -153,9 +142,6 @@ class _AlbumPageState extends State<AlbumPage> {
   }
 }
 
-// ─────────────────────────────────────────────
-// _AlbumListContent: 앨범 목록 (FAB·Scaffold 없음)
-// ─────────────────────────────────────────────
 class _AlbumListContent extends StatefulWidget {
   final int memberId;
   final bool isReorderMode;
@@ -205,10 +191,10 @@ class _AlbumListContentState extends State<_AlbumListContent> {
     _currentPage = 0;
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/albums?page=0&size=$_pageSize'),
+        Uri.parse(ApiEndpoints.archiveAlbumsPaged(page: 0, size: _pageSize)),
       );
       if (response.statusCode == 200) {
-        final albums = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        final albums = ApiClient.decodeBody(response) as List;
         setState(() {
           _albums = albums;
           _hasMore = albums.length >= _pageSize;
@@ -226,10 +212,10 @@ class _AlbumListContentState extends State<_AlbumListContent> {
     _currentPage++;
     try {
       final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/albums?page=$_currentPage&size=$_pageSize'),
+        Uri.parse(ApiEndpoints.archiveAlbumsPaged(page: _currentPage, size: _pageSize)),
       );
       if (response.statusCode == 200) {
-        final more = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        final more = ApiClient.decodeBody(response) as List;
         setState(() {
           _albums = [..._albums, ...more];
           _hasMore = more.length >= _pageSize;
@@ -246,7 +232,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
     final ids = _albums.map((a) => a['id'] as int).toList();
     try {
       final response = await ApiClient.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/archives/reorder'),
+        Uri.parse(ApiEndpoints.archiveReorder),
         body: jsonEncode(ids),
       );
       if (response.statusCode != 200 && mounted) {
@@ -313,7 +299,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
             onPressed: () async {
               if (controller.text.isNotEmpty) {
                 final response = await ApiClient.put(
-                  Uri.parse('${ApiConfig.baseUrl}/api/archives/${album['id']}?title=${Uri.encodeComponent(controller.text)}'),
+                  Uri.parse('${ApiEndpoints.archiveAlbumById(album['id'])}?title=${Uri.encodeComponent(controller.text)}'),
                 );
                 if (response.statusCode == 200) _fetchAlbums();
                 if (mounted) Navigator.pop(context);
@@ -334,7 +320,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
     );
     if (!confirmed || !mounted) return;
     final response = await ApiClient.delete(
-      Uri.parse('${ApiConfig.baseUrl}/api/archives/$albumId'),
+      Uri.parse(ApiEndpoints.archiveAlbumById(albumId)),
     );
     if (response.statusCode == 200) _fetchAlbums();
   }
@@ -351,7 +337,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
               ? _buildReorderableList()
               : GridView.builder(
                   controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 100), // FAB 여백
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,

@@ -14,10 +14,11 @@ import 'note_page.dart';
 import 'work_schedule_page.dart';
 import 'dino_game_page.dart';
 import 'profile_edit_page.dart';
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 import 'share_intent_service.dart';
 import 'fcm_service.dart';
+import 'anniversary_page.dart';
 
 class HomeScreen extends StatefulWidget {
   final User? user;
@@ -45,13 +46,27 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _selectedIndex = 2);
     });
 
-    // FCM 알림 탭 → 채팅 탭으로 이동
-    FcmService().onNavigateToTab = (int index) {
-      if (mounted) setState(() => _selectedIndex = index);
+    // FCM 알림 탭 → 타입에 따라 네비게이션
+    FcmService().onNavigate = (String type) {
+      if (!mounted) return;
+      _navigateByNotificationType(type);
     };
     // 앱이 종료 상태에서 알림 탭으로 열린 경우
-    final pendingTab = FcmService().consumePendingNavigation();
-    if (pendingTab != null) _selectedIndex = pendingTab;
+    final pendingType = FcmService().consumePendingNavigation();
+    if (pendingType != null) {
+      if (pendingType == 'anniversary') {
+        _selectedIndex = 4;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => AnniversaryPage(memberId: widget.memberId),
+            ));
+          }
+        });
+      } else {
+        _selectedIndex = 2; // 채팅 탭 (기본)
+      }
+    }
 
 _pages = [
       AlbumPage(memberId: widget.memberId),
@@ -65,8 +80,19 @@ _pages = [
   @override
   void dispose() {
     _shareSubscription?.cancel();
-    FcmService().onNavigateToTab = null;
+    FcmService().onNavigate = null;
     super.dispose();
+  }
+
+  void _navigateByNotificationType(String type) {
+    if (type == 'anniversary') {
+      setState(() => _selectedIndex = 4);
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => AnniversaryPage(memberId: widget.memberId),
+      ));
+    } else {
+      setState(() => _selectedIndex = 2); // 채팅 탭 (기본)
+    }
   }
 
   void _onItemTapped(int index) {
@@ -121,11 +147,9 @@ class _MorePageState extends State<_MorePage> {
 
   Future<void> _loadProfile() async {
     try {
-      final response = await ApiClient.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/members/me'),
-      );
+      final response = await ApiClient.get(Uri.parse(ApiEndpoints.me));
       if (response.statusCode == 200 && mounted) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        final data = ApiClient.decodeBody(response) as Map<String, dynamic>;
         setState(() {
           _nickname = data['nickname'];
           _profileImageUrl = data['profileImageUrl'];

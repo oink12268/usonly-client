@@ -5,7 +5,7 @@ import 'dart:convert'; // JSON 처리용
 import 'auth_service.dart'; // 로그아웃용
 import 'api_client.dart';
 import 'home_screen.dart'; // 매칭 성공 시 이동할 화면
-import 'api_config.dart';
+import 'api_endpoints.dart';
 
 class MatchingScreen extends StatefulWidget {
   final User user;
@@ -59,7 +59,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
 
     try {
       final response = await ApiClient.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/couples/connect'),
+        Uri.parse(ApiEndpoints.coupleConnect),
         body: jsonEncode({
           "code": partnerCode,
         }),
@@ -68,9 +68,8 @@ class _MatchingScreenState extends State<MatchingScreen> {
       if (!mounted) return; // 비동기 처리 중 화면이 닫혔으면 중단
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        
-        final int myServerId = data['id'];
+        final data = ApiClient.decodeBody(response) as Map<String, dynamic>;
+        final int myServerId = data['memberId'];
         // [FIX #7] coupleId를 응답에서 추출해 HomeScreen에 전달
         // 서버 응답 구조에 따라 'coupleId' 키로 포함되어 있다고 가정
         final int? coupleId = data['coupleId']?.toInt();
@@ -90,15 +89,15 @@ class _MatchingScreenState extends State<MatchingScreen> {
           const SnackBar(content: Text("축하합니다! 커플 연결에 성공했습니다 ❤️")),
         );
       } else {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        String errorMessage = data['message'] ?? "연결에 실패했습니다.";
+        final body = ApiClient.decodeBody(response);
+        String errorMessage = (body is Map ? body['message'] : null) ?? "연결에 실패했습니다.";
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(errorMessage)),
         );
       }
     } catch (e) {
-      print("커플 연결 에러: $e");
+      debugPrint("커플 연결 에러: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("서버와 통신 중 오류가 발생했습니다.")),
       );

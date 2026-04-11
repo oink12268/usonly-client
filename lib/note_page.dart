@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:stomp_dart_client/stomp_dart_client.dart';
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 import 'note_editor_page.dart';
 import 'utils/date_formatter.dart';
 
@@ -61,19 +61,19 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
 
   Future<void> _fetchNotes() async {
     try {
-      final uri = widget.parentNoteId != null
-          ? Uri.parse('${ApiConfig.baseUrl}/api/notes?parentId=${widget.parentNoteId}')
-          : Uri.parse('${ApiConfig.baseUrl}/api/notes');
-      final response = await ApiClient.get(uri);
+      final url = widget.parentNoteId != null
+          ? ApiEndpoints.notesWithParent(widget.parentNoteId!)
+          : ApiEndpoints.notes;
+      final response = await ApiClient.get(Uri.parse(url));
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes)) as List;
+        final data = ApiClient.decodeBody(response) as List;
         setState(() {
           _notes = data.cast<Map<String, dynamic>>();
           _isLoading = false;
         });
       }
     } catch (e) {
-      print("메모 로딩 에러: $e");
+      debugPrint("메모 로딩 에러: $e");
       setState(() => _isLoading = false);
     }
   }
@@ -82,7 +82,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
     final headers = await ApiClient.stompHeaders();
     _stompClient = StompClient(
       config: StompConfig(
-        url: ApiConfig.wsUrl,
+        url: ApiEndpoints.wsUrl,
         stompConnectHeaders: headers,
         onConnect: (StompFrame frame) {
           _stompClient!.subscribe(
@@ -131,7 +131,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
             },
           );
         },
-        onWebSocketError: (e) => print("노트 소켓 에러: $e"),
+        onWebSocketError: (e) => debugPrint("노트 소켓 에러: $e"),
       ),
     );
     _stompClient!.activate();
@@ -142,11 +142,11 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
       final body = <String, dynamic>{'title': '새 메모', 'content': ''};
       if (widget.parentNoteId != null) body['parentId'] = widget.parentNoteId;
       final response = await ApiClient.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/notes'),
+        Uri.parse(ApiEndpoints.notes),
         body: jsonEncode(body),
       );
       if (response.statusCode == 200 && mounted) {
-        final note = jsonDecode(utf8.decode(response.bodyBytes));
+        final note = ApiClient.decodeBody(response) as Map<String, dynamic>;
         await Navigator.push(
           context,
           MaterialPageRoute(
@@ -160,18 +160,18 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
         _fetchNotes();
       }
     } catch (e) {
-      print("메모 생성 에러: $e");
+      debugPrint("메모 생성 에러: $e");
     }
   }
 
   Future<void> _deleteNote(int noteId) async {
     try {
       await ApiClient.delete(
-        Uri.parse('${ApiConfig.baseUrl}/api/notes/$noteId'),
+        Uri.parse(ApiEndpoints.noteById(noteId)),
       );
       // WebSocket이 목록 자동 업데이트
     } catch (e) {
-      print("메모 삭제 에러: $e");
+      debugPrint("메모 삭제 에러: $e");
       _fetchNotes();
     }
   }
@@ -179,7 +179,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
   Future<void> _moveNote(int noteId, int? targetParentId) async {
     try {
       final response = await ApiClient.patch(
-        Uri.parse('${ApiConfig.baseUrl}/api/notes/$noteId/move'),
+        Uri.parse(ApiEndpoints.noteMove(noteId)),
         body: jsonEncode({'targetParentId': targetParentId}),
       );
       if (response.statusCode == 200) {
@@ -193,7 +193,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
         _fetchNotes();
       }
     } catch (e) {
-      print("메모 이동 에러: $e");
+      debugPrint("메모 이동 에러: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('이동 중 오류: $e')),
@@ -217,14 +217,14 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
 
     try {
       await ApiClient.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/notes/reorder'),
+        Uri.parse(ApiEndpoints.noteReorder),
         body: jsonEncode({
           'orderedIds': newNotes.map((n) => n['id']).toList(),
           'parentId': widget.parentNoteId,
         }),
       );
     } catch (e) {
-      print('메모 순서 변경 에러: $e');
+      debugPrint('메모 순서 변경 에러: $e');
       _fetchNotes();
     }
   }

@@ -7,8 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
-import 'api_config.dart';
 import 'api_client.dart';
+import 'api_endpoints.dart';
 import 'note_page.dart';
 import 'google_calendar_service.dart';
 
@@ -189,7 +189,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('${ApiConfig.baseUrl}/api/notes/image'),
+        Uri.parse(ApiEndpoints.noteImage),
       );
       request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
 
@@ -248,7 +248,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     _isSaving.value = true;
     try {
       await ApiClient.put(
-        Uri.parse('${ApiConfig.baseUrl}/api/notes/${widget.note['id']}'),
+        Uri.parse(ApiEndpoints.noteById(widget.note['id'])),
         body: jsonEncode({'title': title, 'content': content, 'isPrivate': _isPrivate}),
       );
       _lastSavedContent = content;
@@ -269,7 +269,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     if (content == _lastSavedContent && title == _lastSavedTitle) return;
     try {
       final res = await ApiClient.put(
-        Uri.parse('${ApiConfig.baseUrl}/api/notes/${widget.note['id']}'),
+        Uri.parse(ApiEndpoints.noteById(widget.note['id'])),
         body: jsonEncode({'title': title, 'content': content, 'isPrivate': _isPrivate}),
       );
       debugPrint('[forceSave] status: ${res.statusCode}');
@@ -292,7 +292,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     _isExtractingSchedule.value = true;
     try {
       final response = await ApiClient.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/notes/extract-schedule'),
+        Uri.parse(ApiEndpoints.noteExtractSchedule),
         body: jsonEncode({'content': plainText}),
       );
 
