@@ -45,6 +45,11 @@ class ApiClient {
     return _client.put(url, headers: headers, body: body);
   }
 
+  static Future<http.Response> patch(Uri url, {Object? body}) async {
+    final headers = await _authHeaders(withJson: body != null);
+    return _client.patch(url, headers: headers, body: body);
+  }
+
   static Future<http.Response> delete(Uri url) async {
     final headers = await _authHeaders();
     return _client.delete(url, headers: headers);

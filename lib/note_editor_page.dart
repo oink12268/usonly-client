@@ -38,11 +38,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   String? _lastSavedContent;
   String? _lastSavedTitle;
   bool _applyingLink = false;
+  late bool _isPrivate;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.note['title'] ?? '');
+    _isPrivate = widget.note['isPrivate'] as bool? ?? false;
 
     final content = widget.note['content'] as String? ?? '';
     _controller = QuillController(
@@ -247,7 +249,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     try {
       await ApiClient.put(
         Uri.parse('${ApiConfig.baseUrl}/api/notes/${widget.note['id']}'),
-        body: jsonEncode({'title': title, 'content': content}),
+        body: jsonEncode({'title': title, 'content': content, 'isPrivate': _isPrivate}),
       );
       _lastSavedContent = content;
       _lastSavedTitle = title;
@@ -268,7 +270,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     try {
       final res = await ApiClient.put(
         Uri.parse('${ApiConfig.baseUrl}/api/notes/${widget.note['id']}'),
-        body: jsonEncode({'title': title, 'content': content}),
+        body: jsonEncode({'title': title, 'content': content, 'isPrivate': _isPrivate}),
       );
       debugPrint('[forceSave] status: ${res.statusCode}');
       _lastSavedContent = content;
@@ -506,6 +508,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         actions: [
+          StatefulBuilder(
+            builder: (context, setIconState) => IconButton(
+              icon: Icon(_isPrivate ? Icons.lock : Icons.lock_open),
+              tooltip: _isPrivate ? '나만 보기 (탭하여 해제)' : '공개 (탭하여 나만 보기)',
+              color: _isPrivate ? Theme.of(context).colorScheme.primary : null,
+              onPressed: () {
+                setIconState(() => _isPrivate = !_isPrivate);
+                _hasUnsavedChanges.value = true;
+                _forceSave();
+              },
+            ),
+          ),
           ValueListenableBuilder<bool>(
             valueListenable: _isExtractingSchedule,
             builder: (_, extracting, __) => extracting

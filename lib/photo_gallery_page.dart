@@ -1,14 +1,18 @@
+import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:image/image.dart' as img;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:exif/exif.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
+import 'package:gal/gal.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui' as ui;
 import 'api_config.dart';
 import 'api_client.dart';
@@ -134,17 +138,17 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
         final type = isVideo ? 'VIDEO' : 'IMAGE';
         Uint8List bytes = await file.readAsBytes();
 
-        // Windows는 imageQuality/maxWidth가 무시되므로 직접 압축
+        // Windows는 imageQuality/maxWidth가 무시되므로 직접 압축 (순수 Dart)
         if (!isVideo && defaultTargetPlatform == TargetPlatform.windows) {
           try {
-            final ext = file.name.toLowerCase().split('.').last;
-            final format = ext == 'png' ? CompressFormat.png
-                         : ext == 'webp' ? CompressFormat.webp
-                         : CompressFormat.jpeg;
-            final compressed = await FlutterImageCompress.compressWithList(
-              bytes, minWidth: 2000, minHeight: 2000, quality: 85, format: format,
-            );
-            if (compressed != null && compressed.isNotEmpty) bytes = compressed;
+            final decoded = img.decodeImage(bytes);
+            if (decoded != null && (decoded.width > 2000 || decoded.height > 2000)) {
+              final resized = img.copyResize(decoded,
+                width: decoded.width > decoded.height ? 2000 : -1,
+                height: decoded.height >= decoded.width ? 2000 : -1,
+              );
+              bytes = Uint8List.fromList(img.encodeJpg(resized, quality: 85));
+            }
           } catch (_) {}
         }
 
@@ -306,6 +310,7 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
                   children: [
                     CachedNetworkImage(
                       imageUrl: thumbUrl,
+                      cacheKey: '${thumbUrl}_thumb',
                       fit: BoxFit.cover,
                       memCacheWidth: 300,
                       maxWidthDiskCache: 300,
@@ -369,6 +374,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   final Map<int, TransformationController> _transformControllers = {};
   int _selectedFilterIndex = 0;
   bool _isSaving = false;
+  bool _isDownloading = false;
   bool _isPeeking = false; // 롱프레스 중 원본 보기
   bool _showUI = true;
 
@@ -503,6 +509,104 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
     }
   }
 
+  Future<void> _downloadMedia() async {
+    final photo = widget.photos[_currentIndex];
+    final url = photo['mediaUrl'] as String;
+    final isVideo = photo['mediaType'] == 'VIDEO';
+    final filename = url.split('/').last.split('?').first;
+
+    setState(() => _isDownloading = true);
+    try {
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        final downloadsPath = '${Platform.environment['USERPROFILE']}\\Downloads\\$filename';
+        final response = await http.get(Uri.parse(url));
+        await File(downloadsPath).writeAsBytes(response.bodyBytes);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('다운로드 완료 (Downloads 폴더)')),
+        );
+      } else {
+        if (!await Gal.hasAccess(toAlbum: true)) await Gal.requestAccess(toAlbum: true);
+        final response = await http.get(Uri.parse(url));
+        if (isVideo) {
+          final tempDir = await getTemporaryDirectory();
+          final tempFile = File('${tempDir.path}/$filename');
+          await tempFile.writeAsBytes(response.bodyBytes);
+          await Gal.putVideo(tempFile.path, album: 'UsOnly');
+          await tempFile.delete();
+        } else {
+          await Gal.putImageBytes(response.bodyBytes, album: 'UsOnly');
+        }
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('갤러리에 저장되었습니다')),
+        );
+      }
+    } catch (e) {
+      debugPrint('다운로드 오류: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('저장 실패: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  void _showPhotoInfo() {
+    final photo = widget.photos[_currentIndex];
+    final takenAt = photo['takenAt'] as String?;
+    final mediaType = photo['mediaType'] as String? ?? 'IMAGE';
+
+    String dateStr = '-';
+    if (takenAt != null) {
+      try {
+        final dt = DateTime.parse(takenAt).toLocal();
+        dateStr = '${dt.year}년 ${dt.month}월 ${dt.day}일 '
+            '${dt.hour.toString().padLeft(2, '0')}:'
+            '${dt.minute.toString().padLeft(2, '0')}';
+      } catch (_) {}
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.black87,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('사진 정보', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              _infoRow(Icons.calendar_today_outlined, '촬영일시', dateStr),
+              const SizedBox(height: 12),
+              _infoRow(
+                mediaType == 'VIDEO' ? Icons.videocam_outlined : Icons.image_outlined,
+                '파일 유형',
+                mediaType == 'VIDEO' ? '동영상' : '사진',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white54, size: 20),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            Text(value, style: const TextStyle(color: Colors.white, fontSize: 14)),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildFilterBar() {
     final photo = widget.photos[_currentIndex];
     final thumbUrl = photo['thumbnailUrl'] as String? ?? photo['mediaUrl'] as String;
@@ -605,6 +709,19 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
                       ),
                     ),
                   ),
+          _isDownloading
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.download_outlined, color: Colors.white),
+                  onPressed: _downloadMedia,
+                ),
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.white),
+            onPressed: _showPhotoInfo,
+          ),
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.white),
             onPressed: () async {
@@ -770,10 +887,10 @@ class SlideshowPage extends StatefulWidget {
 
 class _SlideshowPageState extends State<SlideshowPage>
     with SingleTickerProviderStateMixin {
-  late PageController _pageController;
   int _currentIndex = 0;
   bool _isPlaying = true;
   bool _showControls = true;
+  bool _isShuffle = false;
   int _intervalSeconds = 3;
   Timer? _timer;
   Timer? _progressTimer;
@@ -785,7 +902,6 @@ class _SlideshowPageState extends State<SlideshowPage>
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -801,7 +917,6 @@ class _SlideshowPageState extends State<SlideshowPage>
   void dispose() {
     _timer?.cancel();
     _progressTimer?.cancel();
-    _pageController.dispose();
     _fadeController.dispose();
     super.dispose();
   }
@@ -836,12 +951,16 @@ class _SlideshowPageState extends State<SlideshowPage>
 
   void _nextPhoto() {
     if (!mounted) return;
-    final next = (_currentIndex + 1) % widget.photos.length;
-    _pageController.animateToPage(
-      next,
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.easeInOut,
-    );
+    if (_isShuffle && widget.photos.length > 1) {
+      int next;
+      do {
+        next = Random().nextInt(widget.photos.length);
+      } while (next == _currentIndex);
+      setState(() => _currentIndex = next);
+    } else {
+      setState(() => _currentIndex = (_currentIndex + 1) % widget.photos.length);
+    }
+    _startTimer();
   }
 
   void _stopTimer() {
@@ -894,28 +1013,23 @@ class _SlideshowPageState extends State<SlideshowPage>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // ── 사진 PageView ──
-            PageView.builder(
-              controller: _pageController,
-              itemCount: widget.photos.length,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentIndex = index;
-                  _progress = 0.0;
-                });
-                if (_isPlaying) _startTimer(); else _preloadAhead();
-              },
-              itemBuilder: (context, index) {
-                return CachedNetworkImage(
-                  imageUrl: widget.photos[index]['mediaUrl'],
-                  fit: BoxFit.contain,
-                  placeholder: (context, url) => const Center(
-                    child: CircularProgressIndicator(color: Colors.white54),
-                  ),
-                  errorWidget: (context, url, error) =>
-                      const Icon(Icons.broken_image, color: Colors.white54, size: 64),
-                );
-              },
+            // ── 사진 페이드 전환 ──
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 600),
+              transitionBuilder: (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
+              child: CachedNetworkImage(
+                key: ValueKey(_currentIndex),
+                imageUrl: widget.photos[_currentIndex]['mediaUrl'],
+                fit: BoxFit.contain,
+                width: double.infinity,
+                height: double.infinity,
+                placeholder: (context, url) => const Center(
+                  child: CircularProgressIndicator(color: Colors.white54),
+                ),
+                errorWidget: (context, url, error) =>
+                    const Icon(Icons.broken_image, color: Colors.white54, size: 64),
+              ),
             ),
 
             // ── 컨트롤 오버레이 ──
@@ -1007,10 +1121,10 @@ class _SlideshowPageState extends State<SlideshowPage>
                         IconButton(
                           icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 32),
                           onPressed: () {
-                            final prev = (_currentIndex - 1 + widget.photos.length) % widget.photos.length;
-                            _pageController.animateToPage(prev,
-                                duration: const Duration(milliseconds: 400),
-                                curve: Curves.easeInOut);
+                            setState(() {
+                              _currentIndex = (_currentIndex - 1 + widget.photos.length) % widget.photos.length;
+                            });
+                            if (_isPlaying) _startTimer();
                           },
                         ),
                         const SizedBox(width: 16),
@@ -1038,6 +1152,15 @@ class _SlideshowPageState extends State<SlideshowPage>
                           onPressed: () => _nextPhoto(),
                         ),
                         const Spacer(),
+                        // 셔플
+                        IconButton(
+                          icon: Icon(
+                            Icons.shuffle_rounded,
+                            color: _isShuffle ? Colors.white : Colors.white38,
+                            size: 24,
+                          ),
+                          onPressed: () => setState(() => _isShuffle = !_isShuffle),
+                        ),
                         // 간격 선택
                         Row(
                           children: _intervals.map((sec) {

@@ -47,5 +47,7 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>메모에 사진을 첨부하기 위해 사진 라이브러리 접근이 필요합니다.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>사진을 갤러리에 저장하기 위해 사진 라이브러리 접근이 필요합니다.</string>
 </dict>
 </plist>

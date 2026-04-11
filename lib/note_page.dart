@@ -28,6 +28,9 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
   List<Map<String, dynamic>> _notes = [];
   bool _isLoading = true;
   StompClient? _stompClient;
+  int? _draggingNoteId;
+  int? _hoveringNoteId;
+  int? _reorderTargetIndex;
 
   @override
   void initState() {
@@ -106,6 +109,23 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                   if (idx != -1) _notes[idx] = note;
                 } else if (type == 'DELETED' && deletedId != null) {
                   _notes.removeWhere((n) => n['id'] == deletedId);
+                } else if (type == 'MOVED') {
+                  final movedId = event['movedId'];
+                  if (movedId != null) {
+                    _notes.removeWhere((n) => n['id'] == movedId);
+                  }
+                } else if (type == 'REORDERED') {
+                  final orderedIds = (event['orderedIds'] as List?)?.map((e) => e as int).toList();
+                  final reorderParentId = event['reorderParentId'] as int?;
+                  if (orderedIds != null && reorderParentId == widget.parentNoteId) {
+                    _notes.sort((a, b) {
+                      final ai = orderedIds.indexOf(a['id'] as int);
+                      final bi = orderedIds.indexOf(b['id'] as int);
+                      if (ai == -1) return 1;
+                      if (bi == -1) return -1;
+                      return ai.compareTo(bi);
+                    });
+                  }
                 }
               });
             },
@@ -156,7 +176,283 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _moveNote(int noteId, int? targetParentId) async {
+    try {
+      final response = await ApiClient.patch(
+        Uri.parse('${ApiConfig.baseUrl}/api/notes/$noteId/move'),
+        body: jsonEncode({'targetParentId': targetParentId}),
+      );
+      if (response.statusCode == 200) {
+        setState(() => _notes.removeWhere((n) => n['id'] == noteId));
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('이동 실패 (${response.statusCode}): ${response.body}')),
+          );
+        }
+        _fetchNotes();
+      }
+    } catch (e) {
+      print("메모 이동 에러: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('이동 중 오류: $e')),
+        );
+      }
+      _fetchNotes();
+    }
+  }
+
+  Future<void> _reorderNote(int draggedNoteId, int insertAtIndex) async {
+    final draggedIndex = _notes.indexWhere((n) => n['id'] == draggedNoteId);
+    if (draggedIndex == -1) return;
+
+    final newNotes = List<Map<String, dynamic>>.from(_notes);
+    final draggedNote = newNotes.removeAt(draggedIndex);
+    int targetIndex = draggedIndex < insertAtIndex ? insertAtIndex - 1 : insertAtIndex;
+    targetIndex = targetIndex.clamp(0, newNotes.length);
+    newNotes.insert(targetIndex, draggedNote);
+
+    setState(() => _notes = newNotes);
+
+    try {
+      await ApiClient.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/notes/reorder'),
+        body: jsonEncode({
+          'orderedIds': newNotes.map((n) => n['id']).toList(),
+          'parentId': widget.parentNoteId,
+        }),
+      );
+    } catch (e) {
+      print('메모 순서 변경 에러: $e');
+      _fetchNotes();
+    }
+  }
+
   String _formatDate(String? dateStr) => DateFormatter.formatRelative(dateStr);
+
+  String _extractPlainText(String? content) {
+    if (content == null || content.isEmpty) return '';
+    try {
+      final delta = jsonDecode(content);
+      if (delta is List) {
+        final buffer = StringBuffer();
+        for (final op in delta) {
+          if (op is Map && op['insert'] is String) {
+            buffer.write(op['insert']);
+          }
+        }
+        return buffer.toString().replaceAll('\n', ' ').trim();
+      }
+    } catch (_) {}
+    return content;
+  }
+
+  Widget _buildSeparatorDropZone(BuildContext context, int insertIndex) {
+    return DragTarget<int>(
+      key: ValueKey('sep_$insertIndex'),
+      onWillAcceptWithDetails: (details) {
+        final draggedIndex = _notes.indexWhere((n) => n['id'] == details.data);
+        // 바로 위/아래는 제자리이므로 거절
+        if (draggedIndex == insertIndex || draggedIndex + 1 == insertIndex) return false;
+        setState(() => _reorderTargetIndex = insertIndex);
+        return true;
+      },
+      onLeave: (_) => setState(() {
+        if (_reorderTargetIndex == insertIndex) _reorderTargetIndex = null;
+      }),
+      onAcceptWithDetails: (details) {
+        setState(() => _reorderTargetIndex = null);
+        _reorderNote(details.data, insertIndex);
+      },
+      builder: (context, candidateData, _) {
+        final isActive = candidateData.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          height: isActive ? 24 : 8,
+          child: isActive
+              ? Center(
+                  child: Container(
+                    height: 3,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                )
+              : null,
+        );
+      },
+    );
+  }
+
+  Widget _buildNoteCard(BuildContext context, Map<String, dynamic> note, int index,
+      {required bool isHovering, required bool isDragging}) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: isHovering
+            ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+            : null,
+        color: isHovering
+            ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+            : null,
+      ),
+      child: Dismissible(
+        key: Key('dismiss_${note['id']}'),
+        direction: isDragging ? DismissDirection.none : DismissDirection.endToStart,
+        background: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 20),
+          decoration: BoxDecoration(
+            color: Colors.red.shade400,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.delete, color: Colors.white),
+        ),
+        onDismissed: (_) async {
+          final deletedNote = Map<String, dynamic>.from(note);
+          final deletedIndex = index;
+          setState(() => _notes.removeAt(deletedIndex));
+
+          bool undone = false;
+          final controller = ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('메모가 삭제되었습니다'),
+              action: SnackBarAction(
+                label: '실행 취소',
+                onPressed: () {
+                  undone = true;
+                  if (mounted) {
+                    setState(() => _notes.insert(
+                      deletedIndex.clamp(0, _notes.length),
+                      deletedNote,
+                    ));
+                  }
+                },
+              ),
+            ),
+          );
+
+          await controller.closed;
+          if (!undone) _deleteNote(deletedNote['id']);
+        },
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: isHovering
+                ? BorderSide.none
+                : BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => NoteEditorPage(
+                    note: Map<String, dynamic>.from(note),
+                    memberId: widget.memberId,
+                    coupleId: widget.coupleId,
+                  ),
+                ),
+              );
+              _fetchNotes();
+            },
+            title: Row(
+              children: [
+                if (note['isPrivate'] == true) ...[
+                  Icon(Icons.lock, size: 14, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 4),
+                ],
+                Expanded(
+                  child: Text(
+                    note['title']?.isEmpty == true ? '(제목 없음)' : note['title'],
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            subtitle: note['content']?.isNotEmpty == true
+                ? Text(
+                    _extractPlainText(note['content']),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13),
+                  )
+                : null,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _formatDate(note['updatedAt']),
+                      style: TextStyle(
+                          fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                    if (note['lastEditedByNickname'] != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        note['lastEditedByNickname'],
+                        style: TextStyle(
+                            fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        (note['childCount'] ?? 0) > 0
+                            ? Icons.folder
+                            : Icons.folder_outlined,
+                        size: 20,
+                      ),
+                      if ((note['childCount'] ?? 0) > 0)
+                        Text(
+                          '${note['childCount']}',
+                          style: TextStyle(
+                              fontSize: 10, color: Theme.of(context).colorScheme.onSurface),
+                        ),
+                    ],
+                  ),
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NotePage(
+                          memberId: widget.memberId,
+                          coupleId: widget.coupleId,
+                          parentNoteId: note['id'],
+                          parentTitle: note['title']?.isEmpty == true
+                              ? '(제목 없음)'
+                              : note['title'],
+                        ),
+                      ),
+                    );
+                    _fetchNotes();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -184,152 +480,89 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                     ],
                   ),
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _notes.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  // 아이템 사이사이 + 맨 위/아래에 드롭존 (separator)
+                  // index: 짝수 = separator, 홀수 = note
+                  itemCount: _notes.length * 2 + 1,
                   itemBuilder: (context, index) {
-                    final note = _notes[index];
-                    return Dismissible(
-                      key: Key(note['id'].toString()),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade400,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.delete, color: Colors.white),
-                      ),
-                      onDismissed: (_) async {
-                        final deletedNote = Map<String, dynamic>.from(note);
-                        final deletedIndex = index;
-                        setState(() => _notes.removeAt(deletedIndex));
+                    if (index.isEven) {
+                      return _buildSeparatorDropZone(context, index ~/ 2);
+                    }
 
-                        bool undone = false;
-                        final controller = ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('메모가 삭제되었습니다'),
-                            action: SnackBarAction(
-                              label: '실행 취소',
-                              onPressed: () {
-                                undone = true;
-                                if (mounted) {
-                                  setState(() => _notes.insert(
-                                    deletedIndex.clamp(0, _notes.length),
-                                    deletedNote,
-                                  ));
-                                }
-                              },
+                    final noteIndex = index ~/ 2;
+                    final note = _notes[noteIndex];
+                    final noteId = note['id'] as int;
+                    final isDragging = _draggingNoteId == noteId;
+                    final isHovering = _hoveringNoteId == noteId;
+
+                    return DragTarget<int>(
+                      key: ValueKey('note_$noteId'),
+                      onWillAcceptWithDetails: (details) {
+                        if (details.data == noteId) return false;
+                        setState(() {
+                          _hoveringNoteId = noteId;
+                          _reorderTargetIndex = null;
+                        });
+                        return true;
+                      },
+                      onLeave: (_) => setState(() => _hoveringNoteId = null),
+                      onAcceptWithDetails: (details) {
+                        setState(() => _hoveringNoteId = null);
+                        _moveNote(details.data, noteId);
+                      },
+                      builder: (context, candidateData, _) {
+                        return LongPressDraggable<int>(
+                          data: noteId,
+                          delay: const Duration(milliseconds: 400),
+                          onDragStarted: () => setState(() => _draggingNoteId = noteId),
+                          onDragEnd: (_) => setState(() {
+                            _draggingNoteId = null;
+                            _reorderTargetIndex = null;
+                          }),
+                          feedback: Material(
+                            elevation: 6,
+                            borderRadius: BorderRadius.circular(12),
+                            child: SizedBox(
+                              width: MediaQuery.of(context).size.width - 32,
+                              child: Opacity(
+                                opacity: 0.9,
+                                child: Card(
+                                  elevation: 0,
+                                  margin: EdgeInsets.zero,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    title: Row(
+                                      children: [
+                                        if (note['isPrivate'] == true) ...[
+                                          const Icon(Icons.lock, size: 14),
+                                          const SizedBox(width: 4),
+                                        ],
+                                        Expanded(
+                                          child: Text(
+                                            note['title']?.isEmpty == true ? '(제목 없음)' : note['title'],
+                                            style: const TextStyle(fontWeight: FontWeight.w600),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
+                          childWhenDragging: Opacity(
+                            opacity: 0.3,
+                            child: _buildNoteCard(context, note, noteIndex, isHovering: false, isDragging: true),
+                          ),
+                          child: _buildNoteCard(context, note, noteIndex, isHovering: isHovering, isDragging: isDragging),
                         );
-
-                        await controller.closed;
-                        if (!undone) _deleteNote(deletedNote['id']);
                       },
-                      child: Card(
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-                        ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => NoteEditorPage(
-                                  note: Map<String, dynamic>.from(note),
-                                  memberId: widget.memberId,
-                                  coupleId: widget.coupleId,
-                                ),
-                              ),
-                            );
-                            _fetchNotes();
-                          },
-                          title: Text(
-                            note['title']?.isEmpty == true
-                                ? '(제목 없음)'
-                                : note['title'],
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: note['content']?.isNotEmpty == true
-                              ? Text(
-                                  note['content'],
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 13),
-                                )
-                              : null,
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    _formatDate(note['updatedAt']),
-                                    style: TextStyle(
-                                      fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                  ),
-                                  if (note['lastEditedByNickname'] != null) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      note['lastEditedByNickname'],
-                                      style: TextStyle(
-                                        fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                icon: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      (note['childCount'] ?? 0) > 0
-                                          ? Icons.folder
-                                          : Icons.folder_outlined,
-                                      size: 20,
-                                    ),
-                                    if ((note['childCount'] ?? 0) > 0)
-                                      Text(
-                                        '${note['childCount']}',
-                                        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurface),
-                                      ),
-                                  ],
-                                ),
-                                onPressed: () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => NotePage(
-                                        memberId: widget.memberId,
-                                        coupleId: widget.coupleId,
-                                        parentNoteId: note['id'],
-                                        parentTitle: note['title']?.isEmpty == true
-                                            ? '(제목 없음)'
-                                            : note['title'],
-                                      ),
-                                    ),
-                                  );
-                                  _fetchNotes();
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                     );
                   },
                 ),
