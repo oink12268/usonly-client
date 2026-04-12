@@ -1,6 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:gal/gal.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'api_client.dart';
 import 'api_endpoints.dart';
 import 'utils/date_formatter.dart';
@@ -509,6 +514,7 @@ class FullScreenImageView extends StatefulWidget {
 class _FullScreenImageViewState extends State<FullScreenImageView> {
   late final PageController _pageController;
   late int _currentIndex;
+  bool _isDownloading = false;
 
   @override
   void initState() {
@@ -521,6 +527,36 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _downloadImage() async {
+    final url = widget.imageUrls[_currentIndex];
+    final filename = url.split('/').last.split('?').first;
+    setState(() => _isDownloading = true);
+    try {
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        final downloadsPath = '${Platform.environment['USERPROFILE']}\\Downloads\\$filename';
+        final response = await http.get(Uri.parse(url));
+        await File(downloadsPath).writeAsBytes(response.bodyBytes);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('다운로드 완료 (Downloads 폴더)')),
+        );
+      } else {
+        if (!await Gal.hasAccess(toAlbum: true)) await Gal.requestAccess(toAlbum: true);
+        final response = await http.get(Uri.parse(url));
+        await Gal.putImageBytes(response.bodyBytes, album: 'UsOnly');
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('갤러리에 저장되었습니다')),
+        );
+      }
+    } catch (e) {
+      debugPrint('이미지 저장 오류: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('저장 실패: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
   }
 
   @override
@@ -539,6 +575,21 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
               )
             : null,
         centerTitle: true,
+        actions: [
+          _isDownloading
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.download_outlined, color: Colors.white),
+                  onPressed: _downloadImage,
+                ),
+        ],
       ),
       body: PageView.builder(
         controller: _pageController,
