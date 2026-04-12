@@ -67,7 +67,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('날짜 일괄 수정'),
-        content: Text('앨범 내 사진 ${_photos.length}장의 촬영일을\n${picked.year}.${picked.month.toString().padLeft(2,'0')}.${picked.day.toString().padLeft(2,'0')}로 변경할까요?'),
+        content: Text('앨범 내 촬영일이 2026.03.22인 사진의 날짜를\n${picked.year}.${picked.month.toString().padLeft(2,'0')}.${picked.day.toString().padLeft(2,'0')}로 변경할까요?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('변경')),
