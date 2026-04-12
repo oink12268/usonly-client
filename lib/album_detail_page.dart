@@ -53,6 +53,45 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
     }
   }
 
+  // TODO: 날짜 일괄 수정 기능 (임시, 사용 후 제거)
+  Future<void> _showBulkTakenAtDialog() async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (picked == null || !mounted) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('날짜 일괄 수정'),
+        content: Text('앨범 내 사진 ${_photos.length}장의 촬영일을\n${picked.year}.${picked.month.toString().padLeft(2,'0')}.${picked.day.toString().padLeft(2,'0')}로 변경할까요?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('변경')),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    final takenAtStr =
+        "${picked.year.toString().padLeft(4,'0')}-"
+        "${picked.month.toString().padLeft(2,'0')}-"
+        "${picked.day.toString().padLeft(2,'0')}T00:00:00";
+    final response = await ApiClient.put(
+      Uri.parse('${ApiEndpoints.archiveAlbumMediaTakenAt(widget.albumId)}?takenAt=$takenAtStr'),
+    );
+    if (!mounted) return;
+    if (response.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('날짜 변경 완료!')));
+      _fetchPhotos();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('변경 실패')));
+    }
+  }
+
   bool _isVideoFile(String filename) {
     final ext = filename.toLowerCase().split('.').last;
     return ['mp4', 'mov', 'avi', 'mkv'].contains(ext);
@@ -252,6 +291,13 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
       appBar: AppBar(
         title: Text(_albumTitle),
         actions: [
+          if (_photos.isNotEmpty)
+            // TODO: 날짜 일괄 수정 기능 (임시, 사용 후 제거)
+            IconButton(
+              icon: const Icon(Icons.edit_calendar),
+              tooltip: '앨범 날짜 일괄 수정',
+              onPressed: () => _showBulkTakenAtDialog(),
+            ),
           if (_photos.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.slideshow),
@@ -671,12 +717,11 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
     if (pickedTime == null || !mounted) return;
 
     final newDt = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
-    final newDtStr = newDt.toUtc().toIso8601String().substring(0, 19);
+    final newDtStr = newDt.toIso8601String().substring(0, 19);
 
     try {
       final response = await ApiClient.put(
         Uri.parse('${ApiEndpoints.archiveMediaTakenAt(mediaId)}?takenAt=${Uri.encodeComponent(newDtStr)}'),
-        body: {},
       );
       if (response.statusCode == 200) {
         photo['takenAt'] = newDt.toIso8601String();

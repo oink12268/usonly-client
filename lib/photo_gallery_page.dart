@@ -643,12 +643,11 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
     if (pickedTime == null || !mounted) return;
 
     final newDt = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
-    final newDtStr = newDt.toUtc().toIso8601String().substring(0, 19);
+    final newDtStr = newDt.toIso8601String().substring(0, 19);
 
     try {
       final response = await ApiClient.put(
         Uri.parse('${ApiEndpoints.archiveMediaTakenAt(mediaId)}?takenAt=${Uri.encodeComponent(newDtStr)}'),
-        body: {},
       );
       if (response.statusCode == 200) {
         photo['takenAt'] = newDt.toIso8601String();
