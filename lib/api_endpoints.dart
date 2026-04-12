@@ -74,8 +74,6 @@ class ApiEndpoints {
       '$_base/api/archives/media/$mediaId';
   static String archiveMediaTakenAt(int mediaId) =>
       '$_base/api/archives/media/$mediaId/taken-at';
-  static String archiveAlbumMediaTakenAt(int albumId) =>
-      '$_base/api/archives/$albumId/media/taken-at';
 
   // ── Note ──────────────────────────────────────────────
   static String get notes => '$_base/api/notes';
