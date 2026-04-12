@@ -582,43 +582,110 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
 
   void _showPhotoInfo() {
     final photo = widget.photos[_currentIndex];
-    final takenAt = photo['takenAt'] as String?;
     final mediaType = photo['mediaType'] as String? ?? 'IMAGE';
 
-    String dateStr = '-';
-    if (takenAt != null) {
+    String _buildDateStr(String? takenAt) {
+      if (takenAt == null) return '-';
       try {
         final dt = DateTime.parse(takenAt).toLocal();
-        dateStr = '${dt.year}년 ${dt.month}월 ${dt.day}일 '
+        return '${dt.year}년 ${dt.month}월 ${dt.day}일 '
             '${dt.hour.toString().padLeft(2, '0')}:'
             '${dt.minute.toString().padLeft(2, '0')}';
-      } catch (_) {}
+      } catch (_) {
+        return '-';
+      }
     }
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.black87,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('사진 정보', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              _infoRow(Icons.calendar_today_outlined, '촬영일시', dateStr),
-              const SizedBox(height: 12),
-              _infoRow(
-                mediaType == 'VIDEO' ? Icons.videocam_outlined : Icons.image_outlined,
-                '파일 유형',
-                mediaType == 'VIDEO' ? '동영상' : '사진',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final takenAt = photo['takenAt'] as String?;
+          final dateStr = _buildDateStr(takenAt);
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('사진 정보', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(child: _infoRow(Icons.calendar_today_outlined, '촬영일시', dateStr)),
+                      TextButton(
+                        onPressed: () => _editTakenAt(photo, setSheetState),
+                        child: const Text('수정', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _infoRow(
+                    mediaType == 'VIDEO' ? Icons.videocam_outlined : Icons.image_outlined,
+                    '파일 유형',
+                    mediaType == 'VIDEO' ? '동영상' : '사진',
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
+  }
+
+  Future<void> _editTakenAt(Map<String, dynamic> photo, StateSetter setSheetState) async {
+    final mediaId = photo['id'] as int?;
+    if (mediaId == null) return;
+
+    final currentTakenAt = photo['takenAt'] as String?;
+    DateTime initial;
+    try {
+      initial = currentTakenAt != null ? DateTime.parse(currentTakenAt).toLocal() : DateTime.now();
+    } catch (_) {
+      initial = DateTime.now();
+    }
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+      builder: (ctx, child) => Theme(
+        data: ThemeData.dark(),
+        child: child!,
+      ),
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+      builder: (ctx, child) => Theme(
+        data: ThemeData.dark(),
+        child: child!,
+      ),
+    );
+    if (pickedTime == null || !mounted) return;
+
+    final newDt = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
+    final newDtStr = newDt.toUtc().toIso8601String().substring(0, 19);
+
+    try {
+      final response = await ApiClient.put(
+        Uri.parse('${ApiEndpoints.archiveMediaTakenAt(mediaId)}?takenAt=${Uri.encodeComponent(newDtStr)}'),
+        body: {},
+      );
+      if (response.statusCode == 200) {
+        photo['takenAt'] = newDt.toIso8601String();
+        setSheetState(() {});
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('촬영일시 수정 오류: $e');
+    }
   }
 
   Widget _infoRow(IconData icon, String label, String value) {

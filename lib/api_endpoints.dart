@@ -72,6 +72,8 @@ class ApiEndpoints {
   static String get archiveReorder => '$_base/api/archives/reorder';
   static String archiveMediaDelete(int mediaId) =>
       '$_base/api/archives/media/$mediaId';
+  static String archiveMediaTakenAt(int mediaId) =>
+      '$_base/api/archives/media/$mediaId/taken-at';
 
   // ── Note ──────────────────────────────────────────────
   static String get notes => '$_base/api/notes';
