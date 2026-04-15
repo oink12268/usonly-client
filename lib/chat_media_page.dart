@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'api_client.dart';
 import 'api_endpoints.dart';
+import 'chat_search_page.dart';
 
 class ChatMediaPage extends StatefulWidget {
   const ChatMediaPage({super.key});
@@ -12,19 +12,43 @@ class ChatMediaPage extends StatefulWidget {
 }
 
 class _ChatMediaPageState extends State<ChatMediaPage> {
-  List<String> _imageUrls = [];
+  final List<String> _imageUrls = [];
+  final ScrollController _scrollController = ScrollController();
+  int _currentPage = 0;
+  static const int _pageSize = 30;
+  bool _hasMore = true;
   bool _isLoading = true;
+  bool _isLoadingMore = false;
 
   @override
   void initState() {
     super.initState();
     _fetchImages();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300) {
+      if (_hasMore && !_isLoadingMore) {
+        _fetchImages();
+      }
+    }
   }
 
   Future<void> _fetchImages() async {
+    if (_isLoadingMore) return;
+    setState(() => _isLoadingMore = true);
+
     try {
       final response = await ApiClient.get(
-        Uri.parse(ApiEndpoints.chatImages),
+        Uri.parse(ApiEndpoints.chatImages(page: _currentPage, size: _pageSize)),
       );
       if (response.statusCode == 200) {
         final chats = ApiClient.decodeBody(response) as List;
@@ -32,13 +56,21 @@ class _ChatMediaPageState extends State<ChatMediaPage> {
             .map((c) => (c['message'] as String).replaceFirst('IMAGE:', ''))
             .where((url) => url.isNotEmpty)
             .toList();
-        if (mounted) setState(() { _imageUrls = urls; _isLoading = false; });
+        if (mounted) {
+          setState(() {
+            _imageUrls.addAll(urls);
+            _hasMore = urls.length == _pageSize;
+            _currentPage++;
+            _isLoading = false;
+            _isLoadingMore = false;
+          });
+        }
       } else {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) setState(() { _isLoading = false; _isLoadingMore = false; });
       }
     } catch (e) {
       debugPrint('채팅 이미지 로드 실패: $e');
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() { _isLoading = false; _isLoadingMore = false; });
     }
   }
 
@@ -53,24 +85,35 @@ class _ChatMediaPageState extends State<ChatMediaPage> {
           : _imageUrls.isEmpty
               ? const Center(child: Text('아직 공유된 사진이 없어요'))
               : GridView.builder(
+                  controller: _scrollController,
                   padding: const EdgeInsets.all(2),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     crossAxisSpacing: 2,
                     mainAxisSpacing: 2,
                   ),
-                  itemCount: _imageUrls.length,
+                  itemCount: _imageUrls.length + (_hasMore ? 1 : 0),
                   itemBuilder: (context, index) {
+                    if (index == _imageUrls.length) {
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
                     final url = _imageUrls[index];
                     return GestureDetector(
                       onTap: () => _openFullScreen(context, index),
                       child: CachedNetworkImage(
                         imageUrl: url,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+                        placeholder: (_, __) => Container(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest),
                         errorWidget: (_, __, ___) => Container(
                           color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          child: Icon(Icons.broken_image, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          child: Icon(Icons.broken_image,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                       ),
                     );
@@ -83,68 +126,10 @@ class _ChatMediaPageState extends State<ChatMediaPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _FullScreenGallery(
-          urls: _imageUrls,
+        builder: (_) => FullScreenImageView(
+          imageUrls: _imageUrls,
           initialIndex: initialIndex,
         ),
-      ),
-    );
-  }
-}
-
-class _FullScreenGallery extends StatefulWidget {
-  final List<String> urls;
-  final int initialIndex;
-  const _FullScreenGallery({required this.urls, required this.initialIndex});
-
-  @override
-  State<_FullScreenGallery> createState() => _FullScreenGalleryState();
-}
-
-class _FullScreenGalleryState extends State<_FullScreenGallery> {
-  late final PageController _pageController;
-  late int _currentIndex;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: widget.initialIndex);
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text('${_currentIndex + 1} / ${widget.urls.length}'),
-      ),
-      body: PageView.builder(
-        controller: _pageController,
-        itemCount: widget.urls.length,
-        onPageChanged: (i) => setState(() => _currentIndex = i),
-        itemBuilder: (context, index) {
-          return InteractiveViewer(
-            child: Center(
-              child: CachedNetworkImage(
-                imageUrl: widget.urls[index],
-                fit: BoxFit.contain,
-                placeholder: (_, __) =>
-                    const Center(child: CircularProgressIndicator(color: Colors.white)),
-                errorWidget: (_, __, ___) =>
-                    const Icon(Icons.broken_image, color: Colors.white, size: 64),
-              ),
-            ),
-          );
-        },
       ),
     );
   }

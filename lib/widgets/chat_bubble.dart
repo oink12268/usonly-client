@@ -3,8 +3,6 @@ import 'package:flutter/gestures.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:any_link_preview/any_link_preview.dart';
-import '../api_client.dart';
-import '../api_endpoints.dart';
 import '../utils/date_formatter.dart';
 import '../chat_search_page.dart';
 import '../pdf_viewer_page.dart';
@@ -134,29 +132,14 @@ class ChatBubble extends StatelessWidget {
     );
   }
 
-  Future<void> _openImageGallery(BuildContext context, String content) async {
-    List<String> imageUrls;
-    try {
-      final response = await ApiClient.get(Uri.parse(ApiEndpoints.chatImages));
-      if (response.statusCode == 200) {
-        final chats = ApiClient.decodeBody(response) as List;
-        imageUrls = chats
-            .map((c) => (c['message'] as String).replaceFirst('IMAGE:', ''))
-            .where((url) => url.isNotEmpty)
-            .toList();
-      } else {
-        imageUrls = _fallbackImageUrls();
-      }
-    } catch (_) {
-      imageUrls = _fallbackImageUrls();
-    }
-    final initialIndex = imageUrls.indexOf(content).clamp(0, imageUrls.length - 1);
-    if (!context.mounted) return;
+  void _openImageGallery(BuildContext context, String content) {
+    final imageUrls = _fallbackImageUrls();
+    final initialIndex = imageUrls.indexOf(content).clamp(0, imageUrls.isEmpty ? 0 : imageUrls.length - 1);
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => FullScreenImageView(
-          imageUrls: imageUrls,
+          imageUrls: imageUrls.isEmpty ? [content] : imageUrls,
           initialIndex: initialIndex,
         ),
       ),

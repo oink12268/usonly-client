@@ -37,7 +37,8 @@ class ApiEndpoints {
   static String chatSearchQuery(String q) =>
       '$_base/api/chats/search?q=${Uri.encodeComponent(q)}';
   static String get chatCalendar => '$_base/api/chats/calendar';
-  static String get chatImages => '$_base/api/chats/images';
+  static String chatImages({int page = 0, int size = 30}) =>
+      '$_base/api/chats/images?page=$page&size=$size';
   static String chatDelete(int id) => '$_base/api/chats/$id';
   static String get chatImageUpload => '$_base/api/chat/image';
   static String get chatFileUpload => '$_base/api/chat/file';

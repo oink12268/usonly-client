@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(xargs grep:*)",
-      "Skill(update-config)"
+      "Skill(update-config)",
+      "Bash(flutter pub *)",
+      "Bash(flutter analyze *)",
+      "Bash(flutter clean *)"
     ]
   }
 }
