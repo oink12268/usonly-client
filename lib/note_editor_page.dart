@@ -195,7 +195,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
       final response = await ApiClient.sendMultipart(request);
       if (response.statusCode == 200) {
-        final data = jsonDecode(await response.stream.bytesToString());
+        final data = await ApiClient.decodeStreamedBody(response);
         final serverUrl = data['imageUrl'] as String;
 
         final offset = _controller.selection.baseOffset;
@@ -626,7 +626,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               ),
               showFontFamily: false,
               showFontSize: false,
-              showStrikeThrough: false,
+              showStrikeThrough: true,
               showInlineCode: false,
               showColorButton: false,
               showBackgroundColorButton: false,
