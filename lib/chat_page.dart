@@ -42,6 +42,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
   // 소켓 클라이언트 객체
   StompClient? stompClient;
+  bool _isConnecting = false;
+  Timer? _reconnectTimer;
+  // 연결 중 전송 시도한 메시지 큐 (연결 완료 시 일괄 전송)
+  final List<Map<String, dynamic>> _pendingMessages = [];
 
   // 답장 관련 상태
   Map<String, dynamic>? _replyTarget;
@@ -121,8 +125,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       FcmService().clearChatNotifications();
       _fetchHistory();
       // 기존 소켓 끊고 재연결
+      _reconnectTimer?.cancel();
       stompClient?.deactivate();
       stompClient = null;
+      _isConnecting = false;
       _connectSocket();
     }
   }
@@ -134,6 +140,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     FcmService().setChatActive(false);
     // 방 나가면 소켓 끊기 (필수)
     stompClient?.deactivate();
+    _reconnectTimer?.cancel();
     _typingTimer?.cancel();
     _partnerTypingTimer?.cancel();
     _partnerTypingNotifier.dispose();
@@ -287,13 +294,28 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
   // --- [2] 소켓 연결 및 구독 (WebSocket) ---
   void _connectSocket() async {
+    if (_isConnecting) return;
+    _isConnecting = true;
     final connectHeaders = await ApiClient.stompHeaders();
+    if (!mounted) { _isConnecting = false; return; }
     stompClient = StompClient(
       config: StompConfig(
         url: socketUrl,
         stompConnectHeaders: connectHeaders,
         onConnect: (StompFrame frame) {
           debugPrint("✅ 소켓 연결 성공!");
+          _isConnecting = false;
+          // 연결 대기 중 쌓인 메시지 전송
+          if (_pendingMessages.isNotEmpty) {
+            final toSend = List<Map<String, dynamic>>.from(_pendingMessages);
+            _pendingMessages.clear();
+            for (final payload in toSend) {
+              stompClient!.send(
+                destination: '/pub/chat',
+                body: jsonEncode(payload),
+              );
+            }
+          }
 
           // 타이핑 이벤트 구독
           stompClient!.subscribe(
@@ -358,10 +380,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         },
         onWebSocketError: (dynamic error) {
           debugPrint("🚨 소켓 에러: $error");
+          _isConnecting = false;
           _scheduleReconnect();
         },
         onDisconnect: (StompFrame frame) {
           debugPrint("🔌 소켓 연결 끊김, 재연결 예약...");
+          _isConnecting = false;
           _scheduleReconnect();
         },
       ),
@@ -374,7 +398,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   // --- 소켓 재연결 ---
   void _scheduleReconnect() {
     if (!mounted) return;
-    Future.delayed(const Duration(seconds: 3), () {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
       if (stompClient == null || !stompClient!.connected) {
         debugPrint("🔄 소켓 재연결 시도...");
@@ -420,14 +445,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       payload['replyToUid'] = _replyTarget!['writerUid']?.toString() ?? '';
     }
 
-    // [FIX #1] stompClient null 안전성 체크
+    // 연결 안 됐을 때: 큐에 넣고 재연결 시도 (전송 취소하지 않음)
     if (stompClient == null || !stompClient!.connected) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('서버 연결 중입니다. 잠시 후 다시 시도해주세요.')),
-        );
-      }
+      _pendingMessages.add(Map<String, dynamic>.from(payload));
       _scheduleReconnect();
+      _controller.clear();
+      _cancelReply();
+      _focusNode.requestFocus();
       return;
     }
     stompClient!.send(

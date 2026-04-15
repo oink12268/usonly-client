@@ -7,6 +7,7 @@ import '../api_client.dart';
 import '../api_endpoints.dart';
 import '../utils/date_formatter.dart';
 import '../chat_search_page.dart';
+import '../pdf_viewer_page.dart';
 
 class ChatBubble extends StatelessWidget {
   final Map<String, dynamic> chat;
@@ -419,8 +420,22 @@ class ChatBubble extends StatelessWidget {
                           // 파일
                           else if (isFile)
                             GestureDetector(
-                              onTap: () =>
-                                  launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication),
+                              onTap: () {
+                                final isPdf = fileName.toLowerCase().endsWith('.pdf');
+                                if (isPdf) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PdfViewerPage(
+                                        url: fileUrl,
+                                        fileName: fileName,
+                                      ),
+                                    ),
+                                  );
+                                } else {
+                                  launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
+                                }
+                              },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 14, vertical: 10),
@@ -439,11 +454,16 @@ class ChatBubble extends StatelessWidget {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.insert_drive_file,
+                                    Icon(
+                                        fileName.toLowerCase().endsWith('.pdf')
+                                            ? Icons.picture_as_pdf
+                                            : Icons.insert_drive_file,
                                         size: 28,
                                         color: isMe
                                             ? Theme.of(context).colorScheme.onPrimary
-                                            : Theme.of(context).colorScheme.onSurface),
+                                            : fileName.toLowerCase().endsWith('.pdf')
+                                                ? Colors.red[400]
+                                                : Theme.of(context).colorScheme.onSurface),
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: Text(
@@ -456,7 +476,10 @@ class ChatBubble extends StatelessWidget {
                                       ),
                                     ),
                                     const SizedBox(width: 6),
-                                    Icon(Icons.download,
+                                    Icon(
+                                        fileName.toLowerCase().endsWith('.pdf')
+                                            ? Icons.open_in_new
+                                            : Icons.download,
                                         size: 18,
                                         color: isMe
                                             ? Theme.of(context)

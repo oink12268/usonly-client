@@ -28,6 +28,10 @@ class FcmService {
   bool _isChatActive = false;
   void setChatActive(bool active) => _isChatActive = active;
 
+  // 알림 ID 카운터 (고유 ID 생성용)
+  int _notificationId = 1;
+  int _badgeCount = 0;
+
   // 알림 탭 → 네비게이션 콜백 (HomeScreen이 등록, type: 'chat' | 'anniversary')
   void Function(String type)? onNavigate;
   // 앱이 종료 상태에서 알림 탭으로 열린 경우 pending 저장
@@ -41,6 +45,8 @@ class FcmService {
   // 채팅 읽음 처리: 알림 영역 + 앱 아이콘 배지 초기화
   Future<void> clearChatNotifications() async {
     if (!_isMobile) return;
+    _badgeCount = 0;
+    _notificationId = 1;
     // 알림 영역에서 채팅 알림 제거 (Android: 배지도 함께 제거됨)
     await _localNotifications.cancelAll();
     // iOS: 별도로 배지 카운트 0으로 초기화
@@ -131,12 +137,14 @@ class FcmService {
       if (_isChatActive) return; // 채팅 화면 중이면 알림 표시 안 함
       final notification = message.notification;
       if (notification != null) {
+        _badgeCount++;
+        final id = _notificationId++;
         _localNotifications.show(
-          0, // 고정 ID → 항상 마지막 알림 하나만 표시
+          id,
           notification.title,
           notification.body,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
+          NotificationDetails(
+            android: const AndroidNotificationDetails(
               'chat_channel_v2',
               '채팅 알림',
               importance: Importance.max,
@@ -147,6 +155,7 @@ class FcmService {
             ),
             iOS: DarwinNotificationDetails(
               presentSound: true,
+              badgeNumber: _badgeCount,
             ),
           ),
         );

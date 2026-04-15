@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:convert';
 import 'auth_service.dart';
 import 'font_size_notifier.dart';
@@ -135,14 +136,120 @@ class _MorePage extends StatefulWidget {
   State<_MorePage> createState() => _MorePageState();
 }
 
+// 버전 변경 이력 (최신순)
+const _changelog = [
+  (
+    version: '1.0.0',
+    date: '2026.04.15',
+    changes: [
+      'PDF 파일 뷰어 지원',
+      '채팅 파일 전송 개선',
+      '메모 에디터 취소선 버튼 추가',
+      '메모 에디터 이미지 업로드 오류 수정',
+    ]
+  ),
+  (
+    version: '0.9.5',
+    date: '2026.03.30',
+    changes: [
+      '채팅 전체화면 이미지 저장 버튼 추가',
+      '앨범 날짜 일괄 수정 기능 추가',
+      '날짜 전송 로컬타임 버그 수정',
+    ]
+  ),
+  (
+    version: '0.9.0',
+    date: '2026.03.01',
+    changes: [
+      '채팅 답장(Reply) 기능 추가',
+      '채팅 이미지/파일 전송 개선',
+      '다크모드 지원',
+      '글자 크기 설정 추가',
+    ]
+  ),
+];
+
 class _MorePageState extends State<_MorePage> {
   String? _nickname;
   String? _profileImageUrl;
+  String _appVersion = '';
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _appVersion = info.version);
+  }
+
+  void _showChangelogDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('업데이트 내역'),
+        contentPadding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: _changelog.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              final entry = _changelog[i];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'v${entry.version}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          entry.date,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ...entry.changes.map((c) => Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• ', style: TextStyle(fontSize: 13)),
+                          Expanded(child: Text(c, style: const TextStyle(fontSize: 13))),
+                        ],
+                      ),
+                    )),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadProfile() async {
@@ -299,6 +406,19 @@ class _MorePageState extends State<_MorePage> {
             ),
           ),
           const Divider(height: 20),
+          // 버전 정보
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('버전 정보'),
+            trailing: Text(
+              _appVersion.isNotEmpty ? 'v$_appVersion' : '',
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            onTap: _showChangelogDialog,
+          ),
           // 로그아웃
           if (widget.user != null)
             ListTile(
