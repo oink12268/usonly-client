@@ -42,6 +42,7 @@ class ApiEndpoints {
   static String chatDelete(int id) => '$_base/api/chats/$id';
   static String get chatImageUpload => '$_base/api/chat/image';
   static String get chatFileUpload => '$_base/api/chat/file';
+  static String get chatRead => '$_base/api/chat/read';
   static String get aiSearch => '$_base/api/chat/ai-search';
   static String aiSearchQuery(String q) =>
       '$_base/api/chat/ai-search?q=${Uri.encodeComponent(q)}';

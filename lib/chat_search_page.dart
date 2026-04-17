@@ -515,6 +515,7 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
   late final PageController _pageController;
   late int _currentIndex;
   bool _isDownloading = false;
+  bool _showUI = true;
 
   @override
   void initState() {
@@ -564,53 +565,58 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
     final total = widget.imageUrls.length;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        iconTheme: const IconThemeData(color: Colors.white),
-        elevation: 0,
-        title: total > 1
-            ? Text(
-                '${_currentIndex + 1} / $total',
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-              )
-            : null,
-        centerTitle: true,
-        actions: [
-          _isDownloading
-              ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  ),
-                )
-              : IconButton(
-                  icon: const Icon(Icons.download_outlined, color: Colors.white),
-                  onPressed: _downloadImage,
+      appBar: _showUI
+          ? AppBar(
+              backgroundColor: Colors.black,
+              iconTheme: const IconThemeData(color: Colors.white),
+              elevation: 0,
+              title: total > 1
+                  ? Text(
+                      '${_currentIndex + 1} / $total',
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    )
+                  : null,
+              centerTitle: true,
+              actions: [
+                _isDownloading
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.download_outlined, color: Colors.white),
+                        onPressed: _downloadImage,
+                      ),
+              ],
+            )
+          : null,
+      body: GestureDetector(
+        onTap: () => setState(() => _showUI = !_showUI),
+        child: PageView.builder(
+          controller: _pageController,
+          itemCount: total,
+          onPageChanged: (i) => setState(() => _currentIndex = i),
+          itemBuilder: (context, index) {
+            return InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Center(
+                child: CachedNetworkImage(
+                  imageUrl: widget.imageUrls[index],
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) =>
+                      const CircularProgressIndicator(color: Colors.white),
+                  errorWidget: (context, url, error) =>
+                      const Icon(Icons.error, color: Colors.white),
                 ),
-        ],
-      ),
-      body: PageView.builder(
-        controller: _pageController,
-        itemCount: total,
-        onPageChanged: (i) => setState(() => _currentIndex = i),
-        itemBuilder: (context, index) {
-          return InteractiveViewer(
-            minScale: 0.5,
-            maxScale: 4.0,
-            child: Center(
-              child: CachedNetworkImage(
-                imageUrl: widget.imageUrls[index],
-                fit: BoxFit.contain,
-                placeholder: (context, url) =>
-                    const CircularProgressIndicator(color: Colors.white),
-                errorWidget: (context, url, error) =>
-                    const Icon(Icons.error, color: Colors.white),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

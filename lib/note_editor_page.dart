@@ -568,7 +568,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   builder: (_, unsaved, __) => IconButton(
                     icon: Icon(
                       unsaved ? Icons.save : Icons.cloud_done_outlined,
-                      color: unsaved ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     tooltip: unsaved ? '저장' : '저장됨',
                     onPressed: unsaved ? _save : null,

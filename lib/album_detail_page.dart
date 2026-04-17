@@ -372,6 +372,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   bool _isSaving = false;
   bool _isDownloading = false;
   bool _isPeeking = false; // 롱프레스 중 원본 보기
+  bool _showUI = true;
 
   bool get _isCurrentVideo => widget.photos[_currentIndex]['mediaType'] == 'VIDEO';
 
@@ -773,14 +774,15 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
     final filter = filmFilters[_selectedFilterIndex];
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text(
-          "${_currentIndex + 1} / ${widget.photos.length}",
-          style: const TextStyle(color: Colors.white),
-        ),
-        actions: [
+      appBar: _showUI
+          ? AppBar(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              title: Text(
+                "${_currentIndex + 1} / ${widget.photos.length}",
+                style: const TextStyle(color: Colors.white),
+              ),
+              actions: [
           if (!_isCurrentVideo && _selectedFilterIndex != 0)
             _isSaving
                 ? const Padding(
@@ -830,7 +832,8 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
             },
           ),
         ],
-      ),
+      )
+          : null,
       body: Column(
         children: [
           Expanded(
@@ -882,6 +885,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
                     );
                   }
                   return GestureDetector(
+                    onTap: () => setState(() => _showUI = !_showUI),
                     onDoubleTapDown: (d) => _doubleTapDetails = d,
                     onDoubleTap: () => _onDoubleTap(controller),
                     onLongPress: () => setState(() => _isPeeking = true),
@@ -897,7 +901,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
               ),
             ),
           ),
-          if (!_isCurrentVideo) _buildFilterBar(),
+          if (_showUI && !_isCurrentVideo) _buildFilterBar(),
         ],
       ),
     );

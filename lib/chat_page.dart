@@ -95,9 +95,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       TweenSequenceItem(tween: Tween(begin: 1.35, end: 0.85), weight: 30),
       TweenSequenceItem(tween: Tween(begin: 0.85, end: 1.0), weight: 30),
     ]).animate(CurvedAnimation(parent: _sendAnimController, curve: Curves.easeOut));
-    // 채팅 화면 진입: 포그라운드 알림 억제 + 기존 알림/배지 소거
+    // 채팅 화면 진입: 포그라운드 알림 억제 + 기존 알림/배지 소거 + 다른 기기 알림 동기화
     FcmService().setChatActive(true);
     FcmService().clearChatNotifications();
+    ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
     // 1. 방에 들어오자마자 지난 대화 기록 가져오기 (HTTP)
     _fetchHistory();
     // 2. 소켓 연결 시작 (전화기 들기)

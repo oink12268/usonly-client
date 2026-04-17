@@ -12,7 +12,14 @@ bool get _isMobile => !kIsWeb && (
 // 백그라운드 메시지 핸들러 (top-level 함수여야 함)
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print("백그라운드 메시지 수신: ${message.notification?.title}");
+  if (message.data['type'] == 'clear_chat') {
+    final plugin = FlutterLocalNotificationsPlugin();
+    const initSettings = InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    );
+    await plugin.initialize(initSettings);
+    await plugin.cancelAll();
+  }
 }
 
 class FcmService {
@@ -134,6 +141,11 @@ class FcmService {
 
     // 5. 포그라운드 메시지 수신 → 채팅 화면이 열려 있으면 알림 억제
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      // 다른 기기에서 읽음 처리 시 알림 소거
+      if (message.data['type'] == 'clear_chat') {
+        clearChatNotifications();
+        return;
+      }
       if (_isChatActive) return; // 채팅 화면 중이면 알림 표시 안 함
       final notification = message.notification;
       if (notification != null) {
@@ -144,7 +156,7 @@ class FcmService {
           notification.title,
           notification.body,
           NotificationDetails(
-            android: const AndroidNotificationDetails(
+            android: AndroidNotificationDetails(
               'chat_channel_v2',
               '채팅 알림',
               importance: Importance.max,
@@ -152,6 +164,7 @@ class FcmService {
               playSound: true,
               enableVibration: true,
               icon: '@mipmap/ic_launcher',
+              number: _badgeCount,
             ),
             iOS: DarwinNotificationDetails(
               presentSound: true,

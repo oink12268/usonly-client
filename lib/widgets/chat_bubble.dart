@@ -121,8 +121,8 @@ class ChatBubble extends StatelessWidget {
       spans.add(TextSpan(text: text.substring(last)));
     }
 
-    return RichText(
-      text: TextSpan(
+    return Text.rich(
+      TextSpan(
         style: TextStyle(
           fontSize: 16,
           color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
