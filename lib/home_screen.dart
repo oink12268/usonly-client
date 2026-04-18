@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:convert';
 import 'auth_service.dart';
+import 'debug_log_screen.dart';
 import 'font_size_notifier.dart';
 import 'theme_notifier.dart';
 import 'chat_page.dart'; // ★ ChatPage 파일이 있어야 에러가 안 납니다!
@@ -110,17 +111,24 @@ _pages = [
       // SafeArea의 bottom padding이 키보드 등장 시 동적으로 0이 되면서
       // 입력창이 키보드 위에 붙은 직후 한 번 더 올라가는 2차 점프 원인
       body: SafeArea(bottom: false, child: _pages[_selectedIndex]),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.photo_album), label: '앨범'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '캘린더'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: '채팅'),
-          BottomNavigationBarItem(icon: Icon(Icons.note_outlined), label: '메모장'),
-          BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: '더보기'),
-        ],
+      bottomNavigationBar: MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          padding: MediaQuery.of(context).padding.copyWith(
+            bottom: MediaQuery.of(context).padding.bottom + 8,
+          ),
+        ),
+        child: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.photo_album), label: '앨범'),
+            BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '캘린더'),
+            BottomNavigationBarItem(icon: Icon(Icons.chat), label: '채팅'),
+            BottomNavigationBarItem(icon: Icon(Icons.note_outlined), label: '메모장'),
+            BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: '더보기'),
+          ],
+        ),
       ),
     );
   }
@@ -173,6 +181,29 @@ class _MorePageState extends State<_MorePage> {
   String? _nickname;
   String? _profileImageUrl;
   String _appVersion = '';
+
+  // 숨은 디버그 메뉴 진입: 빈공간 7번 탭
+  int _debugTapCount = 0;
+  Timer? _debugTapTimer;
+
+  void _onDebugAreaTap() {
+    _debugTapCount++;
+    _debugTapTimer?.cancel();
+    _debugTapTimer = Timer(const Duration(seconds: 2), () {
+      _debugTapCount = 0;
+    });
+    if (_debugTapCount >= 7) {
+      _debugTapCount = 0;
+      _debugTapTimer?.cancel();
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const DebugLogScreen()));
+    }
+  }
+
+  @override
+  void dispose() {
+    _debugTapTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -428,6 +459,12 @@ class _MorePageState extends State<_MorePage> {
                 await AuthService().signOut();
               },
             ),
+          // 숨은 디버그 진입 영역 (7번 빠르게 탭)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _onDebugAreaTap,
+            child: const SizedBox(height: 80),
+          ),
         ],
       ),
     ),   // ListenableBuilder 끝

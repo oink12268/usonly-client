@@ -952,7 +952,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
   Future<void> _callAiSearch(String query) async {
     // 로딩 다이얼로그
-    showDialog(
+    unawaited(showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
@@ -964,23 +964,26 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           ],
         ),
       ),
-    );
+    ));
 
+    String? result;
     try {
       final response = await ApiClient.get(
         Uri.parse(ApiEndpoints.aiSearchQuery(query)),
       );
-      Navigator.pop(context); // 로딩 닫기
-
       if (response.statusCode == 200) {
-        final data = ApiClient.decodeBody(response) as Map<String, dynamic>;
-        final result = data['result'] as String;
-        _showAiResult(query, result);
-      } else {
-        _showAiError();
+        result = ApiClient.decodeBody(response) as String;
       }
     } catch (e) {
-      Navigator.pop(context);
+      // result는 null 유지
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context); // 로딩 닫기 (항상 정확히 한 번만)
+
+    if (result != null) {
+      _showAiResult(query, result);
+    } else {
       _showAiError();
     }
   }

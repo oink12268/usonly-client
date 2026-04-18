@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+import 'debug_log_service.dart';
 
 class ApiClient {
   // 싱글턴 Client: TCP+TLS 연결을 재사용해 HTTPS 오버헤드를 줄임
@@ -31,29 +32,56 @@ class ApiClient {
     };
   }
 
+  static void _log(String method, Uri url, int status, int ms) {
+    final path = url.path + (url.query.isNotEmpty ? '?${url.query}' : '');
+    final msg = '$method $path → $status (${ms}ms)';
+    if (status >= 500) {
+      appLog.error(msg);
+    } else if (status >= 400) {
+      appLog.warn(msg);
+    } else {
+      appLog.info(msg);
+    }
+  }
+
   static Future<http.Response> get(Uri url) async {
     final headers = await _authHeaders();
-    return _client.get(url, headers: headers);
+    final sw = Stopwatch()..start();
+    final res = await _client.get(url, headers: headers);
+    _log('GET', url, res.statusCode, sw.elapsedMilliseconds);
+    return res;
   }
 
   static Future<http.Response> post(Uri url, {Object? body}) async {
     final headers = await _authHeaders(withJson: body != null);
-    return _client.post(url, headers: headers, body: body);
+    final sw = Stopwatch()..start();
+    final res = await _client.post(url, headers: headers, body: body);
+    _log('POST', url, res.statusCode, sw.elapsedMilliseconds);
+    return res;
   }
 
   static Future<http.Response> put(Uri url, {Object? body}) async {
     final headers = await _authHeaders(withJson: body != null);
-    return _client.put(url, headers: headers, body: body);
+    final sw = Stopwatch()..start();
+    final res = await _client.put(url, headers: headers, body: body);
+    _log('PUT', url, res.statusCode, sw.elapsedMilliseconds);
+    return res;
   }
 
   static Future<http.Response> patch(Uri url, {Object? body}) async {
     final headers = await _authHeaders(withJson: body != null);
-    return _client.patch(url, headers: headers, body: body);
+    final sw = Stopwatch()..start();
+    final res = await _client.patch(url, headers: headers, body: body);
+    _log('PATCH', url, res.statusCode, sw.elapsedMilliseconds);
+    return res;
   }
 
   static Future<http.Response> delete(Uri url) async {
     final headers = await _authHeaders();
-    return _client.delete(url, headers: headers);
+    final sw = Stopwatch()..start();
+    final res = await _client.delete(url, headers: headers);
+    _log('DELETE', url, res.statusCode, sw.elapsedMilliseconds);
+    return res;
   }
 
   // MultipartRequest 전송 (이미지 업로드 등)
@@ -63,7 +91,12 @@ class ApiClient {
     if (t != null) {
       request.headers['Authorization'] = 'Bearer $t';
     }
-    return _client.send(request);
+    final sw = Stopwatch()..start();
+    final res = await _client.send(request);
+    final path = request.url.path;
+    final msg = 'MULTIPART ${request.method} $path → ${res.statusCode} (${sw.elapsedMilliseconds}ms)';
+    if (res.statusCode >= 400) { appLog.warn(msg); } else { appLog.info(msg); }
+    return res;
   }
 
   // WebSocket STOMP 연결 헤더
