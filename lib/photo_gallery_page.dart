@@ -102,14 +102,38 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
   }
 
   // album_page.dart에서 GlobalKey로 호출
-  void startSlideshow() {
+  Future<void> startSlideshow() async {
     if (_photos.isEmpty) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SlideshowPage(photos: _photos),
-      ),
+
+    // 전체 사진 로딩 중 표시
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)),
     );
+
+    try {
+      // 전체 사진 한 번에 가져오기
+      final response = await ApiClient.get(
+        Uri.parse(ApiEndpoints.archiveMediaPaged(page: 0, size: 9999)),
+      );
+      if (!mounted) return;
+      Navigator.pop(context); // 로딩 닫기
+
+      if (response.statusCode == 200) {
+        final allPhotos = ApiClient.decodeBody(response) as List;
+        if (allPhotos.isEmpty) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SlideshowPage(photos: allPhotos),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      debugPrint("슬라이드쇼 로딩 에러: $e");
+    }
   }
 
   bool _isVideoFile(String filename) {
@@ -885,14 +909,18 @@ class _VideoPlayerWidget extends StatefulWidget {
 class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
   late VideoPlayerController _controller;
   bool _initialized = false;
+  bool _unsupported = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
-      ..initialize().then((_) {
-        if (mounted) setState(() => _initialized = true);
-      });
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _controller.initialize().then((_) {
+      if (mounted) setState(() => _initialized = true);
+    }).catchError((e) {
+      debugPrint('비디오 초기화 실패: $e');
+      if (mounted) setState(() => _unsupported = true);
+    });
   }
 
   @override
@@ -903,6 +931,18 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
 
   @override
   Widget build(BuildContext context) {
+    if (_unsupported) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.videocam_off, color: Colors.white54, size: 48),
+            SizedBox(height: 8),
+            Text('이 기기에서는 동영상을 재생할 수 없어요', style: TextStyle(color: Colors.white54)),
+          ],
+        ),
+      );
+    }
     if (!_initialized) {
       return const Center(child: CircularProgressIndicator(color: Colors.white));
     }
@@ -958,12 +998,13 @@ class _SlideshowPageState extends State<SlideshowPage>
   int _currentIndex = 0;
   bool _isPlaying = true;
   bool _showControls = true;
-  bool _isShuffle = false;
+  bool _isShuffle = true;
   int _intervalSeconds = 3;
   Timer? _timer;
   Timer? _progressTimer;
   double _progress = 0.0;
   late AnimationController _fadeController;
+  final List<int> _shuffleQueue = [];
 
   static const List<int> _intervals = [2, 3, 5, 8];
 
@@ -976,6 +1017,7 @@ class _SlideshowPageState extends State<SlideshowPage>
       value: 1.0,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _buildShuffleQueue();
       _startTimer();
       _scheduleHideControls();
     });
@@ -989,10 +1031,32 @@ class _SlideshowPageState extends State<SlideshowPage>
     super.dispose();
   }
 
+  void _buildShuffleQueue() {
+    final indices = List<int>.generate(widget.photos.length, (i) => i)
+      ..remove(_currentIndex)
+      ..shuffle(Random());
+    _shuffleQueue
+      ..clear()
+      ..addAll(indices);
+    debugPrint('🔀 셔플큐 생성: $_shuffleQueue (현재: $_currentIndex)');
+  }
+
   void _preloadAhead() {
-    for (int i = 1; i <= 2; i++) {
-      final index = (_currentIndex + i) % widget.photos.length;
-      final url = widget.photos[index]['mediaUrl'] as String?;
+    final toPreload = <int>[];
+    if (_isShuffle) {
+      for (int i = 0; i < 2 && i < _shuffleQueue.length; i++) {
+        toPreload.add(_shuffleQueue[i]);
+      }
+    } else {
+      for (int i = 1; i <= 2; i++) {
+        toPreload.add((_currentIndex + i) % widget.photos.length);
+      }
+    }
+    for (final index in toPreload) {
+      final photo = widget.photos[index];
+      final mediaType = photo['mediaType'] as String?;
+      if (mediaType == 'VIDEO') continue;
+      final url = photo['mediaUrl'] as String?;
       if (url != null && mounted) {
         precacheImage(CachedNetworkImageProvider(url), context);
       }
@@ -1020,13 +1084,14 @@ class _SlideshowPageState extends State<SlideshowPage>
   void _nextPhoto() {
     if (!mounted) return;
     if (_isShuffle && widget.photos.length > 1) {
-      int next;
-      do {
-        next = Random().nextInt(widget.photos.length);
-      } while (next == _currentIndex);
+      if (_shuffleQueue.isEmpty) _buildShuffleQueue();
+      final next = _shuffleQueue.removeAt(0);
+      debugPrint('🔀 다음사진: $next (셔플큐 남은것: $_shuffleQueue)');
       setState(() => _currentIndex = next);
     } else {
-      setState(() => _currentIndex = (_currentIndex + 1) % widget.photos.length);
+      final next = (_currentIndex + 1) % widget.photos.length;
+      debugPrint('▶ 다음사진: $next (순서재생)');
+      setState(() => _currentIndex = next);
     }
     _startTimer();
   }
@@ -1227,7 +1292,13 @@ class _SlideshowPageState extends State<SlideshowPage>
                             color: _isShuffle ? Colors.white : Colors.white38,
                             size: 24,
                           ),
-                          onPressed: () => setState(() => _isShuffle = !_isShuffle),
+                          onPressed: () {
+                            setState(() {
+                              _isShuffle = !_isShuffle;
+                            });
+                            debugPrint('🔀 셔플 토글: $_isShuffle');
+                            if (_isShuffle) _buildShuffleQueue();
+                          },
                         ),
                         // 간격 선택
                         Row(
