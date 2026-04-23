@@ -289,6 +289,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       config: StompConfig(
         url: socketUrl,
         stompConnectHeaders: connectHeaders,
+        reconnectDelay: const Duration(seconds: 5),
         onConnect: (StompFrame frame) {
           print("✅ 소켓 연결 성공!");
 
@@ -586,7 +587,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   }
 
   void _sendImageMessage(String imageUrl) {
-    if (stompClient == null) return;
+    if (stompClient == null || !stompClient!.connected) return;
 
     stompClient!.send(
       destination: '/pub/chat',
