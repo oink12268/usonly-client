@@ -839,15 +839,28 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         });
 
         // 타겟 메시지를 화면 중앙으로 스크롤
+        // ListView.builder는 뷰포트 밖 아이템을 빌드하지 않으므로,
+        // 먼저 타겟 근처로 점프해 렌더링 범위를 확장한 뒤 ensureVisible 호출
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          final ctx = _targetMessageKey.currentContext;
-          if (ctx != null) {
-            Scrollable.ensureVisible(
-              ctx,
-              alignment: 0.5,
-              duration: const Duration(milliseconds: 300),
-            );
-          }
+          if (!_scrollController.hasClients) return;
+          final maxScroll = _scrollController.position.maxScrollExtent;
+          // 타겟은 older의 마지막(index = older.length-1)에 위치
+          // reverse:true에서 index i의 픽셀 위치 ≈ maxScroll * (1 - i/N)
+          final targetRatio = _chats.isNotEmpty
+              ? 1.0 - (older.length / _chats.length)
+              : 0.5;
+          _scrollController.jumpTo((maxScroll * targetRatio).clamp(0.0, maxScroll));
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final ctx = _targetMessageKey.currentContext;
+            if (ctx != null) {
+              Scrollable.ensureVisible(
+                ctx,
+                alignment: 0.5,
+                duration: const Duration(milliseconds: 300),
+              );
+            }
+          });
         });
 
         Future.delayed(const Duration(seconds: 2), () {

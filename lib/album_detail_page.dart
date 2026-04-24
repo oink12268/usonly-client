@@ -372,7 +372,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   bool _isSaving = false;
   bool _isDownloading = false;
   bool _isPeeking = false; // 롱프레스 중 원본 보기
-  bool _showUI = true;
+  bool _showUI = false;
 
   bool get _isCurrentVideo => widget.photos[_currentIndex]['mediaType'] == 'VIDEO';
 

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -39,9 +38,7 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
         Uri.parse(ApiEndpoints.chatSearchQuery(query.trim())),
       );
       if (response.statusCode == 200) {
-        setState(() {
-          _results = json.decode(utf8.decode(response.bodyBytes)) as List;
-        });
+        setState(() => _results = ApiClient.decodeBody(response) as List);
       }
     } catch (e) {
       debugPrint('Search error: $e');
