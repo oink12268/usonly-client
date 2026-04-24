@@ -16,6 +16,7 @@ import 'note_page.dart';
 import 'work_schedule_page.dart';
 import 'dino_game_page.dart';
 import 'profile_edit_page.dart';
+import 'notification_settings_page.dart';
 import 'api_client.dart';
 import 'api_endpoints.dart';
 import 'share_intent_service.dart';
@@ -394,6 +395,19 @@ class _MorePageState extends State<_MorePage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const DinoGamePage()),
+              );
+            },
+          ),
+          // 알림 설정
+          ListTile(
+            leading: const Icon(Icons.notifications_outlined),
+            title: const Text('알림 설정'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const NotificationSettingsPage(),
+                ),
               );
             },
           ),

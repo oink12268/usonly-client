@@ -89,4 +89,7 @@ class ApiEndpoints {
 
   // ── Work Schedule ─────────────────────────────────────
   static String get workScheduleAnalyze => '$_base/api/work-schedule/analyze';
+
+  // ── Notification Settings ──────────────────────────────
+  static String get notificationSettings => '$_base/api/notification-settings';
 }
