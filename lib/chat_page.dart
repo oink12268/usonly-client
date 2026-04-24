@@ -370,6 +370,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                   await _getNickname(uid);
                 }
 
+                // 파트너 메시지 수신 시 내 다른 기기(모바일) 알림 제거
+                if (uid != widget.uid) {
+                  ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
+                }
+
                 // 화면 갱신: 리스트에 추가하고 스크롤 내리기
                 setState(() {
                   _chats.add(newChat);

@@ -52,10 +52,11 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final count = (prefs.getInt(_kBadgeCountKey) ?? 0) + 1;
   await prefs.setInt(_kBadgeCountKey, count);
 
-  // data-only 메시지: notification 필드 없이 data['title'], data['body'] 사용
+  // notification 필드가 있으면 FCM이 OS 레벨에서 이미 표시함 → 수동 표시 생략
+  // data-only 메시지(notification == null)일 때만 직접 표시
   final title = message.data['title'];
   final body = message.data['body'];
-  if (title != null || body != null) {
+  if (message.notification == null && (title != null || body != null)) {
     final uid = prefs.getString(_kUserUidKey);
     await plugin.show(
       count,
