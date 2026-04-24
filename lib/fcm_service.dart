@@ -204,8 +204,11 @@ class FcmService {
     );
 
     // 2. 배지 카운트 복원
+    // 백그라운드 핸들러는 badge count 값을 notification ID로 직접 사용하므로,
+    // 포그라운드 ID는 반드시 _badgeCount + 1 부터 시작해야 충돌이 없음
     final prefs = await SharedPreferences.getInstance();
     _badgeCount = prefs.getInt(_kBadgeCountKey) ?? 0;
+    _notificationId = _badgeCount + 1;
 
     // 3. 로컬 알림 초기화
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -279,10 +282,10 @@ class FcmService {
       final body = message.data['body'] as String?;
       if (title != null || body != null) {
         _badgeCount++;
+        final id = _notificationId++;
         SharedPreferences.getInstance()
             .then((p) => p.setInt(_kBadgeCountKey, _badgeCount));
         final uid = FirebaseAuth.instance.currentUser?.uid;
-        final id = _notificationId++;
         _localNotifications.show(
           id,
           title,
