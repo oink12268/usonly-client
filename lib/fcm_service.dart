@@ -25,7 +25,7 @@ const _replyAction = AndroidNotificationAction(
   '답장',
   inputs: [AndroidNotificationActionInput(label: '메시지를 입력하세요...')],
   showsUserInterface: false,
-  cancelNotification: false,
+  cancelNotification: true, // 전송 즉시 알림 닫아 스피너 해제
 );
 
 // 백그라운드 메시지 핸들러 (top-level 함수여야 함)
@@ -51,6 +51,19 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final prefs = await SharedPreferences.getInstance();
   final count = (prefs.getInt(_kBadgeCountKey) ?? 0) + 1;
   await prefs.setInt(_kBadgeCountKey, count);
+
+  // FCM 수신 시점에 Firebase가 초기화된 상태이므로 토큰을 강제 갱신·캐싱
+  // → 이후 답장 핸들러에서 항상 유효한 토큰을 사용할 수 있도록 보장
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final freshToken = await user.getIdToken(true);
+      if (freshToken != null) {
+        await prefs.setString(_kAuthTokenKey, freshToken);
+        await prefs.setString(_kUserUidKey, user.uid);
+      }
+    }
+  } catch (_) {}
 
   // notification 필드가 있으면 FCM이 OS 레벨에서 이미 표시함 → 수동 표시 생략
   // data-only 메시지(notification == null)일 때만 직접 표시
