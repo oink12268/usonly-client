@@ -35,17 +35,17 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   Future<void> _load() async {
     try {
       final res = await ApiClient.get(Uri.parse(ApiEndpoints.notificationSettings));
-      if (res.statusCode == 200 && mounted) {
+      if (!mounted) return;
+      if (res.statusCode == 200) {
         final data = (ApiClient.decodeBody(res) as Map<String, dynamic>)['data'] as Map<String, dynamic>;
         setState(() {
           _calendarEnabled = data['calendarEnabled'] as bool? ?? true;
           _chatEnabled = data['chatEnabled'] as bool? ?? true;
           _anniversaryEnabled = data['anniversaryEnabled'] as bool? ?? true;
           _calendarReminderHour = (data['calendarReminderHour'] as num?)?.toInt() ?? 22;
-          _loading = false;
         });
       }
-    } catch (_) {
+    } catch (_) {} finally {
       if (mounted) setState(() => _loading = false);
     }
   }
