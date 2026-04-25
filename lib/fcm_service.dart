@@ -141,6 +141,8 @@ class FcmService {
   bool _isChatActive = false;
   void setChatActive(bool active) => _isChatActive = active;
 
+  bool _initialized = false;
+
   // 알림 ID 카운터 (고유 ID 생성용)
   int _notificationId = 1;
   int _badgeCount = 0;
@@ -194,7 +196,8 @@ class FcmService {
   }
 
   Future<void> initialize() async {
-    if (!_isMobile) return;
+    if (!_isMobile || _initialized) return;
+    _initialized = true;
 
     // 1. 알림 권한 요청
     await _messaging.requestPermission(
