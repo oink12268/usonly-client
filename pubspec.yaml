@@ -39,13 +39,13 @@ dependencies:
   exif: ^3.0.0
   http_parser: ^4.1.2
   stomp_dart_client: ^3.0.1
-  firebase_core: ^4.4.0
+  firebase_core: ^4.7.0
   cached_network_image: ^3.4.1
-  firebase_auth: ^6.1.4
-  google_sign_in: 6.2.1
+  firebase_auth: ^6.4.0
+  google_sign_in: ^6.2.1
   url_launcher: ^6.3.0
   crypto: ^3.0.0
-  firebase_messaging: ^16.1.1
+  firebase_messaging: ^16.2.0
   flutter_local_notifications: ^18.0.1
   shared_preferences: ^2.3.4
   image: ^4.5.4

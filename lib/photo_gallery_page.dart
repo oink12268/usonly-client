@@ -548,6 +548,14 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('다운로드 완료 (Downloads 폴더)')),
         );
+      } else if (defaultTargetPlatform == TargetPlatform.macOS) {
+        final downloadsDir = await getDownloadsDirectory();
+        final filePath = '${downloadsDir!.path}/$filename';
+        final response = await http.get(Uri.parse(url));
+        await File(filePath).writeAsBytes(response.bodyBytes);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('다운로드 완료 (Downloads 폴더)')),
+        );
       } else {
         if (!await Gal.hasAccess(toAlbum: true)) await Gal.requestAccess(toAlbum: true);
         final response = await http.get(Uri.parse(url));

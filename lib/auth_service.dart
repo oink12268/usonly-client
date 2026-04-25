@@ -101,7 +101,8 @@ class AuthService {
 
   Future<User?> signInWithGoogle() async {
     try {
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.windows ||
+                      defaultTargetPlatform == TargetPlatform.macOS)) {
         return await _signInWindowsGoogle();
       }
 
@@ -114,9 +115,18 @@ class AuthService {
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      final userCredential = await _auth.signInWithCredential(credential);
-      if (kDebugMode) await _linkDevPassword(userCredential.user);
-      return userCredential.user;
+      try {
+        final userCredential = await _auth.signInWithCredential(credential);
+        if (kDebugMode) await _linkDevPassword(userCredential.user);
+        return userCredential.user;
+      } catch (e) {
+        if (defaultTargetPlatform == TargetPlatform.macOS) {
+          print("macOS 로그인 오류 (keychain fallback 시도): $e");
+          final currentUser = _auth.currentUser;
+          if (currentUser != null) return currentUser;
+        }
+        rethrow;
+      }
     } catch (e) {
       print("로그인 실패: $e");
       rethrow;
