@@ -46,8 +46,12 @@ app.*.map.json
 
 # Firebase config (API keys)
 android/app/google-services.json
+android/app/src/google-services.json
 lib/firebase_options.dart
 firebase.json
+firebase.json.bak
+ios/Runner/GoogleService-Info.plist
+macos/Runner/GoogleService-Info.plist
 
 # Windows OAuth credentials
 lib/windows_oauth_config.dart
