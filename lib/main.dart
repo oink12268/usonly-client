@@ -114,7 +114,18 @@ class MyApp extends StatelessWidget {
             if (snapshot.hasData) {
               return AuthCheckWrapper(user: snapshot.data!);
             }
-            return const LoginScreen();
+            return FutureBuilder<User?>(
+              future: AuthService.silentSignInMacOS(),
+              builder: (context, silentSnapshot) {
+                if (silentSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (silentSnapshot.data != null) {
+                  return AuthCheckWrapper(user: silentSnapshot.data!);
+                }
+                return const LoginScreen();
+              },
+            );
           },
         ),
     ),    // MaterialApp 끝

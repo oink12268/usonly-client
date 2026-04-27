@@ -7,7 +7,6 @@ import FirebaseAuth
 class AppDelegate: FlutterAppDelegate {
   override func applicationDidFinishLaunching(_ notification: Notification) {
     FirebaseApp.configure()
-    try? Auth.auth().useUserAccessGroup("3V2TWU95TH.com.example.usonlyClient")
     super.applicationDidFinishLaunching(notification)
   }
 

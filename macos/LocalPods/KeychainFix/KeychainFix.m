@@ -34,63 +34,69 @@ static void fkSave(void) {
 // --- Hooks ---
 
 static OSStatus hook_Add(CFDictionaryRef attrs, CFTypeRef _Nullable * _Nullable result) {
-    OSStatus s = orig_SecItemAdd(attrs, result);
-    if (s == errSecSuccess) return s;
-
     NSDictionary *d = (__bridge NSDictionary *)attrs;
     NSData *value = d[(__bridge id)kSecValueData];
-    if (!value) return s;
-
     NSString *key = fkItemKey(attrs);
-    if (fkStore()[key]) {
-        NSLog(@"[KeychainFix] fakeAdd duplicate: %@", key);
-        return errSecDuplicateItem;
+
+    // Always mirror to fake store for reliable cross-launch persistence
+    if (value) {
+        if (fkStore()[key]) {
+            NSLog(@"[KeychainFix] fakeAdd duplicate: %@", key);
+        } else {
+            fkStore()[key] = value;
+            fkSave();
+            NSLog(@"[KeychainFix] fakeAdd mirrored: %@", key);
+        }
     }
-    fkStore()[key] = value;
-    fkSave();
-    NSLog(@"[KeychainFix] fakeAdd OK: %@", key);
-    return errSecSuccess;
+
+    OSStatus s = orig_SecItemAdd(attrs, result);
+    NSLog(@"[KeychainFix] realAdd key=%@ status=%d", key, (int)s);
+    if (s == errSecSuccess) return s;
+    if (value && fkStore()[key]) return errSecSuccess;
+    return s;
 }
 
 static OSStatus hook_CopyMatching(CFDictionaryRef query, CFTypeRef _Nullable * _Nullable result) {
-    OSStatus s = orig_SecItemCopyMatching(query, result);
-    if (s == errSecSuccess) return s;
-
+    // Check fake store first to ensure consistency with hook_Add saves
     NSString *key = fkItemKey(query);
     NSData *value = fkStore()[key];
-    if (!value) return errSecItemNotFound;
-
-    if (result) {
-        NSDictionary *q = (__bridge NSDictionary *)query;
-        BOOL wantData  = [q[(__bridge id)kSecReturnData] boolValue];
-        BOOL wantAttrs = [q[(__bridge id)kSecReturnAttributes] boolValue];
-        if (wantAttrs) {
-            NSMutableDictionary *a = [NSMutableDictionary dictionary];
-            if (wantData) a[(__bridge id)kSecValueData] = value;
-            if (q[(__bridge id)kSecAttrService]) a[(__bridge id)kSecAttrService] = q[(__bridge id)kSecAttrService];
-            if (q[(__bridge id)kSecAttrAccount]) a[(__bridge id)kSecAttrAccount] = q[(__bridge id)kSecAttrAccount];
-            *result = (__bridge_retained CFTypeRef)a;
-        } else {
-            *result = (__bridge_retained CFTypeRef)value;
+    if (value) {
+        if (result) {
+            NSDictionary *q = (__bridge NSDictionary *)query;
+            BOOL wantData  = [q[(__bridge id)kSecReturnData] boolValue];
+            BOOL wantAttrs = [q[(__bridge id)kSecReturnAttributes] boolValue];
+            if (wantAttrs) {
+                NSMutableDictionary *a = [NSMutableDictionary dictionary];
+                if (wantData) a[(__bridge id)kSecValueData] = value;
+                if (q[(__bridge id)kSecAttrService]) a[(__bridge id)kSecAttrService] = q[(__bridge id)kSecAttrService];
+                if (q[(__bridge id)kSecAttrAccount]) a[(__bridge id)kSecAttrAccount] = q[(__bridge id)kSecAttrAccount];
+                *result = (__bridge_retained CFTypeRef)a;
+            } else {
+                *result = (__bridge_retained CFTypeRef)value;
+            }
         }
+        NSLog(@"[KeychainFix] fakeGet OK: %@", key);
+        return errSecSuccess;
     }
-    NSLog(@"[KeychainFix] fakeGet OK: %@", key);
-    return errSecSuccess;
+
+    OSStatus s = orig_SecItemCopyMatching(query, result);
+    NSLog(@"[KeychainFix] realGet key=%@ status=%d", key, (int)s);
+    return s;
 }
 
 static OSStatus hook_Update(CFDictionaryRef query, CFDictionaryRef attrsToUpdate) {
-    OSStatus s = orig_SecItemUpdate(query, attrsToUpdate);
-    if (s == errSecSuccess) return s;
-
     NSString *key = fkItemKey(query);
-    if (!fkStore()[key]) return errSecItemNotFound;
-
     NSData *newValue = ((__bridge NSDictionary *)attrsToUpdate)[(__bridge id)kSecValueData];
+
+    // Always mirror update to fake store
     if (newValue) {
         fkStore()[key] = newValue;
         fkSave();
-        NSLog(@"[KeychainFix] fakeUpdate OK: %@", key);
+        NSLog(@"[KeychainFix] fakeUpdate mirrored: %@", key);
     }
+
+    OSStatus s = orig_SecItemUpdate(query, attrsToUpdate);
+    NSLog(@"[KeychainFix] realUpdate key=%@ status=%d", key, (int)s);
     return errSecSuccess;
 }
 

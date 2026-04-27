@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'windows_oauth_config.dart';
 
@@ -30,7 +31,9 @@ class AuthService {
   // Google Calendar 토큰 캐시
   static String? _cachedAccessToken;
   static DateTime? _tokenExpiry;
-  static String? _windowsRefreshToken; // Windows 전용
+  static String? _windowsRefreshToken; // Windows/macOS 전용
+
+  static const _kMacOSRefreshToken = 'macos_google_refresh_token';
 
   /// Google Calendar API용 액세스 토큰 반환.
   /// 만료 시 자동 갱신. 권한 없으면 null 반환.
@@ -229,6 +232,9 @@ class AuthService {
     _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn));
     if (refreshToken != null) {
       _windowsRefreshToken = refreshToken;
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+        await _saveMacOSRefreshToken(refreshToken);
+      }
     }
 
     final credential = GoogleAuthProvider.credential(
@@ -249,6 +255,56 @@ class AuthService {
     final bytes = utf8.encode(verifier);
     final digest = sha256.convert(bytes);
     return base64UrlEncode(digest.bytes).replaceAll('=', '');
+  }
+
+  // macOS: refresh token 저장
+  static Future<void> _saveMacOSRefreshToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kMacOSRefreshToken, token);
+  }
+
+  // macOS: refresh token으로 자동 로그인
+  static Future<User?> silentSignInMacOS() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) return null;
+    if (FirebaseAuth.instance.currentUser != null) {
+      return FirebaseAuth.instance.currentUser;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final savedToken = prefs.getString(_kMacOSRefreshToken);
+    if (savedToken == null) return null;
+
+    try {
+      final tokenResponse = await http.post(
+        Uri.parse('https://oauth2.googleapis.com/token'),
+        body: {
+          'client_id': _windowsClientId,
+          'client_secret': _windowsClientSecret,
+          'refresh_token': savedToken,
+          'grant_type': 'refresh_token',
+        },
+      );
+      final tokenData = json.decode(tokenResponse.body);
+      final accessToken = tokenData['access_token'] as String?;
+      final idToken = tokenData['id_token'] as String?;
+      if (accessToken == null || idToken == null) return null;
+
+      _cachedAccessToken = accessToken;
+      _tokenExpiry = DateTime.now().add(
+        Duration(seconds: tokenData['expires_in'] as int? ?? 3600),
+      );
+      _windowsRefreshToken = savedToken;
+
+      final credential = GoogleAuthProvider.credential(
+        idToken: idToken,
+        accessToken: accessToken,
+      );
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      return userCredential.user;
+    } catch (e) {
+      print('[AuthService] macOS silent sign-in failed: $e');
+      return null;
+    }
   }
 
   // ⚠️ 개발용 전용
@@ -273,6 +329,10 @@ class AuthService {
     _cachedAccessToken = null;
     _tokenExpiry = null;
     _windowsRefreshToken = null;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kMacOSRefreshToken);
+    }
     await _auth.signOut();
   }
 }
