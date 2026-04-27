@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'api_client.dart';
 import 'api_endpoints.dart';
+import 'fcm_service.dart';
 import 'widgets/confirm_delete_dialog.dart';
 
 class AnniversaryPage extends StatefulWidget {
@@ -21,6 +22,8 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
   void initState() {
     super.initState();
     _fetchAnniversaries();
+    // 페이지 진입 = 기념일 알림을 본 것으로 간주 → other 배지 카운터 0
+    FcmService().clearOtherNotifications();
   }
 
   Future<void> _fetchAnniversaries() async {

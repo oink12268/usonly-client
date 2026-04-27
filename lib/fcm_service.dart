@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,24 +11,83 @@ import 'api_client.dart';
 import 'api_config.dart';
 import 'api_endpoints.dart';
 
-const _kBadgeCountKey = 'fcm_badge_count';
+// 배지 카운터를 type별로 분리: chat은 채팅 진입 시 0으로 리셋,
+// other(anniversary/schedule)는 별도 누적 — 한쪽 리셋이 다른쪽을 지우지 않도록.
+const _kBadgeChatKey = 'fcm_badge_count_chat';
+const _kBadgeOtherKey = 'fcm_badge_count_other';
+// 채팅 알림 ID 누적 — clear_chat 시 anniversary 알림은 보존하면서
+// 채팅 알림만 선택적으로 cancel하기 위함.
+const _kChatNotifIdsKey = 'fcm_chat_notification_ids';
 const _kAuthTokenKey = 'cached_firebase_token';
 const _kUserUidKey = 'cached_user_uid';
 const _kReplyActionId = 'chat_reply_action';
+// iOS 배지 강제 갱신용 silent notification ID — 일반 알림 ID와 충돌 안 나도록 별도 영역
+const _kIosBadgeSyncId = 2147483640;
 
 bool get _isMobile =>
     !kIsWeb &&
     (defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS);
 
-// 알림에 붙이는 "답장" 액션 (Android 전용)
 const _replyAction = AndroidNotificationAction(
   _kReplyActionId,
   '답장',
   inputs: [AndroidNotificationActionInput(label: '메시지를 입력하세요...')],
   showsUserInterface: false,
-  cancelNotification: true, // 전송 즉시 알림 닫아 스피너 해제
+  cancelNotification: true,
 );
+
+// 충돌 없는 알림 ID 생성 — 시간 기반 unique 값 (Android int 범위로 한정).
+// _kIosBadgeSyncId 영역과 분리되도록 상한 0x7FFFFFF0.
+int _generateNotificationId() =>
+    DateTime.now().millisecondsSinceEpoch.remainder(0x7FFFFFF0);
+
+// prefs 기반 atomic 카운터 증가. 메모리 캐시를 두지 않아 fg/bg isolate 간 desync 차단.
+Future<int> _incrementBadge(SharedPreferences prefs,
+    {required bool isChat}) async {
+  final key = isChat ? _kBadgeChatKey : _kBadgeOtherKey;
+  final next = (prefs.getInt(key) ?? 0) + 1;
+  await prefs.setInt(key, next);
+  return _readTotalBadge(prefs);
+}
+
+int _readTotalBadge(SharedPreferences prefs) =>
+    (prefs.getInt(_kBadgeChatKey) ?? 0) +
+    (prefs.getInt(_kBadgeOtherKey) ?? 0);
+
+Future<void> _appendChatNotifId(SharedPreferences prefs, int id) async {
+  final list = prefs.getStringList(_kChatNotifIdsKey) ?? <String>[];
+  list.add(id.toString());
+  await prefs.setStringList(_kChatNotifIdsKey, list);
+}
+
+Future<List<int>> _drainChatNotifIds(SharedPreferences prefs) async {
+  final list = prefs.getStringList(_kChatNotifIdsKey) ?? <String>[];
+  await prefs.setStringList(_kChatNotifIdsKey, <String>[]);
+  return list.map(int.parse).toList();
+}
+
+// iOS 배지를 prefs 총합으로 강제 동기화. silent notification으로 set한 뒤 즉시 cancel.
+Future<void> _syncIosBadge(
+    FlutterLocalNotificationsPlugin plugin, int total) async {
+  if (defaultTargetPlatform != TargetPlatform.iOS) return;
+  await plugin.show(
+    _kIosBadgeSyncId,
+    null,
+    null,
+    NotificationDetails(
+      iOS: DarwinNotificationDetails(
+        badgeNumber: total,
+        presentAlert: false,
+        presentBadge: true,
+        presentSound: false,
+        presentBanner: false,
+        presentList: false,
+      ),
+    ),
+  );
+  await plugin.cancel(_kIosBadgeSyncId);
+}
 
 // 백그라운드 메시지 핸들러 (top-level 함수여야 함)
 @pragma('vm:entry-point')
@@ -41,16 +102,19 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     onDidReceiveBackgroundNotificationResponse: notificationReplyHandler,
   );
 
-  if (message.data['type'] == 'clear_chat') {
-    await plugin.cancelAll();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_kBadgeCountKey, 0);
+  final prefs = await SharedPreferences.getInstance();
+  final type = message.data['type'];
+
+  if (type == 'clear_chat') {
+    // 채팅 알림만 cancel — anniversary/schedule 알림과 카운터는 보존.
+    final ids = await _drainChatNotifIds(prefs);
+    for (final id in ids) {
+      await plugin.cancel(id);
+    }
+    await prefs.setInt(_kBadgeChatKey, 0);
+    await _syncIosBadge(plugin, _readTotalBadge(prefs));
     return;
   }
-
-  final prefs = await SharedPreferences.getInstance();
-  final count = (prefs.getInt(_kBadgeCountKey) ?? 0) + 1;
-  await prefs.setInt(_kBadgeCountKey, count);
 
   // FCM 수신 시점에 Firebase가 초기화된 상태이므로 토큰을 강제 갱신·캐싱
   // → 이후 답장 핸들러에서 항상 유효한 토큰을 사용할 수 있도록 보장
@@ -65,31 +129,43 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     }
   } catch (_) {}
 
+  final isChat = type == null || type == 'chat';
+  final total = await _incrementBadge(prefs, isChat: isChat);
+
   // notification 필드가 있으면 FCM이 OS 레벨에서 이미 표시함 → 수동 표시 생략
   // data-only 메시지(notification == null)일 때만 직접 표시
   final title = message.data['title'];
   final body = message.data['body'];
   if (message.notification == null && (title != null || body != null)) {
     final uid = prefs.getString(_kUserUidKey);
+    final id = _generateNotificationId();
+    if (isChat) await _appendChatNotifId(prefs, id);
     await plugin.show(
-      count,
+      id,
       title,
       body,
       NotificationDetails(
         android: AndroidNotificationDetails(
-          'chat_channel_v2',
-          '채팅 알림',
+          isChat ? 'chat_channel_v2' : 'anniversary_channel',
+          isChat ? '채팅 알림' : '알림',
           importance: Importance.max,
           priority: Priority.max,
           playSound: true,
           enableVibration: true,
           icon: '@mipmap/ic_launcher',
-          number: count,
-          actions: uid != null ? const [_replyAction] : null,
+          number: total,
+          actions: isChat && uid != null ? const [_replyAction] : null,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentSound: true,
+          badgeNumber: total,
         ),
       ),
       payload: uid != null ? jsonEncode({'uid': uid}) : null,
     );
+  } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+    // OS가 직접 표시한 경우에도 iOS 배지를 prefs 총합으로 보정
+    await _syncIosBadge(plugin, total);
   }
 }
 
@@ -109,7 +185,8 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
   String? uid;
   try {
     if (response.payload != null) {
-      uid = (jsonDecode(response.payload!) as Map<String, dynamic>)['uid'] as String?;
+      uid = (jsonDecode(response.payload!) as Map<String, dynamic>)['uid']
+          as String?;
     }
   } catch (_) {}
   uid ??= prefs.getString(_kUserUidKey);
@@ -128,7 +205,7 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
   } catch (_) {}
 }
 
-class FcmService {
+class FcmService with WidgetsBindingObserver {
   static final FcmService _instance = FcmService._internal();
   factory FcmService() => _instance;
   FcmService._internal();
@@ -142,10 +219,6 @@ class FcmService {
   void setChatActive(bool active) => _isChatActive = active;
 
   bool _initialized = false;
-
-  // 알림 ID 카운터 (고유 ID 생성용)
-  int _notificationId = 1;
-  int _badgeCount = 0;
 
   // 알림 탭 → 네비게이션 콜백 (HomeScreen이 등록, type: 'chat' | 'anniversary')
   void Function(String type)? onNavigate;
@@ -170,29 +243,61 @@ class FcmService {
     } catch (_) {}
   }
 
-  // 채팅 읽음 처리: 알림 영역 + 앱 아이콘 배지 초기화
+  // 채팅 읽음 처리: 채팅 알림 + 채팅 카운터만 0으로, anniversary/schedule 보존
   Future<void> clearChatNotifications() async {
     if (!_isMobile) return;
-    _badgeCount = 0;
-    _notificationId = 1;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_kBadgeCountKey, 0);
-    await _localNotifications.cancelAll();
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      await _localNotifications.show(
-        0,
-        null,
-        null,
-        const NotificationDetails(
-          iOS: DarwinNotificationDetails(
-            badgeNumber: 0,
-            presentAlert: false,
-            presentBadge: true,
-            presentSound: false,
-          ),
-        ),
-      );
+    final ids = await _drainChatNotifIds(prefs);
+    for (final id in ids) {
+      await _localNotifications.cancel(id);
     }
+    await prefs.setInt(_kBadgeChatKey, 0);
+    await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
+  }
+
+  // anniversary/schedule 페이지 진입 시 호출: 그 카테고리 카운터만 0으로
+  Future<void> clearOtherNotifications() async {
+    if (!_isMobile) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kBadgeOtherKey, 0);
+    await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
+  }
+
+  // 서버 truth-source(unread-count)로 chat 카운터를 강제 보정
+  // — multi-device에서 다른 기기가 읽었을 때 이 기기 배지를 자가복구
+  Future<void> syncChatBadgeFromServer() async {
+    if (!_isMobile) return;
+    try {
+      final response = await ApiClient.get(Uri.parse(ApiEndpoints.chatUnreadCount));
+      if (response.statusCode != 200) return;
+      final body = ApiClient.decodeBody(response);
+      if (body is! num) return;
+      final serverCount = body.toInt();
+      final prefs = await SharedPreferences.getInstance();
+      final localChat = prefs.getInt(_kBadgeChatKey) ?? 0;
+      // 서버가 더 작다면 다른 기기가 읽은 것 → 우리 카운터를 줄임
+      // 서버가 더 크다면 우리가 놓친 것 → 서버 값으로 보정
+      // (단, 서버 == 0 이면 강제 0 + chat 알림 모두 cancel하여 일관성 회복)
+      if (serverCount == 0) {
+        final ids = await _drainChatNotifIds(prefs);
+        for (final id in ids) {
+          await _localNotifications.cancel(id);
+        }
+        await prefs.setInt(_kBadgeChatKey, 0);
+      } else if (serverCount != localChat) {
+        await prefs.setInt(_kBadgeChatKey, serverCount);
+      }
+      await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
+    } catch (_) {}
+  }
+
+  // resumed 시 호출: 로컬 prefs를 OS 배지에 반영하고, 서버와도 chat 카운터를 sync
+  Future<void> _resyncBadge() async {
+    if (!_isMobile) return;
+    final prefs = await SharedPreferences.getInstance();
+    await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
+    // 서버 동기화는 백그라운드로 — 네트워크 실패해도 로컬 보정은 이미 완료
+    unawaited(syncChatBadgeFromServer());
   }
 
   Future<void> initialize() async {
@@ -206,14 +311,7 @@ class FcmService {
       sound: true,
     );
 
-    // 2. 배지 카운트 복원
-    // 백그라운드 핸들러는 badge count 값을 notification ID로 직접 사용하므로,
-    // 포그라운드 ID는 반드시 _badgeCount + 1 부터 시작해야 충돌이 없음
-    final prefs = await SharedPreferences.getInstance();
-    _badgeCount = prefs.getInt(_kBadgeCountKey) ?? 0;
-    _notificationId = _badgeCount + 1;
-
-    // 3. 로컬 알림 초기화
+    // 2. 로컬 알림 초기화
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings();
     const initSettings = InitializationSettings(
@@ -247,7 +345,7 @@ class FcmService {
     await androidPlugin?.createNotificationChannel(androidChannel);
     await androidPlugin?.createNotificationChannel(anniversaryChannel);
 
-    // 4. FCM 토큰 서버 전송 + 인증 정보 캐싱
+    // 3. FCM 토큰 서버 전송 + 인증 정보 캐싱
     String? token = await _messaging.getToken();
     if (token != null) {
       await _sendTokenToServer(token);
@@ -256,11 +354,12 @@ class FcmService {
 
     _messaging.onTokenRefresh.listen((newToken) async {
       await _sendTokenToServer(newToken);
-      await _cacheAuthInfo(); // 토큰 갱신 시 캐시도 갱신
+      await _cacheAuthInfo();
     });
 
-    // 5. 알림 탭으로 앱 진입 처리
-    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    // 4. 알림 탭으로 앱 진입 처리
+    final initialMessage =
+        await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
       _pendingNavigationType = initialMessage.data['type'] ?? 'chat';
     }
@@ -273,48 +372,63 @@ class FcmService {
       }
     });
 
-    // 6. 포그라운드 메시지 수신
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      if (message.data['type'] == 'clear_chat') {
-        clearChatNotifications();
-        return;
-      }
-      if (_isChatActive) return;
-      // data-only 메시지: data['title'], data['body'] 사용
-      final title = message.data['title'] as String?;
-      final body = message.data['body'] as String?;
-      if (title != null || body != null) {
-        _badgeCount++;
-        final id = _notificationId++;
-        SharedPreferences.getInstance()
-            .then((p) => p.setInt(_kBadgeCountKey, _badgeCount));
-        final uid = FirebaseAuth.instance.currentUser?.uid;
-        _localNotifications.show(
-          id,
-          title,
-          body,
-          NotificationDetails(
-            android: AndroidNotificationDetails(
-              'chat_channel_v2',
-              '채팅 알림',
-              importance: Importance.max,
-              priority: Priority.max,
-              playSound: true,
-              enableVibration: true,
-              icon: '@mipmap/ic_launcher',
-              number: _badgeCount,
-              actions: const [_replyAction],
-            ),
-            iOS: DarwinNotificationDetails(
-              presentSound: true,
-              badgeNumber: _badgeCount,
-            ),
-          ),
-          payload: uid != null ? jsonEncode({'uid': uid}) : null,
-        );
-      }
-    });
+    // 5. 포그라운드 메시지 수신
+    FirebaseMessaging.onMessage.listen(_onForegroundMessage);
 
+    // 6. 라이프사이클 옵저버 등록 — resumed 시 iOS 배지를 prefs 총합으로 재동기화
+    WidgetsBinding.instance.addObserver(this);
+    // 시작 시점에도 한 번 보정 (백그라운드 카운터가 늘어난 상태에서 콜드부트 됐을 수 있음)
+    await _resyncBadge();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _resyncBadge();
+    }
+  }
+
+  Future<void> _onForegroundMessage(RemoteMessage message) async {
+    final type = message.data['type'];
+    if (type == 'clear_chat') {
+      await clearChatNotifications();
+      return;
+    }
+    final isChat = type == null || type == 'chat';
+    if (isChat && _isChatActive) return;
+
+    final title = message.data['title'] as String?;
+    final body = message.data['body'] as String?;
+    if (title == null && body == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final total = await _incrementBadge(prefs, isChat: isChat);
+    final id = _generateNotificationId();
+    if (isChat) await _appendChatNotifId(prefs, id);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    await _localNotifications.show(
+      id,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          isChat ? 'chat_channel_v2' : 'anniversary_channel',
+          isChat ? '채팅 알림' : '알림',
+          importance: Importance.max,
+          priority: Priority.max,
+          playSound: true,
+          enableVibration: true,
+          icon: '@mipmap/ic_launcher',
+          number: total,
+          actions: isChat ? const [_replyAction] : null,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentSound: true,
+          badgeNumber: total,
+        ),
+      ),
+      payload: uid != null ? jsonEncode({'uid': uid}) : null,
+    );
   }
 
   // 앱이 포그라운드일 때 알림 액션 처리
