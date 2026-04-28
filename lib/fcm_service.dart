@@ -15,9 +15,11 @@ import 'api_endpoints.dart';
 // other(anniversary/schedule)는 별도 누적 — 한쪽 리셋이 다른쪽을 지우지 않도록.
 const _kBadgeChatKey = 'fcm_badge_count_chat';
 const _kBadgeOtherKey = 'fcm_badge_count_other';
-// 채팅 알림 ID 누적 — clear_chat 시 anniversary 알림은 보존하면서
-// 채팅 알림만 선택적으로 cancel하기 위함.
+// 알림 ID 누적 — 카테고리별로 cancel 가능하도록 type별 분리.
+// 채팅: clear_chat / 채팅 진입 시 chat 알림만 cancel (anniversary 보존)
+// other: 캘린더/기념일 진입 시 other 알림만 cancel (chat 보존)
 const _kChatNotifIdsKey = 'fcm_chat_notification_ids';
+const _kOtherNotifIdsKey = 'fcm_other_notification_ids';
 const _kAuthTokenKey = 'cached_firebase_token';
 const _kUserUidKey = 'cached_user_uid';
 const _kReplyActionId = 'chat_reply_action';
@@ -42,6 +44,15 @@ const _replyAction = AndroidNotificationAction(
 int _generateNotificationId() =>
     DateTime.now().millisecondsSinceEpoch.remainder(0x7FFFFFF0);
 
+// SharedPreferences는 isolate별 in-memory 캐시를 가짐 — 백그라운드 isolate가
+// 디스크에 쓴 값이 포그라운드 캐시에 자동 반영되지 않아 stale read 발생.
+// 배지 상태를 만지기 전에는 항상 reload()로 디스크에서 최신 값을 끌어와야 함.
+Future<SharedPreferences> _freshPrefs() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.reload();
+  return prefs;
+}
+
 // prefs 기반 atomic 카운터 증가. 메모리 캐시를 두지 않아 fg/bg isolate 간 desync 차단.
 Future<int> _incrementBadge(SharedPreferences prefs,
     {required bool isChat}) async {
@@ -55,15 +66,19 @@ int _readTotalBadge(SharedPreferences prefs) =>
     (prefs.getInt(_kBadgeChatKey) ?? 0) +
     (prefs.getInt(_kBadgeOtherKey) ?? 0);
 
-Future<void> _appendChatNotifId(SharedPreferences prefs, int id) async {
-  final list = prefs.getStringList(_kChatNotifIdsKey) ?? <String>[];
+Future<void> _appendNotifId(SharedPreferences prefs, int id,
+    {required bool isChat}) async {
+  final key = isChat ? _kChatNotifIdsKey : _kOtherNotifIdsKey;
+  final list = prefs.getStringList(key) ?? <String>[];
   list.add(id.toString());
-  await prefs.setStringList(_kChatNotifIdsKey, list);
+  await prefs.setStringList(key, list);
 }
 
-Future<List<int>> _drainChatNotifIds(SharedPreferences prefs) async {
-  final list = prefs.getStringList(_kChatNotifIdsKey) ?? <String>[];
-  await prefs.setStringList(_kChatNotifIdsKey, <String>[]);
+Future<List<int>> _drainNotifIds(SharedPreferences prefs,
+    {required bool isChat}) async {
+  final key = isChat ? _kChatNotifIdsKey : _kOtherNotifIdsKey;
+  final list = prefs.getStringList(key) ?? <String>[];
+  await prefs.setStringList(key, <String>[]);
   return list.map(int.parse).toList();
 }
 
@@ -102,12 +117,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     onDidReceiveBackgroundNotificationResponse: notificationReplyHandler,
   );
 
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await _freshPrefs();
   final type = message.data['type'];
 
   if (type == 'clear_chat') {
     // 채팅 알림만 cancel — anniversary/schedule 알림과 카운터는 보존.
-    final ids = await _drainChatNotifIds(prefs);
+    final ids = await _drainNotifIds(prefs, isChat: true);
     for (final id in ids) {
       await plugin.cancel(id);
     }
@@ -139,7 +154,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (message.notification == null && (title != null || body != null)) {
     final uid = prefs.getString(_kUserUidKey);
     final id = _generateNotificationId();
-    if (isChat) await _appendChatNotifId(prefs, id);
+    await _appendNotifId(prefs, id, isChat: isChat);
     await plugin.show(
       id,
       title,
@@ -246,8 +261,8 @@ class FcmService with WidgetsBindingObserver {
   // 채팅 읽음 처리: 채팅 알림 + 채팅 카운터만 0으로, anniversary/schedule 보존
   Future<void> clearChatNotifications() async {
     if (!_isMobile) return;
-    final prefs = await SharedPreferences.getInstance();
-    final ids = await _drainChatNotifIds(prefs);
+    final prefs = await _freshPrefs();
+    final ids = await _drainNotifIds(prefs, isChat: true);
     for (final id in ids) {
       await _localNotifications.cancel(id);
     }
@@ -255,10 +270,15 @@ class FcmService with WidgetsBindingObserver {
     await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
   }
 
-  // anniversary/schedule 페이지 진입 시 호출: 그 카테고리 카운터만 0으로
+  // 캘린더/기념일 페이지 진입 시 호출: 카운터 0 + 실제 OS 알림도 cancel
+  // (counter만 0으로 두면 알림 패널엔 남아있어 사용자 혼란 + Android 런처 자동 카운트와 desync)
   Future<void> clearOtherNotifications() async {
     if (!_isMobile) return;
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _freshPrefs();
+    final ids = await _drainNotifIds(prefs, isChat: false);
+    for (final id in ids) {
+      await _localNotifications.cancel(id);
+    }
     await prefs.setInt(_kBadgeOtherKey, 0);
     await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
   }
@@ -273,18 +293,30 @@ class FcmService with WidgetsBindingObserver {
       final body = ApiClient.decodeBody(response);
       if (body is! num) return;
       final serverCount = body.toInt();
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _freshPrefs();
       final localChat = prefs.getInt(_kBadgeChatKey) ?? 0;
-      // 서버가 더 작다면 다른 기기가 읽은 것 → 우리 카운터를 줄임
-      // 서버가 더 크다면 우리가 놓친 것 → 서버 값으로 보정
-      // (단, 서버 == 0 이면 강제 0 + chat 알림 모두 cancel하여 일관성 회복)
+      // 서버가 더 작다면 다른 기기가 읽은 것 → 카운터 + 알림(오래된 것부터) 동시 정리
+      // 서버가 더 크다면 우리가 놓친 것 → 서버 값으로 보정 (다음 chat FCM이 가시성 회복)
       if (serverCount == 0) {
-        final ids = await _drainChatNotifIds(prefs);
+        final ids = await _drainNotifIds(prefs, isChat: true);
         for (final id in ids) {
           await _localNotifications.cancel(id);
         }
         await prefs.setInt(_kBadgeChatKey, 0);
-      } else if (serverCount != localChat) {
+      } else if (serverCount < localChat) {
+        // 초과분만큼 가장 오래된 chat 알림부터 cancel (list 앞쪽 = 오래된 것)
+        final list = prefs.getStringList(_kChatNotifIdsKey) ?? <String>[];
+        final excess = list.length - serverCount;
+        if (excess > 0) {
+          final toCancel = list.sublist(0, excess);
+          final remain = list.sublist(excess);
+          for (final s in toCancel) {
+            await _localNotifications.cancel(int.parse(s));
+          }
+          await prefs.setStringList(_kChatNotifIdsKey, remain);
+        }
+        await prefs.setInt(_kBadgeChatKey, serverCount);
+      } else if (serverCount > localChat) {
         await prefs.setInt(_kBadgeChatKey, serverCount);
       }
       await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
@@ -294,7 +326,7 @@ class FcmService with WidgetsBindingObserver {
   // resumed 시 호출: 로컬 prefs를 OS 배지에 반영하고, 서버와도 chat 카운터를 sync
   Future<void> _resyncBadge() async {
     if (!_isMobile) return;
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _freshPrefs();
     await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
     // 서버 동기화는 백그라운드로 — 네트워크 실패해도 로컬 보정은 이미 완료
     unawaited(syncChatBadgeFromServer());
@@ -401,10 +433,10 @@ class FcmService with WidgetsBindingObserver {
     final body = message.data['body'] as String?;
     if (title == null && body == null) return;
 
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _freshPrefs();
     final total = await _incrementBadge(prefs, isChat: isChat);
     final id = _generateNotificationId();
-    if (isChat) await _appendChatNotifId(prefs, id);
+    await _appendNotifId(prefs, id, isChat: isChat);
     final uid = FirebaseAuth.instance.currentUser?.uid;
     await _localNotifications.show(
       id,
