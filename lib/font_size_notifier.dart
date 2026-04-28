@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class FontSizeNotifier extends ChangeNotifier {
   static const _key = 'font_scale';
 
-  double _scale = 1.0;
+  double _scale = 0.85;
   double get scale => _scale;
 
   FontSizeNotifier() {
@@ -13,7 +13,7 @@ class FontSizeNotifier extends ChangeNotifier {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    _scale = prefs.getDouble(_key) ?? 1.0;
+    _scale = prefs.getDouble(_key) ?? 0.85;
     notifyListeners();
   }
 

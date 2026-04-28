@@ -390,7 +390,7 @@ class _MorePageState extends State<_MorePage> {
           // 미니 게임
           ListTile(
             leading: const Icon(Icons.sports_esports),
-            title: const Text('디노 런 🦖'),
+            title: const Text('디노 런'),
             onTap: () {
               Navigator.push(
                 context,
