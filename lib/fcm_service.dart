@@ -15,15 +15,18 @@ import 'api_endpoints.dart';
 // other(anniversary/schedule)는 별도 누적 — 한쪽 리셋이 다른쪽을 지우지 않도록.
 const _kBadgeChatKey = 'fcm_badge_count_chat';
 const _kBadgeOtherKey = 'fcm_badge_count_other';
-// 알림 ID 누적 — 카테고리별로 cancel 가능하도록 type별 분리.
-// 채팅: clear_chat / 채팅 진입 시 chat 알림만 cancel (anniversary 보존)
-// other: 캘린더/기념일 진입 시 other 알림만 cancel (chat 보존)
-const _kChatNotifIdsKey = 'fcm_chat_notification_ids';
-const _kOtherNotifIdsKey = 'fcm_other_notification_ids';
+
+// 알림 ID — 카테고리당 고정값 1개만 사용.
+// 메시지마다 새 ID를 생성하면 알림이 누적되고, Samsung One UI가 자동 그룹화한 뒤
+// 스와이프로 없앤 알림이 새 알림과 함께 재등장하는 문제 발생.
+// 고정 ID로 덮어쓰면 항상 최신 메시지 1개만 표시되고 그룹화 부작용이 없음.
+const _kChatNotifId = 1;
+const _kOtherNotifId = 2;
+
 const _kAuthTokenKey = 'cached_firebase_token';
 const _kUserUidKey = 'cached_user_uid';
 const _kReplyActionId = 'chat_reply_action';
-// iOS 배지 강제 갱신용 silent notification ID — 일반 알림 ID와 충돌 안 나도록 별도 영역
+// iOS 배지 강제 갱신용 silent notification ID
 const _kIosBadgeSyncId = 2147483640;
 
 bool get _isMobile =>
@@ -39,11 +42,6 @@ const _replyAction = AndroidNotificationAction(
   cancelNotification: true,
 );
 
-// 충돌 없는 알림 ID 생성 — 시간 기반 unique 값 (Android int 범위로 한정).
-// _kIosBadgeSyncId 영역과 분리되도록 상한 0x7FFFFFF0.
-int _generateNotificationId() =>
-    DateTime.now().millisecondsSinceEpoch.remainder(0x7FFFFFF0);
-
 // SharedPreferences는 isolate별 in-memory 캐시를 가짐 — 백그라운드 isolate가
 // 디스크에 쓴 값이 포그라운드 캐시에 자동 반영되지 않아 stale read 발생.
 // 배지 상태를 만지기 전에는 항상 reload()로 디스크에서 최신 값을 끌어와야 함.
@@ -53,7 +51,7 @@ Future<SharedPreferences> _freshPrefs() async {
   return prefs;
 }
 
-// prefs 기반 atomic 카운터 증가. 메모리 캐시를 두지 않아 fg/bg isolate 간 desync 차단.
+// prefs 기반 atomic 카운터 증가.
 Future<int> _incrementBadge(SharedPreferences prefs,
     {required bool isChat}) async {
   final key = isChat ? _kBadgeChatKey : _kBadgeOtherKey;
@@ -66,25 +64,9 @@ int _readTotalBadge(SharedPreferences prefs) =>
     (prefs.getInt(_kBadgeChatKey) ?? 0) +
     (prefs.getInt(_kBadgeOtherKey) ?? 0);
 
-Future<void> _appendNotifId(SharedPreferences prefs, int id,
-    {required bool isChat}) async {
-  final key = isChat ? _kChatNotifIdsKey : _kOtherNotifIdsKey;
-  final list = prefs.getStringList(key) ?? <String>[];
-  list.add(id.toString());
-  await prefs.setStringList(key, list);
-}
-
-Future<List<int>> _drainNotifIds(SharedPreferences prefs,
-    {required bool isChat}) async {
-  final key = isChat ? _kChatNotifIdsKey : _kOtherNotifIdsKey;
-  final list = prefs.getStringList(key) ?? <String>[];
-  await prefs.setStringList(key, <String>[]);
-  return list.map(int.parse).toList();
-}
-
-// 지정 채널의 활성 알림을 모두 cancel — 서버가 FCM `notification` payload로 보내
-// OS가 직접 표시한 알림은 우리가 ID를 모르므로 추적 기반 cancel이 무효.
-// active notification을 enumerate해서 채널 기준으로 정리하면 OS-displayed도 같이 잡힘.
+// 지정 채널의 활성 알림을 모두 cancel.
+// 서버가 FCM `notification` payload로 보내면 OS가 직접 표시하므로 고정 ID cancel 외에
+// 채널 기반 enumerate로 나머지도 정리.
 Future<void> _cancelActiveByChannel(
     FlutterLocalNotificationsPlugin plugin, String channelId) async {
   if (defaultTargetPlatform != TargetPlatform.android) return;
@@ -123,6 +105,41 @@ Future<void> _syncIosBadge(
   await plugin.cancel(_kIosBadgeSyncId);
 }
 
+// 알림 표시 헬퍼 — 고정 ID로 덮어써서 항상 최신 메시지 1개만 유지.
+Future<void> _showNotif(
+  FlutterLocalNotificationsPlugin plugin, {
+  required bool isChat,
+  required String? title,
+  required String? body,
+  required int total,
+  required String? uid,
+}) async {
+  final notifId = isChat ? _kChatNotifId : _kOtherNotifId;
+  await plugin.show(
+    notifId,
+    title,
+    body,
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        isChat ? 'chat_channel_v2' : 'anniversary_channel',
+        isChat ? '채팅 알림' : '알림',
+        importance: Importance.max,
+        priority: Priority.max,
+        playSound: true,
+        enableVibration: true,
+        icon: '@mipmap/ic_launcher',
+        number: total,
+        actions: isChat && uid != null ? const [_replyAction] : null,
+      ),
+      iOS: DarwinNotificationDetails(
+        presentSound: true,
+        badgeNumber: total,
+      ),
+    ),
+    payload: uid != null ? jsonEncode({'uid': uid}) : null,
+  );
+}
+
 // 백그라운드 메시지 핸들러 (top-level 함수여야 함)
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -141,11 +158,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   if (type == 'clear_chat') {
     // 채팅 알림만 cancel — anniversary/schedule 알림과 카운터는 보존.
-    final ids = await _drainNotifIds(prefs, isChat: true);
-    for (final id in ids) {
-      await plugin.cancel(id);
-    }
-    // FCM이 직접 표시한 채팅 알림도 cleanup (ID 추적 못한 것들)
+    await plugin.cancel(_kChatNotifId);
     await _cancelActiveByChannel(plugin, 'chat_channel_v2');
     await prefs.setInt(_kBadgeChatKey, 0);
     await _syncIosBadge(plugin, _readTotalBadge(prefs));
@@ -174,31 +187,8 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final body = message.data['body'];
   if (message.notification == null && (title != null || body != null)) {
     final uid = prefs.getString(_kUserUidKey);
-    final id = _generateNotificationId();
-    await _appendNotifId(prefs, id, isChat: isChat);
-    await plugin.show(
-      id,
-      title,
-      body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          isChat ? 'chat_channel_v2' : 'anniversary_channel',
-          isChat ? '채팅 알림' : '알림',
-          importance: Importance.max,
-          priority: Priority.max,
-          playSound: true,
-          enableVibration: true,
-          icon: '@mipmap/ic_launcher',
-          number: total,
-          actions: isChat && uid != null ? const [_replyAction] : null,
-        ),
-        iOS: DarwinNotificationDetails(
-          presentSound: true,
-          badgeNumber: total,
-        ),
-      ),
-      payload: uid != null ? jsonEncode({'uid': uid}) : null,
-    );
+    await _showNotif(plugin,
+        isChat: isChat, title: title, body: body, total: total, uid: uid);
   } else if (defaultTargetPlatform == TargetPlatform.iOS) {
     // OS가 직접 표시한 경우에도 iOS 배지를 prefs 총합으로 보정
     await _syncIosBadge(plugin, total);
@@ -283,25 +273,18 @@ class FcmService with WidgetsBindingObserver {
   Future<void> clearChatNotifications() async {
     if (!_isMobile) return;
     final prefs = await _freshPrefs();
-    final ids = await _drainNotifIds(prefs, isChat: true);
-    for (final id in ids) {
-      await _localNotifications.cancel(id);
-    }
-    // FCM이 직접 표시한 채팅 알림도 cleanup (notification payload 모드에서 ID 추적 누락분)
+    await _localNotifications.cancel(_kChatNotifId);
+    // FCM이 직접 표시한 채팅 알림도 cleanup (notification payload 모드)
     await _cancelActiveByChannel(_localNotifications, 'chat_channel_v2');
     await prefs.setInt(_kBadgeChatKey, 0);
     await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
   }
 
   // 캘린더/기념일 페이지 진입 시 호출: 카운터 0 + 실제 OS 알림도 cancel
-  // (counter만 0으로 두면 알림 패널엔 남아있어 사용자 혼란 + Android 런처 자동 카운트와 desync)
   Future<void> clearOtherNotifications() async {
     if (!_isMobile) return;
     final prefs = await _freshPrefs();
-    final ids = await _drainNotifIds(prefs, isChat: false);
-    for (final id in ids) {
-      await _localNotifications.cancel(id);
-    }
+    await _localNotifications.cancel(_kOtherNotifId);
     // FCM이 직접 표시한 기념일 알림도 cleanup
     await _cancelActiveByChannel(_localNotifications, 'anniversary_channel');
     await prefs.setInt(_kBadgeOtherKey, 0);
@@ -313,37 +296,20 @@ class FcmService with WidgetsBindingObserver {
   Future<void> syncChatBadgeFromServer() async {
     if (!_isMobile) return;
     try {
-      final response = await ApiClient.get(Uri.parse(ApiEndpoints.chatUnreadCount));
+      final response =
+          await ApiClient.get(Uri.parse(ApiEndpoints.chatUnreadCount));
       if (response.statusCode != 200) return;
       final body = ApiClient.decodeBody(response);
       if (body is! num) return;
       final serverCount = body.toInt();
       final prefs = await _freshPrefs();
       final localChat = prefs.getInt(_kBadgeChatKey) ?? 0;
-      // 서버가 더 작다면 다른 기기가 읽은 것 → 카운터 + 알림(오래된 것부터) 동시 정리
-      // 서버가 더 크다면 우리가 놓친 것 → 서버 값으로 보정 (다음 chat FCM이 가시성 회복)
       if (serverCount == 0) {
-        final ids = await _drainNotifIds(prefs, isChat: true);
-        for (final id in ids) {
-          await _localNotifications.cancel(id);
-        }
-        // FCM 직접 표시분도 정리
+        await _localNotifications.cancel(_kChatNotifId);
         await _cancelActiveByChannel(_localNotifications, 'chat_channel_v2');
         await prefs.setInt(_kBadgeChatKey, 0);
-      } else if (serverCount < localChat) {
-        // 초과분만큼 가장 오래된 chat 알림부터 cancel (list 앞쪽 = 오래된 것)
-        final list = prefs.getStringList(_kChatNotifIdsKey) ?? <String>[];
-        final excess = list.length - serverCount;
-        if (excess > 0) {
-          final toCancel = list.sublist(0, excess);
-          final remain = list.sublist(excess);
-          for (final s in toCancel) {
-            await _localNotifications.cancel(int.parse(s));
-          }
-          await prefs.setStringList(_kChatNotifIdsKey, remain);
-        }
-        await prefs.setInt(_kBadgeChatKey, serverCount);
-      } else if (serverCount > localChat) {
+      } else if (serverCount != localChat) {
+        // 카운터만 보정 — 다음 새 메시지가 오면 알림 number도 갱신됨
         await prefs.setInt(_kBadgeChatKey, serverCount);
       }
       await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
@@ -417,8 +383,7 @@ class FcmService with WidgetsBindingObserver {
     });
 
     // 4. 알림 탭으로 앱 진입 처리
-    final initialMessage =
-        await FirebaseMessaging.instance.getInitialMessage();
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
     if (initialMessage != null) {
       _pendingNavigationType = initialMessage.data['type'] ?? 'chat';
     }
@@ -462,32 +427,9 @@ class FcmService with WidgetsBindingObserver {
 
     final prefs = await _freshPrefs();
     final total = await _incrementBadge(prefs, isChat: isChat);
-    final id = _generateNotificationId();
-    await _appendNotifId(prefs, id, isChat: isChat);
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    await _localNotifications.show(
-      id,
-      title,
-      body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          isChat ? 'chat_channel_v2' : 'anniversary_channel',
-          isChat ? '채팅 알림' : '알림',
-          importance: Importance.max,
-          priority: Priority.max,
-          playSound: true,
-          enableVibration: true,
-          icon: '@mipmap/ic_launcher',
-          number: total,
-          actions: isChat ? const [_replyAction] : null,
-        ),
-        iOS: DarwinNotificationDetails(
-          presentSound: true,
-          badgeNumber: total,
-        ),
-      ),
-      payload: uid != null ? jsonEncode({'uid': uid}) : null,
-    );
+    await _showNotif(_localNotifications,
+        isChat: isChat, title: title, body: body, total: total, uid: uid);
   }
 
   // 앱이 포그라운드일 때 알림 액션 처리
@@ -523,9 +465,9 @@ class FcmService with WidgetsBindingObserver {
       await ApiClient.post(
         Uri.parse('${ApiEndpoints.fcmToken}?token=$token'),
       );
-      print("FCM 토큰 서버 전송 완료");
+      debugPrint('FCM 토큰 서버 전송 완료');
     } catch (e) {
-      print("FCM 토큰 전송 실패: $e");
+      debugPrint('FCM 토큰 전송 실패: $e');
     }
   }
 }
