@@ -77,7 +77,9 @@ Future<void> _cancelActiveByChannel(
     for (final notif in active) {
       final id = notif.id;
       if (id != null && notif.channelId == channelId && id != _kIosBadgeSyncId) {
-        await plugin.cancel(id);
+        // FCM이 notify(tag, id, ...) 로 띄운 알림은 tag가 있음.
+        // cancel(id) 만 쓰면 tag 불일치로 취소가 안 되므로 tag도 같이 전달.
+        await plugin.cancel(id, tag: notif.tag);
       }
     }
   } catch (_) {}
