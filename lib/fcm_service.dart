@@ -82,6 +82,25 @@ Future<List<int>> _drainNotifIds(SharedPreferences prefs,
   return list.map(int.parse).toList();
 }
 
+// 지정 채널의 활성 알림을 모두 cancel — 서버가 FCM `notification` payload로 보내
+// OS가 직접 표시한 알림은 우리가 ID를 모르므로 추적 기반 cancel이 무효.
+// active notification을 enumerate해서 채널 기준으로 정리하면 OS-displayed도 같이 잡힘.
+Future<void> _cancelActiveByChannel(
+    FlutterLocalNotificationsPlugin plugin, String channelId) async {
+  if (defaultTargetPlatform != TargetPlatform.android) return;
+  try {
+    final androidPlugin = plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    final active = await androidPlugin?.getActiveNotifications() ?? [];
+    for (final notif in active) {
+      final id = notif.id;
+      if (id != null && notif.channelId == channelId && id != _kIosBadgeSyncId) {
+        await plugin.cancel(id);
+      }
+    }
+  } catch (_) {}
+}
+
 // iOS 배지를 prefs 총합으로 강제 동기화. silent notification으로 set한 뒤 즉시 cancel.
 Future<void> _syncIosBadge(
     FlutterLocalNotificationsPlugin plugin, int total) async {
@@ -126,6 +145,8 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     for (final id in ids) {
       await plugin.cancel(id);
     }
+    // FCM이 직접 표시한 채팅 알림도 cleanup (ID 추적 못한 것들)
+    await _cancelActiveByChannel(plugin, 'chat_channel_v2');
     await prefs.setInt(_kBadgeChatKey, 0);
     await _syncIosBadge(plugin, _readTotalBadge(prefs));
     return;
@@ -266,6 +287,8 @@ class FcmService with WidgetsBindingObserver {
     for (final id in ids) {
       await _localNotifications.cancel(id);
     }
+    // FCM이 직접 표시한 채팅 알림도 cleanup (notification payload 모드에서 ID 추적 누락분)
+    await _cancelActiveByChannel(_localNotifications, 'chat_channel_v2');
     await prefs.setInt(_kBadgeChatKey, 0);
     await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
   }
@@ -279,6 +302,8 @@ class FcmService with WidgetsBindingObserver {
     for (final id in ids) {
       await _localNotifications.cancel(id);
     }
+    // FCM이 직접 표시한 기념일 알림도 cleanup
+    await _cancelActiveByChannel(_localNotifications, 'anniversary_channel');
     await prefs.setInt(_kBadgeOtherKey, 0);
     await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
   }
@@ -302,6 +327,8 @@ class FcmService with WidgetsBindingObserver {
         for (final id in ids) {
           await _localNotifications.cancel(id);
         }
+        // FCM 직접 표시분도 정리
+        await _cancelActiveByChannel(_localNotifications, 'chat_channel_v2');
         await prefs.setInt(_kBadgeChatKey, 0);
       } else if (serverCount < localChat) {
         // 초과분만큼 가장 오래된 chat 알림부터 cancel (list 앞쪽 = 오래된 것)
