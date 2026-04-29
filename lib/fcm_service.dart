@@ -297,6 +297,11 @@ class FcmService with WidgetsBindingObserver {
   // — multi-device에서 다른 기기가 읽었을 때 이 기기 배지를 자가복구
   Future<void> syncChatBadgeFromServer() async {
     if (!_isMobile) return;
+    // 채팅 화면이 열려 있는 동안은 sync 생략.
+    // clearChatNotifications(counter=0)와 syncChatBadgeFromServer(server 응답=이전값)가
+    // 동시에 실행되면 chatRead API가 서버에 반영되기 전에 stale 값으로 counter가
+    // 덮어써져 다음 메시지부터 카운트가 틀리는 race condition 방지.
+    if (_isChatActive) return;
     try {
       final response =
           await ApiClient.get(Uri.parse(ApiEndpoints.chatUnreadCount));
