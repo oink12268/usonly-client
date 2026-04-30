@@ -377,6 +377,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                   await _getNickname(uid);
                 }
 
+                // 파트너 메시지 수신 시 lastReadChatId 갱신
+                // → 채팅창 안에 있는 동안 STOMP로 온 메시지도 읽음 처리되어
+                //   백그라운드 FCM 배지 카운트가 정확하게 계산됨
+                if (uid != widget.uid) {
+                  ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
+                }
+
                 // 화면 갱신: 리스트에 추가하고 스크롤 내리기
                 setState(() {
                   _chats.add(newChat);
