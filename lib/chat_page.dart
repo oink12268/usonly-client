@@ -371,7 +371,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                 }
 
                 // 파트너 메시지 수신 시 내 다른 기기(모바일) 알림 제거
-                if (uid != widget.uid) {
+                // 백그라운드 상태에서 호출되면 lastReadChatId가 즉시 갱신되어
+                // FCM 배지 카운트가 0으로 잘못 계산되므로 포그라운드일 때만 호출
+                if (uid != widget.uid &&
+                    WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
                   ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
                 }
 
