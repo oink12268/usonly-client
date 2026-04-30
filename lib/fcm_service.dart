@@ -64,6 +64,27 @@ int _readTotalBadge(SharedPreferences prefs) =>
     (prefs.getInt(_kBadgeChatKey) ?? 0) +
     (prefs.getInt(_kBadgeOtherKey) ?? 0);
 
+// 서버 unread-count를 가져와 _kBadgeChatKey를 덮어쓴 뒤 총합 반환.
+// FCM 중복 배달(Samsung Doze 재시도) 시에도 배지가 부풀지 않도록
+// 로컬 증가 대신 서버 truth-source를 사용.
+Future<int> _fetchAndStoreChatCount(
+    SharedPreferences prefs, String token) async {
+  try {
+    final response = await http.get(
+      Uri.parse('${ApiConfig.baseUrl}/api/chats/unread-count'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is Map && decoded['data'] is num) {
+        await prefs.setInt(
+            _kBadgeChatKey, (decoded['data'] as num).toInt());
+      }
+    }
+  } catch (_) {}
+  return _readTotalBadge(prefs);
+}
+
 // 지정 채널의 활성 알림을 모두 cancel.
 // 서버가 FCM `notification` payload로 보내면 OS가 직접 표시하므로 고정 ID cancel 외에
 // 채널 기반 enumerate로 나머지도 정리.
@@ -181,7 +202,15 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   } catch (_) {}
 
   final isChat = type == null || type == 'chat';
-  final total = await _incrementBadge(prefs, isChat: isChat);
+  final int total;
+  if (isChat) {
+    final token = prefs.getString(_kAuthTokenKey);
+    total = token != null
+        ? await _fetchAndStoreChatCount(prefs, token)
+        : await _incrementBadge(prefs, isChat: true);
+  } else {
+    total = await _incrementBadge(prefs, isChat: false);
+  }
 
   // notification 필드가 있으면 FCM이 OS 레벨에서 이미 표시함 → 수동 표시 생략
   // data-only 메시지(notification == null)일 때만 직접 표시
@@ -433,7 +462,15 @@ class FcmService with WidgetsBindingObserver {
     if (title == null && body == null) return;
 
     final prefs = await _freshPrefs();
-    final total = await _incrementBadge(prefs, isChat: isChat);
+    final int total;
+    if (isChat) {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      total = token != null
+          ? await _fetchAndStoreChatCount(prefs, token)
+          : await _incrementBadge(prefs, isChat: true);
+    } else {
+      total = await _incrementBadge(prefs, isChat: false);
+    }
     final uid = FirebaseAuth.instance.currentUser?.uid;
     await _showNotif(_localNotifications,
         isChat: isChat, title: title, body: body, total: total, uid: uid);
