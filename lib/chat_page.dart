@@ -122,8 +122,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // 채팅 화면으로 복귀: 알림/배지 소거
+      // 채팅 화면으로 복귀: 알림/배지 소거 + 읽음 처리
       FcmService().clearChatNotifications();
+      ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
       _fetchHistory();
       // 기존 소켓 끊고 재연결
       _reconnectTimer?.cancel();
@@ -131,14 +132,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       stompClient = null;
       _isConnecting = false;
       _connectSocket();
+    } else if (state == AppLifecycleState.paused) {
+      // 홈버튼으로 백그라운드 전환 시 읽음 처리
+      // dispose가 호출되지 않으므로 여기서 lastReadChatId를 갱신해야
+      // 백그라운드 FCM 배지 카운트가 정확하게 계산됨
+      ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // 채팅 화면 이탈: 포그라운드 알림 억제 해제
+    // 채팅 화면 이탈: 포그라운드 알림 억제 해제 + 읽음 처리 (뒤로가기)
     FcmService().setChatActive(false);
+    ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
     // 방 나가면 소켓 끊기 (필수)
     stompClient?.deactivate();
     _reconnectTimer?.cancel();
