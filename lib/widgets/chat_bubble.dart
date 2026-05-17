@@ -19,6 +19,7 @@ class ChatBubble extends StatelessWidget {
   final void Function(dynamic chat) onReply;
   final void Function(dynamic chat) onLongPress;
   final void Function(int id) onScrollToReply;
+  final VoidCallback? onRetry;
 
   const ChatBubble({
     super.key,
@@ -33,6 +34,7 @@ class ChatBubble extends StatelessWidget {
     required this.onReply,
     required this.onLongPress,
     required this.onScrollToReply,
+    this.onRetry,
   });
 
   String _replyPreviewText(String message) {
@@ -158,6 +160,9 @@ class ChatBubble extends StatelessWidget {
     final message = chat['message'] as String? ?? '';
     final String? createdAt = chat['created_at'] ?? chat['createdAt'];
     final isMe = chat['writerUid'] == myUid;
+    final String? messageStatus = chat['_status'] as String?;
+    final isPending = messageStatus == 'pending';
+    final isFailed = messageStatus == 'failed';
 
     final isImage = message.startsWith('IMAGE:');
     final isFile = message.startsWith('FILE:');
@@ -218,7 +223,9 @@ class ChatBubble extends StatelessWidget {
           // 말풍선 (스와이프로 답장)
           Dismissible(
             key: ValueKey('dismissible_${chat['id']}'),
-            direction: DismissDirection.startToEnd,
+            direction: (isPending || isFailed)
+                ? DismissDirection.none
+                : DismissDirection.startToEnd,
             confirmDismiss: (_) async {
               onReply(chat);
               return false;
@@ -229,7 +236,7 @@ class ChatBubble extends StatelessWidget {
               child: Icon(Icons.reply, color: Theme.of(context).colorScheme.onSurface),
             ),
             child: GestureDetector(
-              onLongPress: () => onLongPress(chat),
+              onLongPress: (isPending || isFailed) ? null : () => onLongPress(chat),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
                 child: Row(
@@ -288,24 +295,53 @@ class ChatBubble extends StatelessWidget {
                         ),
                       ),
 
-                    // 내 메시지: 시간 왼쪽
+                    // 내 메시지: 시간 or 전송 상태 표시
                     if (isMe)
                       Padding(
                         padding: const EdgeInsets.only(right: 4, top: 4),
                         child: Align(
                           alignment: Alignment.bottomRight,
-                          child: Text(
-                            DateFormatter.formatTime(createdAt),
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          ),
+                          child: isPending
+                              ? SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.5,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                )
+                              : isFailed
+                                  ? GestureDetector(
+                                      onTap: onRetry,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.error_outline,
+                                              size: 16, color: Colors.red[400]),
+                                          Text(
+                                            '재전송',
+                                            style: TextStyle(
+                                                fontSize: 9, color: Colors.red[400]),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : Text(
+                                      DateFormatter.formatTime(createdAt),
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant),
+                                    ),
                         ),
                       ),
 
                     // 말풍선 본체
                     Flexible(
-                      child: Column(
+                      child: Opacity(
+                        opacity: isPending ? 0.55 : 1.0,
+                        child: Column(
                         crossAxisAlignment:
                             isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                         children: [
@@ -514,6 +550,7 @@ class ChatBubble extends StatelessWidget {
                             ),
                         ],
                       ),
+                      ), // Opacity
                     ),
 
                     // 상대 메시지: 시간 오른쪽

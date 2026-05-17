@@ -75,6 +75,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   late AnimationController _sendAnimController;
   late Animation<double> _sendScaleAnim;
 
+  // 전송 실패 감지 타이머 (8초 내 소켓 연결 안 되면 failed로 전환)
+  Timer? _sendFailTimer;
+
   // uid → 닉네임 / 프로필 이미지 캐시
   final Map<String, String> _nicknameCache = {};
   final Map<String, String?> _profileImageCache = {};
@@ -151,6 +154,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     _reconnectTimer?.cancel();
     _typingTimer?.cancel();
     _partnerTypingTimer?.cancel();
+    _sendFailTimer?.cancel();
     _partnerTypingNotifier.dispose();
     _focusNotifier.dispose();
     _controller.dispose();
@@ -313,6 +317,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         onConnect: (StompFrame frame) {
           debugPrint("✅ 소켓 연결 성공!");
           _isConnecting = false;
+          _sendFailTimer?.cancel();
+          _sendFailTimer = null;
           // 연결 대기 중 쌓인 메시지 전송
           if (_pendingMessages.isNotEmpty) {
             final toSend = List<Map<String, dynamic>>.from(_pendingMessages);
@@ -322,6 +328,14 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                 destination: '/pub/chat',
                 body: jsonEncode(payload),
               );
+            }
+            // optimistic 메시지 제거: 서버 에코가 곧 실제 메시지로 추가됨
+            if (mounted) {
+              setState(() {
+                _chats.removeWhere(
+                  (c) => c['_status'] == 'pending' || c['_status'] == 'failed',
+                );
+              });
             }
           }
 
@@ -386,6 +400,17 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
                 // 화면 갱신: 리스트에 추가하고 스크롤 내리기
                 setState(() {
+                  // 내 메시지 에코가 돌아오면 matching pending 항목 제거
+                  if (uid == widget.uid) {
+                    final msg = newChat['message']?.toString() ?? '';
+                    final idx = _chats.indexWhere(
+                      (c) =>
+                          (c['_status'] == 'pending' || c['_status'] == 'failed') &&
+                          c['message']?.toString() == msg &&
+                          c['writerUid']?.toString() == uid,
+                    );
+                    if (idx != -1) _chats.removeAt(idx);
+                  }
                   _chats.add(newChat);
                 });
                 _scrollToBottom();
@@ -460,10 +485,22 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       payload['replyToUid'] = _replyTarget!['writerUid']?.toString() ?? '';
     }
 
-    // 연결 안 됐을 때: 큐에 넣고 재연결 시도 (전송 취소하지 않음)
+    // 연결 안 됐을 때: optimistic 메시지 추가 후 재연결 시도
     if (stompClient == null || !stompClient!.connected) {
+      final localId = 'local_${DateTime.now().millisecondsSinceEpoch}';
+      final optimistic = {
+        ...Map<String, dynamic>.from(payload),
+        'id': localId,
+        'created_at': DateTime.now().toIso8601String(),
+        'createdAt': DateTime.now().toIso8601String(),
+        '_status': 'pending',
+      };
       _pendingMessages.add(Map<String, dynamic>.from(payload));
+      setState(() => _chats.add(optimistic));
+      _scrollToBottom();
       _scheduleReconnect();
+      // 8초 내 연결 안 되면 실패로 표시
+      _sendFailTimer ??= Timer(const Duration(seconds: 8), _markPendingAsFailed);
       _controller.clear();
       _cancelReply();
       _focusNode.requestFocus();
@@ -479,6 +516,34 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     _typingTimer?.cancel();
     _cancelReply();       // 답장 상태 초기화
     _focusNode.requestFocus(); // 전송 후 포커스 유지
+  }
+
+  // pending 메시지들을 failed 상태로 전환 (8초 타임아웃)
+  void _markPendingAsFailed() {
+    _sendFailTimer = null;
+    if (!mounted) return;
+    setState(() {
+      for (int i = 0; i < _chats.length; i++) {
+        if (_chats[i]['_status'] == 'pending') {
+          _chats[i] = Map<String, dynamic>.from(_chats[i])
+            ..['_status'] = 'failed';
+        }
+      }
+    });
+  }
+
+  // 실패한 메시지 재전송 시도
+  void _retryFailedMessage(Map<String, dynamic> failedChat) {
+    setState(() {
+      final idx = _chats.indexWhere((c) => c['id'] == failedChat['id']);
+      if (idx != -1) {
+        _chats[idx] = Map<String, dynamic>.from(_chats[idx])
+          ..['_status'] = 'pending';
+      }
+    });
+    _scheduleReconnect();
+    _sendFailTimer?.cancel();
+    _sendFailTimer = Timer(const Duration(seconds: 8), _markPendingAsFailed);
   }
 
   void _showAttachmentSheet() {
@@ -1151,6 +1216,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                     onReply: _setReplyTarget,
                     onLongPress: _showMessageOptions,
                     onScrollToReply: _loadAndScrollToMessage,
+                    onRetry: chat['_status'] == 'failed'
+                        ? () => _retryFailedMessage(chat)
+                        : null,
                   );
                 },
               ),
