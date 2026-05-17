@@ -211,32 +211,36 @@ class CalendarGrid extends StatelessWidget {
                 ),
               ),
             ),
-            if (holidayName != null || hasSchedule || hasAnniversary || hasSingleDayGoogle)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (holidayName != null)
-                    _dot(isSelected
-                        ? Theme.of(context).colorScheme.onPrimary
-                        : Theme.of(context).colorScheme.onSurfaceVariant),
-                  if (holidayName != null && (hasSchedule || hasAnniversary || hasSingleDayGoogle))
-                    const SizedBox(width: 2),
-                  if (hasSchedule)
-                    _dot(isSelected
-                        ? Theme.of(context).colorScheme.onPrimary
-                        : Theme.of(context).colorScheme.onSurface),
-                  if (hasSchedule && (hasAnniversary || hasSingleDayGoogle)) const SizedBox(width: 2),
-                  if (hasAnniversary)
-                    _dot(isSelected
-                        ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.7)
-                        : Theme.of(context).colorScheme.onSurfaceVariant),
-                  if (hasAnniversary && hasSingleDayGoogle) const SizedBox(width: 2),
-                  if (hasSingleDayGoogle)
-                    _dot(isSelected
-                        ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.6)
-                        : Theme.of(context).colorScheme.outline),
-                ],
-              ),
+            SizedBox(
+              height: 7,
+              child: (holidayName != null || hasSchedule || hasAnniversary || hasSingleDayGoogle)
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (holidayName != null)
+                          _dot(isSelected
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context).colorScheme.onSurfaceVariant),
+                        if (holidayName != null && (hasSchedule || hasAnniversary || hasSingleDayGoogle))
+                          const SizedBox(width: 2),
+                        if (hasSchedule)
+                          _dot(isSelected
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context).colorScheme.onSurface),
+                        if (hasSchedule && (hasAnniversary || hasSingleDayGoogle)) const SizedBox(width: 2),
+                        if (hasAnniversary)
+                          _dot(isSelected
+                              ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.7)
+                              : Theme.of(context).colorScheme.onSurfaceVariant),
+                        if (hasAnniversary && hasSingleDayGoogle) const SizedBox(width: 2),
+                        if (hasSingleDayGoogle)
+                          _dot(isSelected
+                              ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.6)
+                              : Theme.of(context).colorScheme.outline),
+                      ],
+                    )
+                  : null,
+            ),
           ],
         ),
       ),

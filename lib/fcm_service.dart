@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -235,30 +236,56 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
   final text = response.input?.trim();
   if (text == null || text.isEmpty) return;
 
-  final prefs = await SharedPreferences.getInstance();
-  final token = prefs.getString(_kAuthTokenKey);
+  // reload()로 백그라운드 isolate가 캐싱한 최신 토큰을 반드시 읽어옴
+  final prefs = await _freshPrefs();
 
-  // payload에서 uid 추출, 없으면 SharedPreferences fallback
+  String? token;
   String? uid;
+
+  // Firebase에서 토큰 강제 갱신 시도 (캐시된 토큰은 1시간 후 만료)
+  // flutter_local_notifications 백그라운드 핸들러는 Firebase가 미초기화일 수 있으므로
+  // apps.isEmpty 확인 후 initializeApp → getIdToken(true) 순서로 진행
   try {
-    if (response.payload != null) {
-      uid = (jsonDecode(response.payload!) as Map<String, dynamic>)['uid']
-          as String?;
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      token = await user.getIdToken(true).timeout(const Duration(seconds: 10));
+      uid = user.uid;
+      await prefs.setString(_kAuthTokenKey, token);
+      await prefs.setString(_kUserUidKey, uid);
     }
   } catch (_) {}
-  uid ??= prefs.getString(_kUserUidKey);
+
+  // Firebase 갱신 실패 시 캐시된 토큰으로 fallback
+  token ??= prefs.getString(_kAuthTokenKey);
+
+  // payload에서 uid 추출, 없으면 SharedPreferences fallback
+  if (uid == null) {
+    try {
+      if (response.payload != null) {
+        uid = (jsonDecode(response.payload!) as Map<String, dynamic>)['uid']
+            as String?;
+      }
+    } catch (_) {}
+    uid ??= prefs.getString(_kUserUidKey);
+  }
 
   if (token == null || uid == null) return;
 
   try {
-    await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/chats'),
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({'message': text, 'writerUid': uid}),
-    );
+    // 타임아웃 없으면 서버 무응답 시 핸들러가 영원히 완료되지 않아 무한 로딩 발생
+    await http
+        .post(
+          Uri.parse('${ApiConfig.baseUrl}/api/chats'),
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'message': text, 'writerUid': uid}),
+        )
+        .timeout(const Duration(seconds: 15));
   } catch (_) {}
 }
 
@@ -274,6 +301,10 @@ class FcmService with WidgetsBindingObserver {
   // 채팅 화면이 열려 있을 때 포그라운드 FCM 알림 억제
   bool _isChatActive = false;
   void setChatActive(bool active) => _isChatActive = active;
+
+  // 캘린더 화면이 열려 있을 때 포그라운드 schedule 알림 억제
+  bool _isCalendarActive = false;
+  void setCalendarActive(bool active) => _isCalendarActive = active;
 
   bool _initialized = false;
 
@@ -327,18 +358,23 @@ class FcmService with WidgetsBindingObserver {
   Future<void> syncChatBadgeFromServer() async {
     if (!_isMobile) return;
     // 채팅 화면이 열려 있는 동안은 sync 생략.
-    // clearChatNotifications(counter=0)와 syncChatBadgeFromServer(server 응답=이전값)가
-    // 동시에 실행되면 chatRead API가 서버에 반영되기 전에 stale 값으로 counter가
-    // 덮어써져 다음 메시지부터 카운트가 틀리는 race condition 방지.
+    // 진입 시 1회 + 각 await 이후마다 재확인 필요 — 그렇지 않으면 다음 race가 발생:
+    //   1) resumed 직후 이 함수가 unread-count GET을 in-flight로 띄움
+    //   2) 사용자가 채팅 탭 진입 → setChatActive(true) → clearChatNotifications가
+    //      counter=0 으로 리셋하고 chatRead API 발사
+    //   3) 서버가 chatRead 반영 전에 1)의 응답이 도착(=stale 값) → 0을 덮어씀
+    //   4) 다음 새 메시지부터 stale 값에 누적되어 배지가 틀림
     if (_isChatActive) return;
     try {
       final response =
           await ApiClient.get(Uri.parse(ApiEndpoints.chatUnreadCount));
+      if (_isChatActive) return;
       if (response.statusCode != 200) return;
       final body = ApiClient.decodeBody(response);
       if (body is! num) return;
       final serverCount = body.toInt();
       final prefs = await _freshPrefs();
+      if (_isChatActive) return;
       final localChat = prefs.getInt(_kBadgeChatKey) ?? 0;
       if (serverCount == 0) {
         await _localNotifications.cancel(_kChatNotifId);
@@ -356,6 +392,24 @@ class FcmService with WidgetsBindingObserver {
   Future<void> _resyncBadge() async {
     if (!_isMobile) return;
     final prefs = await _freshPrefs();
+
+    // Android: 트레이에서 스와이프 삭제 등으로 OS 알림이 사라졌는데
+    // _kBadgeOtherKey가 남아있는 경우를 보정.
+    // anniversary_channel 알림이 실제로 없으면 other 카운터를 0으로 리셋.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        final androidPlugin = _localNotifications
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>();
+        final active = await androidPlugin?.getActiveNotifications() ?? [];
+        final hasOtherNotif = active.any((n) =>
+            n.channelId == 'anniversary_channel' && n.id != _kIosBadgeSyncId);
+        if (!hasOtherNotif && (prefs.getInt(_kBadgeOtherKey) ?? 0) > 0) {
+          await prefs.setInt(_kBadgeOtherKey, 0);
+        }
+      } catch (_) {}
+    }
+
     await _syncIosBadge(_localNotifications, _readTotalBadge(prefs));
     // 서버 동기화는 백그라운드로 — 네트워크 실패해도 로컬 보정은 이미 완료
     unawaited(syncChatBadgeFromServer());
@@ -456,6 +510,7 @@ class FcmService with WidgetsBindingObserver {
     }
     final isChat = type == null || type == 'chat';
     if (isChat && _isChatActive) return;
+    if (type == 'schedule' && _isCalendarActive) return;
 
     final title = message.data['title'] as String?;
     final body = message.data['body'] as String?;
