@@ -66,6 +66,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ));
           }
         });
+      } else if (pendingType == 'schedule') {
+        _selectedIndex = 1; // 캘린더 탭
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) FcmService().clearOtherNotifications();
+        });
       } else {
         _selectedIndex = 2; // 채팅 탭 (기본)
       }
@@ -93,6 +98,9 @@ _pages = [
       Navigator.push(context, MaterialPageRoute(
         builder: (_) => AnniversaryPage(memberId: widget.memberId),
       ));
+    } else if (type == 'schedule') {
+      setState(() => _selectedIndex = 1); // 캘린더 탭
+      FcmService().clearOtherNotifications();
     } else {
       setState(() => _selectedIndex = 2); // 채팅 탭 (기본)
     }

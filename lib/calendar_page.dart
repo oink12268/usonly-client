@@ -33,6 +33,13 @@ class _CalendarPageState extends State<CalendarPage> {
     _fetchData();
     // 페이지 진입 = 일정/기념일 알림을 본 것으로 간주 → other 배지 카운터 0
     FcmService().clearOtherNotifications();
+    FcmService().setCalendarActive(true);
+  }
+
+  @override
+  void dispose() {
+    FcmService().setCalendarActive(false);
+    super.dispose();
   }
 
   Future<void> _fetchData() async {
