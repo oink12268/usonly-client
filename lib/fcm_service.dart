@@ -253,7 +253,7 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
     if (user != null) {
       token = await user.getIdToken(true).timeout(const Duration(seconds: 10));
       uid = user.uid;
-      await prefs.setString(_kAuthTokenKey, token);
+      if (token != null) await prefs.setString(_kAuthTokenKey, token!);
       await prefs.setString(_kUserUidKey, uid);
     }
   } catch (_) {}
