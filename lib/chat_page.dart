@@ -82,6 +82,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   final Map<String, String> _nicknameCache = {};
   final Map<String, String?> _profileImageCache = {};
 
+  // 쿠폰으로 저장된 이미지 URL 세트 (채팅 말풍선 배지용)
+  Set<String> _couponImageUrls = {};
+
   final String socketUrl = ApiEndpoints.wsUrl;
   final String httpUrl = ApiEndpoints.chats;
 
@@ -106,6 +109,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     _fetchHistory();
     // 2. 소켓 연결 시작 (전화기 들기)
     _connectSocket();
+    // 3. 쿠폰 이미지 URL 로드 (말풍선 배지용)
+    _fetchCouponImageUrls();
 
     _scrollController.addListener(_onScroll);
 
@@ -198,6 +203,24 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         !_isLoadingNewer) {
       _loadNewer();
     }
+  }
+
+  Future<void> _fetchCouponImageUrls() async {
+    try {
+      final res = await ApiClient.get(Uri.parse(ApiEndpoints.coupons));
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        final raw = ApiClient.decodeBody(res);
+        if (raw is List) {
+          final list = raw.cast<Map<String, dynamic>>();
+          final urls = list
+              .map((c) => c['imageUrl'] as String?)
+              .whereType<String>()
+              .toSet();
+          if (mounted) setState(() => _couponImageUrls = urls);
+        }
+      }
+    } catch (_) {}
   }
 
   // --- [1] 지난 대화 로딩 (HTTP GET, 최신 50개) ---
@@ -1219,6 +1242,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                     onRetry: chat['_status'] == 'failed'
                         ? () => _retryFailedMessage(chat)
                         : null,
+                    couponImageUrls: _couponImageUrls,
                   );
                 },
               ),

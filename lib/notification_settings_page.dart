@@ -15,6 +15,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   bool _calendarEnabled = true;
   bool _chatEnabled = true;
   bool _anniversaryEnabled = true;
+  bool _couponEnabled = true;
   int _calendarReminderHour = 22;
   bool _loading = true;
 
@@ -37,11 +38,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       final res = await ApiClient.get(Uri.parse(ApiEndpoints.notificationSettings));
       if (!mounted) return;
       if (res.statusCode == 200) {
-        final data = (ApiClient.decodeBody(res) as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+        final data = ApiClient.decodeBody(res) as Map<String, dynamic>;
         setState(() {
           _calendarEnabled = data['calendarEnabled'] as bool? ?? true;
           _chatEnabled = data['chatEnabled'] as bool? ?? true;
           _anniversaryEnabled = data['anniversaryEnabled'] as bool? ?? true;
+          _couponEnabled = data['couponEnabled'] as bool? ?? true;
           _calendarReminderHour = (data['calendarReminderHour'] as num?)?.toInt() ?? 22;
         });
       }
@@ -63,6 +65,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           'calendarEnabled': _calendarEnabled,
           'chatEnabled': _chatEnabled,
           'anniversaryEnabled': _anniversaryEnabled,
+          'couponEnabled': _couponEnabled,
           'calendarReminderHour': _calendarReminderHour,
         }),
       );
@@ -156,6 +159,17 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   activeColor: Theme.of(context).colorScheme.primary,
                   onChanged: (v) {
                     setState(() => _anniversaryEnabled = v);
+                    _autoSave();
+                  },
+                ),
+                SwitchListTile(
+                  secondary: const Icon(Icons.confirmation_num_outlined),
+                  title: const Text('쿠폰 만료 알림'),
+                  subtitle: const Text('쿠폰 만료 D-7, D-1에 알려줘요'),
+                  value: _couponEnabled,
+                  activeColor: Theme.of(context).colorScheme.primary,
+                  onChanged: (v) {
+                    setState(() => _couponEnabled = v);
                     _autoSave();
                   },
                 ),

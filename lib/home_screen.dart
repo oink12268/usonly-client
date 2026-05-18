@@ -17,6 +17,7 @@ import 'work_schedule_page.dart';
 import 'dino_game_page.dart';
 import 'profile_edit_page.dart';
 import 'notification_settings_page.dart';
+import 'coupon_page.dart';
 import 'api_client.dart';
 import 'api_endpoints.dart';
 import 'share_intent_service.dart';
@@ -71,6 +72,15 @@ class _HomeScreenState extends State<HomeScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) FcmService().clearOtherNotifications();
         });
+      } else if (pendingType == 'coupon') {
+        _selectedIndex = 4; // 더보기 탭
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => const CouponPage(),
+            ));
+          }
+        });
       } else {
         _selectedIndex = 2; // 채팅 탭 (기본)
       }
@@ -101,6 +111,11 @@ _pages = [
     } else if (type == 'schedule') {
       setState(() => _selectedIndex = 1); // 캘린더 탭
       FcmService().clearOtherNotifications();
+    } else if (type == 'coupon') {
+      setState(() => _selectedIndex = 4);
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => const CouponPage(),
+      ));
     } else {
       setState(() => _selectedIndex = 2); // 채팅 탭 (기본)
     }
@@ -392,6 +407,17 @@ class _MorePageState extends State<_MorePage> {
                 MaterialPageRoute(
                   builder: (_) => AnniversaryPage(memberId: widget.memberId),
                 ),
+              );
+            },
+          ),
+          // 쿠폰함
+          ListTile(
+            leading: const Icon(Icons.confirmation_num_outlined),
+            title: const Text('쿠폰함'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CouponPage()),
               );
             },
           ),

@@ -20,6 +20,7 @@ class ChatBubble extends StatelessWidget {
   final void Function(dynamic chat) onLongPress;
   final void Function(int id) onScrollToReply;
   final VoidCallback? onRetry;
+  final Set<String> couponImageUrls;
 
   const ChatBubble({
     super.key,
@@ -35,6 +36,7 @@ class ChatBubble extends StatelessWidget {
     required this.onLongPress,
     required this.onScrollToReply,
     this.onRetry,
+    this.couponImageUrls = const {},
   });
 
   String _replyPreviewText(String message) {
@@ -417,23 +419,58 @@ class ChatBubble extends StatelessWidget {
                           if (isImage)
                             GestureDetector(
                               onTap: () => _openImageGallery(context, content),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(15),
-                                child: CachedNetworkImage(
-                                  imageUrl: content,
-                                  width: 200,
-                                  height: 200,
-                                  fit: BoxFit.cover,
-                                  memCacheWidth: 300,
-                                  placeholder: (context, url) => Container(
+                              child: Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(15),
+                                    child: CachedNetworkImage(
+                                      imageUrl: content,
                                       width: 200,
                                       height: 200,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest),
-                                  errorWidget: (context, url, error) =>
-                                      const Icon(Icons.error),
-                                ),
+                                      fit: BoxFit.cover,
+                                      memCacheWidth: 300,
+                                      placeholder: (context, url) => Container(
+                                          width: 200,
+                                          height: 200,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surfaceContainerHighest),
+                                      errorWidget: (context, url, error) =>
+                                          const Icon(Icons.error),
+                                    ),
+                                  ),
+                                  if (couponImageUrls.contains(content))
+                                    Positioned(
+                                      bottom: 0,
+                                      left: 0,
+                                      right: 0,
+                                      child: Container(
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xCC1B5E20),
+                                          borderRadius: BorderRadius.only(
+                                            bottomLeft: Radius.circular(15),
+                                            bottomRight: Radius.circular(15),
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(vertical: 5),
+                                        child: const Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.confirmation_num_outlined,
+                                                size: 13, color: Colors.white),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              '쿠폰 저장됨',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w600),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             )
                           // 파일

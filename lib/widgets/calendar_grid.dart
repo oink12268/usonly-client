@@ -75,16 +75,18 @@ class CalendarGrid extends StatelessWidget {
     return null;
   }
 
-  bool _hasSchedule(DateTime day) {
+  String? _scheduleTitle(DateTime day) {
     final dayStr = _toDateStr(day);
-    return schedules.any((s) => s['date'] == dayStr);
+    final match = schedules.firstWhere((s) => s['date'] == dayStr, orElse: () => null);
+    return match?['title'] as String?;
   }
 
-  bool _hasAnniversary(DateTime day) {
-    return anniversaries.any((a) {
+  String? _anniversaryTitle(DateTime day) {
+    for (final a in anniversaries) {
       final d = _anniversaryDateInMonth(a);
-      return d != null && d.day == day.day;
-    });
+      if (d != null && d.day == day.day) return a['title'] as String?;
+    }
+    return null;
   }
 
   List<GoogleCalEvent> _googleEventsForDate(DateTime day) {
@@ -137,10 +139,16 @@ class CalendarGrid extends StatelessWidget {
 
   // ─── Widgets ─────────────────────────────────────────────────────────────
 
-  Widget _dot(Color color) => Container(
-        width: 5,
-        height: 5,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  Widget _tag(String text, Color bg, Color fg) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0.5),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(3)),
+        child: Text(
+          text,
+          style: TextStyle(fontSize: 8.5, color: fg, height: 1.4),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
       );
 
   Widget _buildEventBarWidget(BuildContext context, _EventBar bar) {
@@ -171,11 +179,11 @@ class CalendarGrid extends StatelessWidget {
       Map<DateTime, String> holidays) {
     final isSelected = selectedDate != null && _isSameDay(date, selectedDate!);
     final isToday = _isSameDay(date, DateTime.now());
-    final hasSchedule = _hasSchedule(date);
-    final hasAnniversary = _hasAnniversary(date);
+    final scheduleTitle = _scheduleTitle(date);
+    final anniversaryTitle = _anniversaryTitle(date);
     final holidayName = holidays[DateTime(date.year, date.month, date.day)];
-    final hasSingleDayGoogle =
-        _googleEventsForDate(date).where((e) => !e.isMultiDay).isNotEmpty;
+    final singleDayGoogleEvents =
+        _googleEventsForDate(date).where((e) => !e.isMultiDay).toList();
 
     Color dateColor() {
       if (isSelected) return Theme.of(context).colorScheme.onPrimary;
@@ -185,14 +193,19 @@ class CalendarGrid extends StatelessWidget {
       return Theme.of(context).colorScheme.onSurface;
     }
 
+    final hasTags = holidayName != null || scheduleTitle != null ||
+        anniversaryTitle != null || singleDayGoogleEvents.isNotEmpty;
+
     return GestureDetector(
       onTap: () => onDateSelected(date),
       child: SizedBox(
         width: width,
         height: height,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            const SizedBox(height: 4),
             Container(
               width: 28,
               height: 28,
@@ -211,36 +224,63 @@ class CalendarGrid extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(
-              height: 7,
-              child: (holidayName != null || hasSchedule || hasAnniversary || hasSingleDayGoogle)
-                  ? Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (holidayName != null)
-                          _dot(isSelected
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : Theme.of(context).colorScheme.onSurfaceVariant),
-                        if (holidayName != null && (hasSchedule || hasAnniversary || hasSingleDayGoogle))
-                          const SizedBox(width: 2),
-                        if (hasSchedule)
-                          _dot(isSelected
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : Theme.of(context).colorScheme.onSurface),
-                        if (hasSchedule && (hasAnniversary || hasSingleDayGoogle)) const SizedBox(width: 2),
-                        if (hasAnniversary)
-                          _dot(isSelected
-                              ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.7)
-                              : Theme.of(context).colorScheme.onSurfaceVariant),
-                        if (hasAnniversary && hasSingleDayGoogle) const SizedBox(width: 2),
-                        if (hasSingleDayGoogle)
-                          _dot(isSelected
-                              ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.6)
-                              : Theme.of(context).colorScheme.outline),
-                      ],
-                    )
-                  : null,
-            ),
+            if (hasTags) ...[
+              const SizedBox(height: 2),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1),
+                child: Column(
+                  children: [
+                    if (holidayName != null)
+                      _tag(
+                        holidayName,
+                        isSelected
+                            ? Theme.of(context).colorScheme.onPrimary.withValues(alpha:0.15)
+                            : Theme.of(context).colorScheme.surfaceContainerHighest,
+                        isSelected
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    if (scheduleTitle != null) ...[
+                      if (holidayName != null) const SizedBox(height: 1),
+                      _tag(
+                        scheduleTitle,
+                        isSelected
+                            ? Theme.of(context).colorScheme.onPrimary.withValues(alpha:0.2)
+                            : const Color(0xFFE5F0FF),
+                        isSelected
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : const Color(0xFF1C5FC5),
+                      ),
+                    ],
+                    if (anniversaryTitle != null) ...[
+                      if (holidayName != null || scheduleTitle != null) const SizedBox(height: 1),
+                      _tag(
+                        anniversaryTitle,
+                        isSelected
+                            ? Theme.of(context).colorScheme.onPrimary.withValues(alpha:0.2)
+                            : const Color(0xFFFFF0F5),
+                        isSelected
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : const Color(0xFFC0195E),
+                      ),
+                    ],
+                    if (singleDayGoogleEvents.isNotEmpty) ...[
+                      if (holidayName != null || scheduleTitle != null || anniversaryTitle != null)
+                        const SizedBox(height: 1),
+                      _tag(
+                        singleDayGoogleEvents.first.title,
+                        isSelected
+                            ? Theme.of(context).colorScheme.onPrimary.withValues(alpha:0.15)
+                            : Theme.of(context).colorScheme.surfaceContainerHighest,
+                        isSelected
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -249,7 +289,7 @@ class CalendarGrid extends StatelessWidget {
 
   Widget _buildWeekRow(BuildContext context, List<DateTime?> weekDays, double cellWidth,
       Map<DateTime, String> holidays) {
-    const dateCellHeight = 42.0;
+    const dateCellHeight = 62.0;
     const barHeight = 14.0;
     const barSpacing = 2.0;
 
@@ -333,7 +373,7 @@ class CalendarGrid extends StatelessWidget {
                   GestureDetector(
                     onTap: onYearMonthPicker,
                     child: Text(
-                      "${year}년 ${month}월",
+                      "$year년 $month월",
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),

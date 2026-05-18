@@ -93,4 +93,8 @@ class ApiEndpoints {
 
   // ── Notification Settings ──────────────────────────────
   static String get notificationSettings => '$_base/api/notification-settings';
+
+  // ── Coupons ───────────────────────────────────────────
+  static String get coupons => '$_base/api/coupons';
+  static String couponById(int id) => '$_base/api/coupons/$id';
 }
