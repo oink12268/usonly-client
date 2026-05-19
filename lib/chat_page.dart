@@ -141,9 +141,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       _isConnecting = false;
       _connectSocket();
     } else if (state == AppLifecycleState.paused) {
-      // 홈버튼으로 백그라운드 전환 시 읽음 처리
-      // dispose가 호출되지 않으므로 여기서 lastReadChatId를 갱신해야
-      // 백그라운드 FCM 배지 카운트가 정확하게 계산됨
+      // 홈버튼으로 백그라운드 전환 시 clear_chat FCM 발송 (본인 기기 배지 소거)
       ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
     }
   }
@@ -414,9 +412,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                   await _getNickname(uid);
                 }
 
-                // 파트너 메시지 수신 시 lastReadChatId 갱신
-                // → 채팅창 안에 있는 동안 STOMP로 온 메시지도 읽음 처리되어
-                //   백그라운드 FCM 배지 카운트가 정확하게 계산됨
                 if (uid != widget.uid) {
                   ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
                 }
@@ -508,7 +503,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       payload['replyToUid'] = _replyTarget!['writerUid']?.toString() ?? '';
     }
 
-    // 연결 안 됐을 때: optimistic 메시지 추가 후 재연결 시도
+    // 연결 안 됐을 때: optimistic 메시지 추가 후 재연결 시도F
     if (stompClient == null || !stompClient!.connected) {
       final localId = 'local_${DateTime.now().millisecondsSinceEpoch}';
       final optimistic = {

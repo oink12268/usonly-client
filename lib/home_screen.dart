@@ -76,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _selectedIndex = 4; // 더보기 탭
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
+            FcmService().clearOtherNotifications();
             Navigator.push(context, MaterialPageRoute(
               builder: (_) => const CouponPage(),
             ));
@@ -113,6 +114,7 @@ _pages = [
       FcmService().clearOtherNotifications();
     } else if (type == 'coupon') {
       setState(() => _selectedIndex = 4);
+      FcmService().clearOtherNotifications();
       Navigator.push(context, MaterialPageRoute(
         builder: (_) => const CouponPage(),
       ));
