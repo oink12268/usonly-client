@@ -146,6 +146,7 @@ class CalendarGrid extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(fontSize: 8.5, color: fg, height: 1.4),
+          textAlign: TextAlign.center,
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
         ),
@@ -233,35 +234,23 @@ class CalendarGrid extends StatelessWidget {
                     if (holidayName != null)
                       _tag(
                         holidayName,
-                        isSelected
-                            ? Theme.of(context).colorScheme.onPrimary.withValues(alpha:0.15)
-                            : Theme.of(context).colorScheme.surfaceContainerHighest,
-                        isSelected
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                        Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     if (scheduleTitle != null) ...[
                       if (holidayName != null) const SizedBox(height: 1),
                       _tag(
                         scheduleTitle,
-                        isSelected
-                            ? Theme.of(context).colorScheme.onPrimary.withValues(alpha:0.2)
-                            : const Color(0xFFE5F0FF),
-                        isSelected
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : const Color(0xFF1C5FC5),
+                        const Color(0xFFE5F0FF),
+                        const Color(0xFF1C5FC5),
                       ),
                     ],
                     if (anniversaryTitle != null) ...[
                       if (holidayName != null || scheduleTitle != null) const SizedBox(height: 1),
                       _tag(
                         anniversaryTitle,
-                        isSelected
-                            ? Theme.of(context).colorScheme.onPrimary.withValues(alpha:0.2)
-                            : const Color(0xFFFFF0F5),
-                        isSelected
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : const Color(0xFFC0195E),
+                        const Color(0xFFFFF0F5),
+                        const Color(0xFFC0195E),
                       ),
                     ],
                     if (singleDayGoogleEvents.isNotEmpty) ...[
@@ -269,12 +258,8 @@ class CalendarGrid extends StatelessWidget {
                         const SizedBox(height: 1),
                       _tag(
                         singleDayGoogleEvents.first.title,
-                        isSelected
-                            ? Theme.of(context).colorScheme.onPrimary.withValues(alpha:0.15)
-                            : Theme.of(context).colorScheme.surfaceContainerHighest,
-                        isSelected
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                        Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ],
                   ],
