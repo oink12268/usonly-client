@@ -615,8 +615,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             ),
           ),
           const Divider(height: 1),
-          ColoredBox(
-            color: Theme.of(context).colorScheme.surface,
+          Theme(
+            data: Theme.of(context).copyWith(
+              canvasColor: Theme.of(context).colorScheme.surface,
+            ),
             child: QuillSimpleToolbar(
             controller: _controller,
             config: QuillSimpleToolbarConfig(
@@ -651,7 +653,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               ],
             ),
           ),
-          ), // ColoredBox
+          ), // Theme
         ],
       ),
     ), // Scaffold

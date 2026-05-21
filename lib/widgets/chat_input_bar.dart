@@ -35,23 +35,26 @@ class ChatInputBar extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              decoration: InputDecoration(
-                hintText: "",
-                filled: true,
-                isDense: true,
-                constraints: const BoxConstraints.tightFor(height: 36),
-                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
+            child: SizedBox(
+              height: 36,
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                maxLines: 1,
+                decoration: InputDecoration(
+                  hintText: "",
+                  filled: true,
+                  isDense: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                onChanged: onTypingChanged,
+                onSubmitted: (_) => onSend(),
               ),
-              onChanged: onTypingChanged,
-              onSubmitted: (_) => onSend(),
             ),
           ),
           const SizedBox(width: 8),
