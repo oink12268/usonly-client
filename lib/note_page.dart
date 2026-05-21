@@ -269,7 +269,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
         final isActive = candidateData.isNotEmpty;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 100),
-          height: isActive ? 24 : 8,
+          height: isActive ? 24 : 6,
           child: isActive
               ? Center(
                   child: Container(
@@ -289,16 +289,16 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
 
   Widget _buildNoteCard(BuildContext context, Map<String, dynamic> note, int index,
       {required bool isHovering, required bool isDragging}) {
+    final cs = Theme.of(context).colorScheme;
+    final childCount = (note['childCount'] ?? 0) as int;
+    final title = note['title']?.isEmpty == true ? '(제목 없음)' : note['title'] as String;
+    final plainText = _extractPlainText(note['content']);
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 150),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: isHovering
-            ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
-            : null,
-        color: isHovering
-            ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
-            : null,
+        borderRadius: BorderRadius.circular(16),
+        border: isHovering ? Border.all(color: cs.primary, width: 1.5) : null,
       ),
       child: Dismissible(
         key: Key('dismiss_${note['id']}'),
@@ -308,9 +308,9 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
           padding: const EdgeInsets.only(right: 20),
           decoration: BoxDecoration(
             color: Colors.red.shade400,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
-          child: const Icon(Icons.delete, color: Colors.white),
+          child: const Icon(Icons.delete_outline, color: Colors.white),
         ),
         onDismissed: (_) async {
           final deletedNote = Map<String, dynamic>.from(note);
@@ -339,16 +339,13 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
           await controller.closed;
           if (!undone) _deleteNote(deletedNote['id']);
         },
-        child: Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: isHovering
-                ? BorderSide.none
-                : BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Material(
+          color: isHovering
+              ? cs.primaryContainer.withOpacity(0.25)
+              : cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
             onTap: () async {
               await Navigator.push(
                 context,
@@ -362,91 +359,101 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
               );
               _fetchNotes();
             },
-            title: Row(
-              children: [
-                if (note['isPrivate'] == true) ...[
-                  Icon(Icons.lock, size: 14, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 4),
-                ],
-                Expanded(
-                  child: Text(
-                    note['title']?.isEmpty == true ? '(제목 없음)' : note['title'],
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            subtitle: note['content']?.isNotEmpty == true
-                ? Text(
-                    _extractPlainText(note['content']),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13),
-                  )
-                : null,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      _formatDate(note['updatedAt']),
-                      style: TextStyle(
-                          fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (note['isPrivate'] == true) ...[
+                              Icon(Icons.lock_outline, size: 13, color: cs.primary),
+                              const SizedBox(width: 4),
+                            ],
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w500, fontSize: 15),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (plainText.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            plainText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Text(
+                              _formatDate(note['updatedAt']),
+                              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withOpacity(0.7)),
+                            ),
+                            if (note['lastEditedByNickname'] != null) ...[
+                              Text(
+                                '  ·  ${note['lastEditedByNickname']}',
+                                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withOpacity(0.7)),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
                     ),
-                    if (note['lastEditedByNickname'] != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        note['lastEditedByNickname'],
-                        style: TextStyle(
-                            fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  icon: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        (note['childCount'] ?? 0) > 0
-                            ? Icons.folder
-                            : Icons.folder_outlined,
-                        size: 20,
-                      ),
-                      if ((note['childCount'] ?? 0) > 0)
-                        Text(
-                          '${note['childCount']}',
-                          style: TextStyle(
-                              fontSize: 10, color: Theme.of(context).colorScheme.onSurface),
-                        ),
-                    ],
                   ),
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => NotePage(
-                          memberId: widget.memberId,
-                          coupleId: widget.coupleId,
-                          parentNoteId: note['id'],
-                          parentTitle: note['title']?.isEmpty == true
-                              ? '(제목 없음)'
-                              : note['title'],
+                  if (childCount > 0)
+                    GestureDetector(
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => NotePage(
+                              memberId: widget.memberId,
+                              coupleId: widget.coupleId,
+                              parentNoteId: note['id'],
+                              parentTitle: title,
+                            ),
+                          ),
+                        );
+                        _fetchNotes();
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: cs.onSurface.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '$childCount',
+                                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(Icons.chevron_right, size: 18, color: cs.onSurfaceVariant.withOpacity(0.5)),
+                          ],
                         ),
                       ),
-                    );
-                    _fetchNotes();
-                  },
-                ),
-              ],
+                    )
+                  else
+                    const SizedBox(width: 12),
+                ],
+              ),
             ),
           ),
         ),
@@ -481,7 +488,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   // 아이템 사이사이 + 맨 위/아래에 드롭존 (separator)
                   // index: 짝수 = separator, 홀수 = note
                   itemCount: _notes.length * 2 + 1,
@@ -521,36 +528,31 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                             _reorderTargetIndex = null;
                           }),
                           feedback: Material(
-                            elevation: 6,
-                            borderRadius: BorderRadius.circular(12),
+                            elevation: 8,
+                            borderRadius: BorderRadius.circular(16),
+                            color: Theme.of(context).colorScheme.surfaceContainerHigh,
                             child: SizedBox(
                               width: MediaQuery.of(context).size.width - 32,
                               child: Opacity(
-                                opacity: 0.9,
-                                child: Card(
-                                  elevation: 0,
-                                  margin: EdgeInsets.zero,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                    title: Row(
-                                      children: [
-                                        if (note['isPrivate'] == true) ...[
-                                          const Icon(Icons.lock, size: 14),
-                                          const SizedBox(width: 4),
-                                        ],
-                                        Expanded(
-                                          child: Text(
-                                            note['title']?.isEmpty == true ? '(제목 없음)' : note['title'],
-                                            style: const TextStyle(fontWeight: FontWeight.w600),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
+                                opacity: 0.95,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                  child: Row(
+                                    children: [
+                                      if (note['isPrivate'] == true) ...[
+                                        Icon(Icons.lock_outline, size: 13,
+                                            color: Theme.of(context).colorScheme.primary),
+                                        const SizedBox(width: 4),
                                       ],
-                                    ),
+                                      Expanded(
+                                        child: Text(
+                                          note['title']?.isEmpty == true ? '(제목 없음)' : note['title'],
+                                          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -566,11 +568,12 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                     );
                   },
                 ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.small(
         onPressed: _createNote,
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        child: const Icon(Icons.add),
+        elevation: 2,
+        child: const Icon(Icons.add, size: 20),
       ),
     );
   }
