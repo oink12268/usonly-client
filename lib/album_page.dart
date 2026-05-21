@@ -345,7 +345,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
-                    childAspectRatio: 0.85,
+                    childAspectRatio: 1.0,
                   ),
                   itemCount: _albums.length,
                   itemBuilder: (context, index) => _buildAlbumCard(_albums[index]),
@@ -372,48 +372,57 @@ class _AlbumListContentState extends State<_AlbumListContent> {
         _fetchAlbums();
       },
       onLongPress: () => _showAlbumOptions(album),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(2, 2)),
-                ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // 커버 이미지
+            album['coverImageUrl'] != null
+                ? CachedNetworkImage(
+                    imageUrl: album['coverImageUrl'],
+                    fit: BoxFit.cover,
+                    memCacheWidth: 300,
+                    maxWidthDiskCache: 300,
+                    placeholder: (context, url) => Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Icon(Icons.image, size: 40, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                  )
+                : Container(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: Icon(Icons.image, size: 40, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+            // 하단 그라디언트 + 앨범명
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 28, 12, 12),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xCC000000), Colors.transparent],
+                  ),
+                ),
+                child: Text(
+                  album['title'] ?? "무제",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              child: album['coverImageUrl'] != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: CachedNetworkImage(
-                        imageUrl: album['coverImageUrl'],
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: double.infinity,
-                        memCacheWidth: 300,
-                        maxWidthDiskCache: 300,
-                        placeholder: (context, url) => Container(
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        ),
-                        errorWidget: (context, url, error) =>
-                            Center(child: Icon(Icons.error, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                      ),
-                    )
-                  : Center(child: Icon(Icons.image, size: 40, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 8, left: 4),
-            child: Text(
-              album['title'] ?? "무제",
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
