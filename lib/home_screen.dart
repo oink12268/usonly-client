@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -147,12 +148,31 @@ _pages = [
           type: BottomNavigationBarType.fixed,
           currentIndex: _selectedIndex,
           onTap: _onItemTapped,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.photo_album), label: '앨범'),
-            BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '캘린더'),
-            BottomNavigationBarItem(icon: Icon(Icons.chat), label: '채팅'),
-            BottomNavigationBarItem(icon: Icon(Icons.note_outlined), label: '메모장'),
-            BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: '더보기'),
+          items: [
+            BottomNavigationBarItem(
+              icon: const Icon(Symbols.photo_library),
+              activeIcon: const Icon(Symbols.photo_library, fill: 1),
+              label: '앨범',
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Symbols.calendar_month),
+              activeIcon: const Icon(Symbols.calendar_month, fill: 1),
+              label: '캘린더',
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Symbols.chat_bubble),
+              activeIcon: const Icon(Symbols.chat_bubble, fill: 1),
+              label: '채팅',
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Symbols.sticky_note_2),
+              activeIcon: const Icon(Symbols.sticky_note_2, fill: 1),
+              label: '메모장',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Symbols.more_horiz),
+              label: '더보기',
+            ),
           ],
         ),
       ),
@@ -360,7 +380,7 @@ class _MorePageState extends State<_MorePage> {
                             ? CachedNetworkImageProvider(_profileImageUrl!)
                             : null,
                         child: _profileImageUrl == null
-                            ? const Icon(Icons.person, size: 30)
+                            ? const Icon(Symbols.person, size: 30)
                             : null,
                       ),
                       Positioned(
@@ -393,7 +413,7 @@ class _MorePageState extends State<_MorePage> {
                       ],
                     ),
                   ),
-                  Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  Icon(Symbols.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ],
               ),
             ),
@@ -401,7 +421,7 @@ class _MorePageState extends State<_MorePage> {
           const Divider(height: 40),
           // 기념일
           ListTile(
-            leading: const Icon(Icons.favorite),
+            leading: const Icon(Symbols.cake),
             title: const Text('기념일'),
             onTap: () {
               Navigator.push(
@@ -414,7 +434,7 @@ class _MorePageState extends State<_MorePage> {
           ),
           // 쿠폰함
           ListTile(
-            leading: const Icon(Icons.confirmation_num_outlined),
+            leading: const Icon(Symbols.confirmation_number),
             title: const Text('쿠폰함'),
             onTap: () {
               Navigator.push(
@@ -425,7 +445,7 @@ class _MorePageState extends State<_MorePage> {
           ),
           // 미니 게임
           ListTile(
-            leading: const Icon(Icons.sports_esports),
+            leading: const Icon(Symbols.sports_esports),
             title: const Text('플래피 버드'),
             onTap: () {
               Navigator.push(
@@ -436,7 +456,7 @@ class _MorePageState extends State<_MorePage> {
           ),
           // 알림 설정
           ListTile(
-            leading: const Icon(Icons.notifications_outlined),
+            leading: const Icon(Symbols.notifications),
             title: const Text('알림 설정'),
             onTap: () {
               Navigator.push(
@@ -450,7 +470,7 @@ class _MorePageState extends State<_MorePage> {
           const Divider(height: 20),
           // 다크모드
           SwitchListTile(
-            secondary: const Icon(Icons.dark_mode_outlined),
+            secondary: const Icon(Symbols.dark_mode),
             title: const Text('다크모드'),
             value: themeNotifier.isDark,
             activeColor: Theme.of(context).colorScheme.primary,
@@ -458,7 +478,7 @@ class _MorePageState extends State<_MorePage> {
           ),
           // 글자 크기
           ListTile(
-            leading: const Icon(Icons.text_fields),
+            leading: const Icon(Symbols.text_fields),
             title: const Text('글자 크기'),
             trailing: SegmentedButton<double>(
               segments: const [
@@ -489,7 +509,7 @@ class _MorePageState extends State<_MorePage> {
           const Divider(height: 20),
           // 버전 정보
           ListTile(
-            leading: const Icon(Icons.info_outline),
+            leading: const Icon(Symbols.info),
             title: const Text('버전 정보'),
             trailing: Text(
               _appVersion.isNotEmpty ? 'v$_appVersion' : '',
@@ -503,7 +523,7 @@ class _MorePageState extends State<_MorePage> {
           // 로그아웃
           if (widget.user != null)
             ListTile(
-              leading: const Icon(Icons.logout),
+              leading: const Icon(Symbols.logout),
               title: const Text('로그아웃'),
               onTap: () async {
                 await AuthService().signOut();
