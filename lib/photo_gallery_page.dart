@@ -1007,7 +1007,7 @@ class _SlideshowPageState extends State<SlideshowPage>
   bool _isPlaying = true;
   bool _showControls = true;
   bool _isShuffle = true;
-  int _intervalSeconds = 3;
+  int _intervalSeconds = 5;
   Timer? _timer;
   Timer? _progressTimer;
   double _progress = 0.0;
