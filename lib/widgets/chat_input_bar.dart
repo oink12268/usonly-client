@@ -46,7 +46,7 @@ class ChatInputBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               ),
               onChanged: onTypingChanged,
               onSubmitted: (_) => onSend(),
@@ -68,7 +68,7 @@ class ChatInputBar extends StatelessWidget {
                     onSend();
                   },
                   child: Icon(
-                    Icons.play_arrow_rounded,
+                    Icons.send_rounded,
                     color: Theme.of(context).colorScheme.onPrimary,
                     size: 20,
                   ),

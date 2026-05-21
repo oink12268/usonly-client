@@ -158,7 +158,7 @@ _pages = [
               label: '캘린더',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Symbols.chat_bubble),
+              icon: Icon(Icons.chat_bubble_outline),
               label: '채팅',
             ),
             BottomNavigationBarItem(
@@ -430,7 +430,7 @@ class _MorePageState extends State<_MorePage> {
           ),
           // 쿠폰함
           ListTile(
-            leading: const Icon(Symbols.confirmation_number),
+            leading: const Icon(Icons.confirmation_number_outlined),
             title: const Text('쿠폰함'),
             onTap: () {
               Navigator.push(
@@ -441,7 +441,7 @@ class _MorePageState extends State<_MorePage> {
           ),
           // 미니 게임
           ListTile(
-            leading: const Icon(Symbols.sports_esports),
+            leading: const Icon(Icons.sports_esports_outlined),
             title: const Text('플래피 버드'),
             onTap: () {
               Navigator.push(
