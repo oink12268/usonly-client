@@ -148,28 +148,24 @@ _pages = [
           type: BottomNavigationBarType.fixed,
           currentIndex: _selectedIndex,
           onTap: _onItemTapped,
-          items: [
+          items: const [
             BottomNavigationBarItem(
-              icon: const Icon(Symbols.photo_library),
-              activeIcon: const Icon(Symbols.photo_library, fill: 1),
+              icon: Icon(Symbols.photo_library),
               label: '앨범',
             ),
             BottomNavigationBarItem(
-              icon: const Icon(Symbols.calendar_month),
-              activeIcon: const Icon(Symbols.calendar_month, fill: 1),
+              icon: Icon(Symbols.calendar_month),
               label: '캘린더',
             ),
             BottomNavigationBarItem(
-              icon: const Icon(Symbols.chat_bubble),
-              activeIcon: const Icon(Symbols.chat_bubble, fill: 1),
+              icon: Icon(Symbols.chat_bubble),
               label: '채팅',
             ),
             BottomNavigationBarItem(
-              icon: const Icon(Symbols.sticky_note_2),
-              activeIcon: const Icon(Symbols.sticky_note_2, fill: 1),
+              icon: Icon(Symbols.sticky_note_2),
               label: '메모장',
             ),
-            const BottomNavigationBarItem(
+            BottomNavigationBarItem(
               icon: Icon(Symbols.more_horiz),
               label: '더보기',
             ),

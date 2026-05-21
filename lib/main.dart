@@ -73,7 +73,7 @@ class MyApp extends StatelessWidget {
           backgroundColor: Color(0xFF1A1A1A),
           foregroundColor: Colors.white,
         ),
-        iconTheme: const IconThemeData(opticalSize: 24, weight: 200, fill: 0),
+        iconTheme: const IconThemeData(opticalSize: 24, weight: 300),
         colorScheme: const ColorScheme(
           brightness: Brightness.light,
           primary: Color(0xFF1A1A1A),
@@ -127,7 +127,7 @@ class MyApp extends StatelessWidget {
           backgroundColor: Color(0xFFE0E0E0),
           foregroundColor: Color(0xFF1A1A1A),
         ),
-        iconTheme: const IconThemeData(opticalSize: 24, weight: 200, fill: 0),
+        iconTheme: const IconThemeData(opticalSize: 24, weight: 300),
         colorScheme: const ColorScheme(
           brightness: Brightness.dark,
           primary: Color(0xFFE0E0E0),

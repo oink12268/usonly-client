@@ -96,12 +96,13 @@ class _AlbumPageState extends State<AlbumPage> {
             Positioned(
               bottom: _showPhotos ? 160 : 92,
               right: 16,
-              child: FloatingActionButton(
+              child: FloatingActionButton.small(
                 heroTag: 'viewToggle',
                 onPressed: () => setState(() => _showPhotos = !_showPhotos),
                 backgroundColor: Colors.grey.shade300,
                 foregroundColor: Colors.grey.shade800,
                 elevation: 2,
+                shape: const CircleBorder(),
                 child: Icon(
                   _showPhotos ? Icons.auto_stories_rounded : Icons.collections_rounded,
                 ),
@@ -111,24 +112,26 @@ class _AlbumPageState extends State<AlbumPage> {
               Positioned(
                 bottom: 92,
                 right: 16,
-                child: FloatingActionButton(
+                child: FloatingActionButton.small(
                   heroTag: 'slideshow',
                   onPressed: () => _galleryKey.currentState?.startSlideshow(),
                   backgroundColor: Colors.grey.shade300,
                   foregroundColor: Colors.grey.shade800,
                   elevation: 2,
+                  shape: const CircleBorder(),
                   child: const Icon(Icons.slideshow_rounded),
                 ),
               ),
             Positioned(
               bottom: 24,
               right: 16,
-              child: FloatingActionButton(
+              child: FloatingActionButton.small(
                 heroTag: 'mainAction',
                 onPressed: _showPhotos
                     ? () => _galleryKey.currentState?.pickAndUploadImage()
                     : _showCreateAlbumDialog,
                 backgroundColor: Theme.of(context).colorScheme.primary,
+                shape: const CircleBorder(),
                 child: Icon(
                   _showPhotos ? Icons.add_a_photo : Icons.add,
                   color: Theme.of(context).colorScheme.onPrimary,

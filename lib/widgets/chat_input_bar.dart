@@ -46,8 +46,7 @@ class ChatInputBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
               onChanged: onTypingChanged,
               onSubmitted: (_) => onSend(),
@@ -56,15 +55,24 @@ class ChatInputBar extends StatelessWidget {
           const SizedBox(width: 8),
           ScaleTransition(
             scale: sendScaleAnim,
-            child: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              radius: 20,
-              child: IconButton(
-                icon: Icon(Icons.send, color: Theme.of(context).colorScheme.onPrimary, size: 18),
-                onPressed: () {
-                  sendAnimController.forward(from: 0.0);
-                  onSend();
-                },
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Material(
+                color: Theme.of(context).colorScheme.primary,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () {
+                    sendAnimController.forward(from: 0.0);
+                    onSend();
+                  },
+                  child: Icon(
+                    Icons.arrow_upward_rounded,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                    size: 20,
+                  ),
+                ),
               ),
             ),
           ),

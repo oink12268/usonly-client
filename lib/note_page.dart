@@ -359,7 +359,9 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
               );
               _fetchNotes();
             },
-            child: Padding(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 76),
+              child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -454,6 +456,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                     const SizedBox(width: 12),
                 ],
               ),
+            ),
             ),
           ),
         ),
