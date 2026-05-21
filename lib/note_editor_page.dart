@@ -619,7 +619,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             controller: _controller,
             config: QuillSimpleToolbarConfig(
               multiRowsDisplay: false,
-              color: Theme.of(context).scaffoldBackgroundColor,
+              decoration: const BoxDecoration(color: Colors.transparent),
               iconTheme: QuillIconTheme(
                 iconButtonUnselectedData: IconButtonData(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 iconButtonSelectedData: IconButtonData(color: Theme.of(context).colorScheme.primary),
