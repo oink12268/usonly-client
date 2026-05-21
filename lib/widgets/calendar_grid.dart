@@ -354,7 +354,10 @@ class CalendarGrid extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(onPressed: onPrevMonth, icon: const Icon(Icons.chevron_left)),
+                  IconButton(
+                    onPressed: onPrevMonth,
+                    icon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.onSurface),
+                  ),
                   GestureDetector(
                     onTap: onYearMonthPicker,
                     child: Text(
@@ -362,7 +365,10 @@ class CalendarGrid extends StatelessWidget {
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  IconButton(onPressed: onNextMonth, icon: const Icon(Icons.chevron_right)),
+                  IconButton(
+                    onPressed: onNextMonth,
+                    icon: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurface),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),

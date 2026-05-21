@@ -347,18 +347,6 @@ class ChatBubble extends StatelessWidget {
                         crossAxisAlignment:
                             isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                         children: [
-                          // 상대 닉네임
-                          if (!isMe)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4, left: 2),
-                              child: Text(
-                                nicknameCache[chat['writerUid']?.toString()] ??
-                                    chat['writerUid'].toString().substring(0, 4),
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-                              ),
-                            ),
 
                           // 답장 인용
                           if (hasReply && replyToMessage != null)
