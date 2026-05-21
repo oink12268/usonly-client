@@ -615,14 +615,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             ),
           ),
           const Divider(height: 1),
-          Theme(
-            data: Theme.of(context).copyWith(
-              canvasColor: Theme.of(context).colorScheme.surface,
-            ),
-            child: QuillSimpleToolbar(
+          QuillSimpleToolbar(
             controller: _controller,
             config: QuillSimpleToolbarConfig(
               multiRowsDisplay: false,
+              color: Theme.of(context).colorScheme.surface,
               iconTheme: QuillIconTheme(
                 iconButtonUnselectedData: IconButtonData(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 iconButtonSelectedData: IconButtonData(color: Theme.of(context).colorScheme.primary),
@@ -653,7 +650,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               ],
             ),
           ),
-          ), // Theme
         ],
       ),
     ), // Scaffold
