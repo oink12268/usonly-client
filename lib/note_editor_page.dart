@@ -615,12 +615,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             ),
           ),
           const Divider(height: 1),
-          QuillSimpleToolbar(
+          ColoredBox(
+            color: Theme.of(context).colorScheme.surface,
+            child: QuillSimpleToolbar(
             controller: _controller,
             config: QuillSimpleToolbarConfig(
               multiRowsDisplay: false,
               iconTheme: QuillIconTheme(
-                iconButtonUnselectedData: IconButtonData(color: Colors.grey.shade500),
+                iconButtonUnselectedData: IconButtonData(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 iconButtonSelectedData: IconButtonData(color: Theme.of(context).colorScheme.primary),
               ),
               showFontFamily: false,
@@ -649,6 +651,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               ],
             ),
           ),
+          ), // ColoredBox
         ],
       ),
     ), // Scaffold
