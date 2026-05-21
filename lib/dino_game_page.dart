@@ -90,7 +90,7 @@ class FlappyGame extends FlameGame
   void _spawnPipe() {
     final rng = Random();
     final minTop = size.y * 0.15;
-    final maxTop = size.y - _GroundComponent.height - _pipeGap - size.y * 0.15;
+    final maxTop = size.y - _GroundComponent.groundHeight - _pipeGap - size.y * 0.15;
     final topH = minTop + rng.nextDouble() * (maxTop - minTop);
     add(PipePair(topHeight: topH, game: this));
   }
@@ -150,14 +150,14 @@ class FlappyGame extends FlameGame
 
 class _GroundComponent extends PositionComponent
     with HasGameRef<FlappyGame>, CollisionCallbacks {
-  static const double height = 80.0;
+  static const double groundHeight = 80.0;
 
   _GroundComponent() : super();
 
   @override
   Future<void> onLoad() async {
-    size = Vector2(gameRef.size.x, height);
-    position = Vector2(0, gameRef.size.y - height);
+    size = Vector2(gameRef.size.x, groundHeight);
+    position = Vector2(0, gameRef.size.y - groundHeight);
     add(RectangleHitbox());
   }
 
@@ -215,7 +215,7 @@ class BirdComponent extends PositionComponent
     }
 
     // Hit ground
-    if (position.y + size.y / 2 >= g.size.y - _GroundComponent.height) {
+    if (position.y + size.y / 2 >= g.size.y - _GroundComponent.groundHeight) {
       g.triggerGameOver();
     }
   }
@@ -295,7 +295,7 @@ class PipePair extends PositionComponent with HasGameRef<FlappyGame> {
   @override
   Future<void> onLoad() async {
     position = Vector2(gameRef.size.x + FlappyGame._pipeWidth, 0);
-    final groundTop = gameRef.size.y - _GroundComponent.height;
+    final groundTop = gameRef.size.y - _GroundComponent.groundHeight;
 
     // Top pipe
     add(_PipeBody(
