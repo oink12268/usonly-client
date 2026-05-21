@@ -575,6 +575,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
         onPressed: _createNote,
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        shape: const CircleBorder(),
         elevation: 2,
         child: const Icon(Icons.add, size: 20),
       ),

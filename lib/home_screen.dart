@@ -162,7 +162,7 @@ _pages = [
               label: '채팅',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Symbols.sticky_note_2),
+              icon: Icon(Icons.sticky_note_2_outlined),
               label: '메모장',
             ),
             BottomNavigationBarItem(
@@ -452,7 +452,7 @@ class _MorePageState extends State<_MorePage> {
           ),
           // 알림 설정
           ListTile(
-            leading: const Icon(Symbols.notifications),
+            leading: const Icon(Icons.notifications_outlined),
             title: const Text('알림 설정'),
             onTap: () {
               Navigator.push(
@@ -466,7 +466,7 @@ class _MorePageState extends State<_MorePage> {
           const Divider(height: 20),
           // 다크모드
           SwitchListTile(
-            secondary: const Icon(Symbols.dark_mode),
+            secondary: const Icon(Icons.dark_mode_outlined),
             title: const Text('다크모드'),
             value: themeNotifier.isDark,
             activeColor: Theme.of(context).colorScheme.primary,

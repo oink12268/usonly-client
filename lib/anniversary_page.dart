@@ -235,9 +235,10 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
               },
             ),
         ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.small(
         onPressed: _showAddDialog,
         backgroundColor: Theme.of(context).colorScheme.primary,
+        shape: const CircleBorder(),
         child: Icon(Icons.add, color: Theme.of(context).colorScheme.onPrimary),
       ),
     );

@@ -332,9 +332,10 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                 );
               },
             ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.small(
         onPressed: _pickAndUploadImage,
         backgroundColor: Theme.of(context).colorScheme.primary,
+        shape: const CircleBorder(),
         child: Icon(Icons.add_a_photo, color: Theme.of(context).colorScheme.onPrimary),
       ),
     );

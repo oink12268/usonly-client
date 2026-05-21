@@ -213,7 +213,7 @@ class _CalendarPageState extends State<CalendarPage> {
 
     final titleController = TextEditingController();
     final memoController = TextEditingController();
-    bool syncToGoogle = true;
+    bool syncToGoogle = false;
 
     showDialog(
       context: context,
@@ -480,9 +480,10 @@ class _CalendarPageState extends State<CalendarPage> {
         ],
       ),
       floatingActionButton: _selectedDate != null
-          ? FloatingActionButton(
+          ? FloatingActionButton.small(
               onPressed: _showAddScheduleDialog,
               backgroundColor: Theme.of(context).colorScheme.primary,
+              shape: const CircleBorder(),
               child: Icon(Icons.add, color: Theme.of(context).colorScheme.onPrimary),
             )
           : null,

@@ -56,8 +56,8 @@ class ChatInputBar extends StatelessWidget {
           ScaleTransition(
             scale: sendScaleAnim,
             child: SizedBox(
-              width: 44,
-              height: 44,
+              width: 36,
+              height: 36,
               child: Material(
                 color: Theme.of(context).colorScheme.primary,
                 shape: const CircleBorder(),
@@ -68,7 +68,7 @@ class ChatInputBar extends StatelessWidget {
                     onSend();
                   },
                   child: Icon(
-                    Icons.arrow_upward_rounded,
+                    Icons.play_arrow_rounded,
                     color: Theme.of(context).colorScheme.onPrimary,
                     size: 20,
                   ),
