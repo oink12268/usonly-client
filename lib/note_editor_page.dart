@@ -620,7 +620,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             config: QuillSimpleToolbarConfig(
               multiRowsDisplay: false,
               iconTheme: QuillIconTheme(
-                iconButtonUnselectedData: IconButtonData(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                iconButtonUnselectedData: IconButtonData(color: Colors.grey.shade500),
                 iconButtonSelectedData: IconButtonData(color: Theme.of(context).colorScheme.primary),
               ),
               showFontFamily: false,

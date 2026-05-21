@@ -166,7 +166,7 @@ _pages = [
               label: '메모장',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Symbols.more_horiz),
+              icon: Icon(Icons.more_horiz),
               label: '더보기',
             ),
           ],
@@ -417,7 +417,7 @@ class _MorePageState extends State<_MorePage> {
           const Divider(height: 40),
           // 기념일
           ListTile(
-            leading: const Icon(Symbols.cake),
+            leading: const Icon(Icons.cake_outlined),
             title: const Text('기념일'),
             onTap: () {
               Navigator.push(
@@ -474,7 +474,7 @@ class _MorePageState extends State<_MorePage> {
           ),
           // 글자 크기
           ListTile(
-            leading: const Icon(Symbols.text_fields),
+            leading: const Icon(Icons.text_fields_outlined),
             title: const Text('글자 크기'),
             trailing: SegmentedButton<double>(
               segments: const [
@@ -519,7 +519,7 @@ class _MorePageState extends State<_MorePage> {
           // 로그아웃
           if (widget.user != null)
             ListTile(
-              leading: const Icon(Symbols.logout),
+              leading: const Icon(Icons.logout),
               title: const Text('로그아웃'),
               onTap: () async {
                 await AuthService().signOut();

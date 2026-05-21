@@ -41,12 +41,13 @@ class ChatInputBar extends StatelessWidget {
               decoration: InputDecoration(
                 hintText: "",
                 filled: true,
+                isDense: true,
                 fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               ),
               onChanged: onTypingChanged,
               onSubmitted: (_) => onSend(),
