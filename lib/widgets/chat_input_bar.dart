@@ -23,7 +23,7 @@ class ChatInputBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+      padding: const EdgeInsets.fromLTRB(8, 4, 14, 8),
       child: Row(
         children: [
           IconButton(
