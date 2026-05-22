@@ -88,12 +88,12 @@ class ChatBubble extends StatelessWidget {
 
   Color _myBubbleColor(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return isDark ? const Color(0xFF484848) : const Color(0xFF3A3A3A);
+    return isDark ? const Color(0xFF424242) : const Color(0xFF3A3A3A);
   }
 
   Color _partnerBubbleColor(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return isDark ? const Color(0xFF272727) : const Color(0xFFE8E8E8);
+    return isDark ? const Color(0xFF303030) : const Color(0xFFE8E8E8);
   }
 
   Color _myTextColor(BuildContext context) => const Color(0xFFEEEEEE);
@@ -558,8 +558,8 @@ class ChatBubble extends StatelessWidget {
                                       horizontal: 14, vertical: 10),
                                   decoration: BoxDecoration(
                                     color: isMe
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).colorScheme.surfaceContainerHigh,
+                                        ? _myBubbleColor(context)
+                                        : _partnerBubbleColor(context),
                                     borderRadius: BorderRadius.only(
                                       topLeft: const Radius.circular(15),
                                       topRight: const Radius.circular(15),
