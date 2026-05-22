@@ -86,6 +86,21 @@ class ChatBubble extends StatelessWidget {
     );
   }
 
+  Color _myBubbleColor(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return isDark ? const Color(0xFF484848) : const Color(0xFF3A3A3A);
+  }
+
+  Color _partnerBubbleColor(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return isDark ? const Color(0xFF272727) : const Color(0xFFE8E8E8);
+  }
+
+  Color _myTextColor(BuildContext context) => const Color(0xFFEEEEEE);
+
+  Color _partnerTextColor(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface;
+
   Widget _buildMessageContent(BuildContext context, String text, bool isMe) {
     final urlRegex = RegExp(r'(https?://[^\s]+)', caseSensitive: false);
     final matches = urlRegex.allMatches(text);
@@ -94,7 +109,7 @@ class ChatBubble extends StatelessWidget {
         text,
         style: TextStyle(
           fontSize: 16,
-          color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
+          color: isMe ? _myTextColor(context) : _partnerTextColor(context),
         ),
       );
     }
@@ -109,9 +124,9 @@ class ChatBubble extends StatelessWidget {
       spans.add(TextSpan(
         text: url,
         style: TextStyle(
-          color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
+          color: isMe ? _myTextColor(context) : _partnerTextColor(context),
           decoration: TextDecoration.underline,
-          decorationColor: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
+          decorationColor: isMe ? _myTextColor(context) : _partnerTextColor(context),
         ),
         recognizer: TapGestureRecognizer()
           ..onTap = () async {
@@ -129,7 +144,7 @@ class ChatBubble extends StatelessWidget {
       TextSpan(
         style: TextStyle(
           fontSize: 16,
-          color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
+          color: isMe ? _myTextColor(context) : _partnerTextColor(context),
         ),
         children: spans,
       ),
@@ -485,8 +500,8 @@ class ChatBubble extends StatelessWidget {
                                     horizontal: 14, vertical: 10),
                                 decoration: BoxDecoration(
                                   color: isMe
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.surfaceContainerHigh,
+                                      ? _myBubbleColor(context)
+                                      : _partnerBubbleColor(context),
                                   borderRadius: BorderRadius.circular(15),
                                   boxShadow: [
                                     BoxShadow(
@@ -504,10 +519,10 @@ class ChatBubble extends StatelessWidget {
                                             : Icons.insert_drive_file,
                                         size: 28,
                                         color: isMe
-                                            ? Theme.of(context).colorScheme.onPrimary
+                                            ? _myTextColor(context)
                                             : fileName.toLowerCase().endsWith('.pdf')
                                                 ? Colors.red[400]
-                                                : Theme.of(context).colorScheme.onSurface),
+                                                : _partnerTextColor(context)),
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: Text(
@@ -515,8 +530,8 @@ class ChatBubble extends StatelessWidget {
                                         style: TextStyle(
                                             fontSize: 13,
                                             color: isMe
-                                                ? Theme.of(context).colorScheme.onPrimary
-                                                : Theme.of(context).colorScheme.onSurface),
+                                                ? _myTextColor(context)
+                                                : _partnerTextColor(context)),
                                       ),
                                     ),
                                     const SizedBox(width: 6),
@@ -526,13 +541,8 @@ class ChatBubble extends StatelessWidget {
                                             : Icons.download,
                                         size: 18,
                                         color: isMe
-                                            ? Theme.of(context)
-                                                .colorScheme
-                                                .onPrimary
-                                                .withOpacity(0.7)
-                                            : Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant),
+                                            ? _myTextColor(context).withOpacity(0.7)
+                                            : Theme.of(context).colorScheme.onSurfaceVariant),
                                   ],
                                 ),
                               ),
