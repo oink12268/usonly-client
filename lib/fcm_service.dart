@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_client.dart';
 import 'api_endpoints.dart';
+import 'firebase_options.dart';
 
 // 알림 유무만 추적 (읽지 않은 알림이 있으면 1, 없으면 0).
 // 정확한 카운트 대신 boolean 플래그로 관리해 race condition / 중복배달 문제를 원천 차단.
@@ -206,6 +207,18 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
   final text = response.input?.trim();
   if (text == null || text.isEmpty) return;
 
+  // Samsung One UI: cancelNotification: true가 백그라운드 isolate에서 무시되는 경우가 있음.
+  // 전송 결과와 무관하게 알림을 직접 cancel해서 "Sending..." 스피너를 제거.
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.initialize(
+    const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    ),
+    onDidReceiveBackgroundNotificationResponse: notificationReplyHandler,
+  );
+  await plugin.cancel(_kChatNotifId);
+
   // reload()로 백그라운드 isolate가 캐싱한 최신 토큰을 반드시 읽어옴
   final prefs = await _freshPrefs();
 
@@ -214,16 +227,18 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
 
   // Firebase에서 토큰 강제 갱신 시도 (캐시된 토큰은 1시간 후 만료)
   // flutter_local_notifications 백그라운드 핸들러는 Firebase가 미초기화일 수 있으므로
-  // apps.isEmpty 확인 후 initializeApp → getIdToken(true) 순서로 진행
+  // apps.isEmpty 확인 후 DefaultFirebaseOptions로 initializeApp → getIdToken(true) 순서로 진행.
+  // options 없이 initializeApp()하면 background isolate에서 currentUser가 null이 되어 전송 실패.
   try {
     if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform);
     }
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       token = await user.getIdToken(true).timeout(const Duration(seconds: 10));
       uid = user.uid;
-      if (token != null) await prefs.setString(_kAuthTokenKey, token!);
+      if (token != null) await prefs.setString(_kAuthTokenKey, token);
       await prefs.setString(_kUserUidKey, uid);
     }
   } catch (_) {}
@@ -322,27 +337,10 @@ class FcmService with WidgetsBindingObserver {
     await _syncIosBadge(_localNotifications, _readBadge(prefs));
   }
 
-  // resumed 시 호출: Android는 실제 알림 트레이와 플래그를 동기화, iOS는 OS 배지 보정
+  // resumed 시 호출: iOS OS 배지를 prefs 총합으로 보정
   Future<void> _resyncBadge() async {
     if (!_isMobile) return;
     final prefs = await _freshPrefs();
-
-    // Android: 트레이에서 스와이프 삭제로 OS 알림이 사라졌는데 플래그가 남아있는 경우 보정.
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      try {
-        final androidPlugin = _localNotifications
-            .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>();
-        final active = await androidPlugin?.getActiveNotifications() ?? [];
-        final hasChatNotif = active.any((n) =>
-            n.channelId == 'chat_channel_v2' && n.id != _kIosBadgeSyncId);
-        final hasOtherNotif = active.any((n) =>
-            n.channelId == 'anniversary_channel' && n.id != _kIosBadgeSyncId);
-        if (!hasChatNotif) await prefs.setInt(_kBadgeChatKey, 0);
-        if (!hasOtherNotif) await prefs.setInt(_kBadgeOtherKey, 0);
-      } catch (_) {}
-    }
-
     await _syncIosBadge(_localNotifications, _readBadge(prefs));
   }
 
