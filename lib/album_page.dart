@@ -248,6 +248,45 @@ class _AlbumListContentState extends State<_AlbumListContent> {
     }
   }
 
+  Future<void> _sortByName() async {
+    // 페이징으로 아직 안 불러온 앨범이 있으면 전체 로드 먼저
+    if (_hasMore) {
+      setState(() => _isLoading = true);
+      int page = _currentPage + 1;
+      while (true) {
+        try {
+          final response = await ApiClient.get(
+            Uri.parse(ApiEndpoints.archiveAlbumsPaged(page: page, size: _pageSize)),
+          );
+          if (response.statusCode == 200) {
+            final more = ApiClient.decodeBody(response) as List;
+            _albums = [..._albums, ...more];
+            if (more.length < _pageSize) {
+              _hasMore = false;
+              break;
+            }
+            page++;
+          } else {
+            break;
+          }
+        } catch (e) {
+          break;
+        }
+      }
+      _currentPage = page - 1;
+      setState(() => _isLoading = false);
+    }
+
+    setState(() {
+      _albums.sort((a, b) {
+        final titleA = (a['title'] as String?) ?? '';
+        final titleB = (b['title'] as String?) ?? '';
+        return titleB.compareTo(titleA);
+      });
+    });
+    widget.onEnterReorder();
+  }
+
   void _showAlbumOptions(dynamic album) {
     showModalBottomSheet(
       context: context,
@@ -261,6 +300,15 @@ class _AlbumListContentState extends State<_AlbumListContent> {
               onTap: () {
                 Navigator.pop(context);
                 widget.onEnterReorder();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.sort_by_alpha),
+              title: const Text("이름순 정렬"),
+              subtitle: const Text("최신 날짜가 맨 위로"),
+              onTap: () {
+                Navigator.pop(context);
+                _sortByName();
               },
             ),
             ListTile(
