@@ -93,6 +93,11 @@ class ApiEndpoints {
   // ── Notification Settings ──────────────────────────────
   static String get notificationSettings => '$_base/api/notification-settings';
 
+  // ── Game ──────────────────────────────────────────────
+  static String get gameScores => '$_base/api/game/scores';
+  static String gameScoresTop10({String gameType = 'flappy'}) =>
+      '$_base/api/game/scores/top10?gameType=$gameType';
+
   // ── Coupons ───────────────────────────────────────────
   static String get coupons => '$_base/api/coupons';
   static String couponById(int id) => '$_base/api/coupons/$id';

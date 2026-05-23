@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:flame/game.dart';
 import 'package:flame/components.dart';
@@ -5,6 +6,39 @@ import 'package:flame/events.dart';
 import 'package:flame/collisions.dart';
 import 'package:flutter/material.dart' hide Gradient;
 import 'package:flutter/services.dart';
+import 'api_client.dart';
+import 'api_endpoints.dart';
+
+// ── Score Service ─────────────────────────────────────────────────────────────
+
+class _GameScoreService {
+  static Future<Map<String, dynamic>?> submitScore(int score) async {
+    try {
+      final res = await ApiClient.post(
+        Uri.parse(ApiEndpoints.gameScores),
+        body: jsonEncode({'gameType': 'flappy', 'score': score}),
+      );
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+        return decoded['data'] as Map<String, dynamic>?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<List<dynamic>?> getTop10() async {
+    try {
+      final res = await ApiClient.get(
+        Uri.parse(ApiEndpoints.gameScoresTop10()),
+      );
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+        return decoded['data'] as List<dynamic>?;
+      }
+    } catch (_) {}
+    return null;
+  }
+}
 
 // ── Flutter Page ──────────────────────────────────────────────────────────────
 
@@ -53,9 +87,7 @@ class FlappyGame extends FlameGame
 
   @override
   Future<void> onLoad() async {
-    // Ground
     add(_GroundComponent());
-
     _bird = BirdComponent();
     add(_bird);
 
@@ -163,12 +195,10 @@ class _GroundComponent extends PositionComponent
 
   @override
   void render(Canvas canvas) {
-    // Grass strip
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.x, 14),
       Paint()..color = const Color(0xFF5DBB37),
     );
-    // Dirt
     canvas.drawRect(
       Rect.fromLTWH(0, 14, size.x, size.y - 14),
       Paint()..color = const Color(0xFFDEB887),
@@ -204,17 +234,13 @@ class BirdComponent extends PositionComponent
 
     _vy = min(_vy + _gravity * dt, _maxFallV);
     position.y += _vy * dt;
-
-    // Tilt: nose up on flap, nose down on fall
     _angle = (_vy / _maxFallV * 1.1).clamp(-0.5, 1.1);
 
-    // Hit ceiling
     if (position.y - size.y / 2 < 0) {
       position.y = size.y / 2;
       _vy = 0;
     }
 
-    // Hit ground
     if (position.y + size.y / 2 >= g.size.y - _GroundComponent.groundHeight) {
       g.triggerGameOver();
     }
@@ -234,27 +260,21 @@ class BirdComponent extends PositionComponent
     final eyePupil = Paint()..color = Colors.black;
     final beak = Paint()..color = const Color(0xFFFF6B00);
 
-    // Wing
     canvas.drawOval(
         Rect.fromCenter(
             center: Offset(size.x * 0.28, size.y * 0.55),
             width: size.x * 0.55,
             height: size.y * 0.32),
         wingPaint);
-    // Body
     canvas.drawCircle(Offset(r, r), r, bodyPaint);
-    // Belly
     canvas.drawOval(
         Rect.fromCenter(
             center: Offset(size.x * 0.58, size.y * 0.62),
             width: size.x * 0.45,
             height: size.y * 0.38),
         Paint()..color = const Color(0xFFFFF9C4));
-    // Eye white
     canvas.drawCircle(Offset(size.x * 0.7, size.y * 0.32), 6.5, eyeWhite);
-    // Pupil
     canvas.drawCircle(Offset(size.x * 0.72, size.y * 0.32), 3.5, eyePupil);
-    // Beak
     final beakPath = Path()
       ..moveTo(size.x * 0.88, size.y * 0.44)
       ..lineTo(size.x * 1.12, size.y * 0.5)
@@ -278,6 +298,7 @@ class BirdComponent extends PositionComponent
   @override
   void onCollisionStart(
       Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollisionStart(intersectionPoints, other);
     if (other is _PipeBody || other is _GroundComponent) {
       gameRef.triggerGameOver();
     }
@@ -297,13 +318,11 @@ class PipePair extends PositionComponent with HasGameRef<FlappyGame> {
     position = Vector2(gameRef.size.x + FlappyGame._pipeWidth, 0);
     final groundTop = gameRef.size.y - _GroundComponent.groundHeight;
 
-    // Top pipe
     add(_PipeBody(
       pipePosition: Vector2(0, 0),
       pipeSize: Vector2(FlappyGame._pipeWidth, topHeight),
       isTop: true,
     ));
-    // Bottom pipe
     final bottomY = topHeight + FlappyGame._pipeGap;
     add(_PipeBody(
       pipePosition: Vector2(0, bottomY),
@@ -348,26 +367,22 @@ class _PipeBody extends PositionComponent
     const capExtra = 6.0;
 
     if (isTop) {
-      // Pipe body
       canvas.drawRRect(
           RRect.fromRectAndRadius(
               Rect.fromLTWH(0, 0, size.x, size.y - capH),
               const Radius.circular(3)),
           bodyPaint);
-      // Cap at bottom
       canvas.drawRRect(
           RRect.fromRectAndRadius(
               Rect.fromLTWH(-capExtra, size.y - capH, size.x + capExtra * 2, capH),
               const Radius.circular(5)),
           darkPaint);
     } else {
-      // Cap at top
       canvas.drawRRect(
           RRect.fromRectAndRadius(
               Rect.fromLTWH(-capExtra, 0, size.x + capExtra * 2, capH),
               const Radius.circular(5)),
           darkPaint);
-      // Pipe body
       canvas.drawRRect(
           RRect.fromRectAndRadius(
               Rect.fromLTWH(0, capH, size.x, size.y - capH),
@@ -377,11 +392,29 @@ class _PipeBody extends PositionComponent
   }
 }
 
-// ── Overlays ──────────────────────────────────────────────────────────────────
+// ── Start Overlay ─────────────────────────────────────────────────────────────
 
-class _StartOverlay extends StatelessWidget {
+class _StartOverlay extends StatefulWidget {
   final FlappyGame game;
   const _StartOverlay({required this.game});
+
+  @override
+  State<_StartOverlay> createState() => _StartOverlayState();
+}
+
+class _StartOverlayState extends State<_StartOverlay> {
+  List<dynamic>? _top10;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTop10();
+  }
+
+  Future<void> _loadTop10() async {
+    final data = await _GameScoreService.getTop10();
+    if (mounted) setState(() => _top10 = data);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -403,9 +436,9 @@ class _StartOverlay extends StatelessWidget {
                   fontSize: 15,
                   color: Colors.white.withOpacity(0.9),
                   shadows: const [Shadow(blurRadius: 4, color: Colors.black38)])),
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
           ElevatedButton.icon(
-            onPressed: () => game._flap(),
+            onPressed: () => widget.game._flap(),
             icon: const Icon(Icons.play_arrow),
             label: const Text('시작하기'),
             style: ElevatedButton.styleFrom(
@@ -415,52 +448,379 @@ class _StartOverlay extends StatelessWidget {
               textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
+          if (_top10 != null && _top10!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () => _showLeaderboard(context),
+              icon: const Icon(Icons.emoji_events, color: Colors.amber),
+              label: const Text('명예의 전당 보기',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      shadows: [Shadow(blurRadius: 4, color: Colors.black38)])),
+            ),
+          ],
         ],
       ),
     );
   }
+
+  void _showLeaderboard(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => _LeaderboardDialog(entries: _top10!),
+    );
+  }
 }
 
-class _GameOverOverlay extends StatelessWidget {
+// ── Game Over Overlay ─────────────────────────────────────────────────────────
+
+class _GameOverOverlay extends StatefulWidget {
   final FlappyGame game;
   const _GameOverOverlay({required this.game});
 
   @override
+  State<_GameOverOverlay> createState() => _GameOverOverlayState();
+}
+
+class _GameOverOverlayState extends State<_GameOverOverlay> {
+  Map<String, dynamic>? _summary;
+  List<dynamic>? _top10;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _submitAndFetch();
+  }
+
+  Future<void> _submitAndFetch() async {
+    final results = await Future.wait([
+      _GameScoreService.submitScore(widget.game.score),
+      _GameScoreService.getTop10(),
+    ]);
+    if (mounted) {
+      setState(() {
+        _summary = results[0] as Map<String, dynamic>?;
+        _top10 = results[1] as List<dynamic>?;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 40),
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+        margin: const EdgeInsets.symmetric(horizontal: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.92),
+          color: Colors.white.withOpacity(0.95),
           borderRadius: BorderRadius.circular(20),
           boxShadow: const [BoxShadow(blurRadius: 16, color: Colors.black26)],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('💥', style: TextStyle(fontSize: 52)),
-            const SizedBox(height: 8),
-            const Text('게임 오버!',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+            const Text('💥', style: TextStyle(fontSize: 48)),
             const SizedBox(height: 6),
-            Text('점수: ${game.score}',
+            const Text('게임 오버!',
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('이번 점수: ${widget.game.score}',
                 style: TextStyle(
-                    fontSize: 20,
-                    color: Theme.of(context).colorScheme.primary,
+                    fontSize: 18,
+                    color: theme.colorScheme.primary,
                     fontWeight: FontWeight.w600)),
-            const SizedBox(height: 22),
-            ElevatedButton.icon(
-              onPressed: game.restart,
-              icon: const Icon(Icons.refresh),
-              label: const Text('다시 시작'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                textStyle:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            const SizedBox(height: 16),
+            if (_loading)
+              const SizedBox(
+                  height: 32,
+                  child: Center(
+                      child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))))
+            else if (_summary != null)
+              _ScoreBanner(summary: _summary!),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_top10 != null && _top10!.isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: () => showDialog(
+                      context: context,
+                      builder: (_) => _LeaderboardDialog(entries: _top10!),
+                    ),
+                    icon: const Icon(Icons.emoji_events),
+                    label: const Text('명예의 전당'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                if (_top10 != null && _top10!.isNotEmpty) const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: widget.game.restart,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('다시 시작'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: theme.colorScheme.onPrimary,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
+                    textStyle: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Score Banner (내 최고 vs 파트너) ──────────────────────────────────────────
+
+class _ScoreBanner extends StatelessWidget {
+  final Map<String, dynamic> summary;
+  const _ScoreBanner({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final myBest = summary['myBest'] as int? ?? 0;
+    final partnerBest = summary['partnerBest'] as int?;
+    final partnerNickname = summary['partnerNickname'] as String?;
+
+    final myWinning = partnerBest == null || myBest >= partnerBest;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _ScoreColumn(
+                  label: '나',
+                  score: myBest,
+                  isCrown: myWinning && partnerBest != null,
+                  highlight: true),
+              Container(width: 1, height: 40, color: Colors.grey.shade300),
+              if (partnerBest != null && partnerNickname != null)
+                _ScoreColumn(
+                    label: partnerNickname,
+                    score: partnerBest,
+                    isCrown: !myWinning,
+                    highlight: false)
+              else
+                const Text('파트너 기록 없음',
+                    style: TextStyle(color: Colors.grey, fontSize: 12)),
+            ],
+          ),
+          if (partnerBest != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              myBest > partnerBest
+                  ? '앞서고 있어요! 🎉'
+                  : myBest == partnerBest
+                      ? '동점이에요! 🤝'
+                      : '따라잡아야 해요! 💪',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: myBest >= partnerBest ? Colors.green : Colors.orange),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ScoreColumn extends StatelessWidget {
+  final String label;
+  final int score;
+  final bool isCrown;
+  final bool highlight;
+
+  const _ScoreColumn({
+    required this.label,
+    required this.score,
+    required this.isCrown,
+    required this.highlight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (isCrown)
+          const Text('👑', style: TextStyle(fontSize: 16))
+        else
+          const SizedBox(height: 20),
+        Text(label,
+            style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 2),
+        Text('최고 $score점',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: highlight
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.black87)),
+      ],
+    );
+  }
+}
+
+// ── Leaderboard Dialog ────────────────────────────────────────────────────────
+
+class _LeaderboardDialog extends StatelessWidget {
+  final List<dynamic> entries;
+  const _LeaderboardDialog({required this.entries});
+
+  static const _rankEmoji = ['🥇', '🥈', '🥉'];
+
+  String _formatDate(String? isoDate) {
+    if (isoDate == null) return '';
+    try {
+      final dt = DateTime.parse(isoDate);
+      return '${dt.month}/${dt.day}';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                const Text('🏆', style: TextStyle(fontSize: 24)),
+                const SizedBox(width: 8),
+                const Text('명예의 전당',
+                    style: TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('우리 커플 TOP ${entries.length}',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 380),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: entries.length,
+                separatorBuilder: (context, i) =>
+                    Divider(height: 1, color: Colors.grey.shade200),
+                itemBuilder: (context, i) {
+                  final e = entries[i] as Map<String, dynamic>;
+                  final rank = e['rank'] as int? ?? (i + 1);
+                  final isMe = e['isMe'] as bool? ?? false;
+                  final rankLabel = rank <= 3
+                      ? _rankEmoji[rank - 1]
+                      : '$rank위';
+
+                  return Container(
+                    color: isMe
+                        ? theme.colorScheme.primary.withOpacity(0.07)
+                        : null,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 10),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 36,
+                          child: Text(rankLabel,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: rank <= 3 ? 20 : 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: rank <= 3
+                                      ? null
+                                      : Colors.grey.shade600)),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Text(
+                                e['nickname'] as String? ?? '?',
+                                style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: isMe
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: isMe
+                                        ? theme.colorScheme.primary
+                                        : null),
+                              ),
+                              if (isMe) ...[
+                                const SizedBox(width: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text('나',
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: theme.colorScheme.onPrimary,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Text('${e['score']}점',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isMe
+                                    ? theme.colorScheme.primary
+                                    : Colors.black87)),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 36,
+                          child: Text(
+                            _formatDate(e['playedAt'] as String?),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey.shade500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ],
