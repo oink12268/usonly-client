@@ -89,8 +89,12 @@ class _MatchingScreenState extends State<MatchingScreen> {
           const SnackBar(content: Text("축하합니다! 커플 연결에 성공했습니다 ❤️")),
         );
       } else {
-        final body = ApiClient.decodeBody(response);
-        String errorMessage = (body is Map ? body['message'] : null) ?? "연결에 실패했습니다.";
+        String errorMessage = "연결에 실패했습니다.";
+        try {
+          ApiClient.decodeBody(response); // 에러 코드면 ApiException 으로 메시지 추출
+        } on ApiException catch (e) {
+          errorMessage = e.message;
+        } catch (_) {}
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(errorMessage)),

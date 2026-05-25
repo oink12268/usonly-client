@@ -1,17 +1,23 @@
 import 'package:flutter/foundation.dart';
 
 class ApiConfig {
-  // ★ 여기만 바꾸면 전체 앱의 서버 주소가 변경됩니다!
-  // 에뮬레이터: 10.0.2.2  |  실제 핸드폰: PC의 IP (예: 192.168.0.10)
-  // static const String _host = '15.164.123.38';  // EC2
-  // static const String _host = '192.168.0.13';   // 개발 PC
-  // static const String _host = '192.168.0.16';   // 서버 PC (내부)
-  static const String _host = 'usonly.duckdns.org';  // DDNS (어디서든 접속)
-  static const int _port = 8080;  // 로컬: 8080, 서버: 30080
+  // 빌드 시 --dart-define-from-file 로 주입 (dart_defines/dev.json 또는 prod.json)
+  // 기본값 = 프로덕션 서버 (dart-define 없이 빌드하면 prod)
+  static const String _host = String.fromEnvironment(
+    'API_HOST',
+    defaultValue: 'usonly.duckdns.org',
+  );
+  static const String _scheme = String.fromEnvironment(
+    'API_SCHEME',
+    defaultValue: 'https',  // dev 에서는 'http' 로 오버라이드
+  );
 
   static String get baseUrl =>
-      kIsWeb ? 'http://localhost:$_port' : 'https://$_host';
+      kIsWeb ? 'http://localhost:8080' : '$_scheme://$_host';
 
-  static String get wsUrl =>
-      kIsWeb ? 'ws://localhost:$_port/ws' : 'wss://$_host/ws';
+  static String get wsUrl {
+    if (kIsWeb) return 'ws://localhost:8080/ws';
+    final wsScheme = _scheme == 'https' ? 'wss' : 'ws';
+    return '$wsScheme://$_host/ws';
+  }
 }

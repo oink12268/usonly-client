@@ -3,29 +3,45 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'debug_log_service.dart';
 
+/// 서버가 code >= 400 을 반환했을 때 던지는 예외
+class ApiException implements Exception {
+  final int code;
+  final String message;
+  const ApiException({required this.code, required this.message});
+
+  @override
+  String toString() => 'ApiException($code): $message';
+}
+
 class ApiClient {
   // 싱글턴 Client: TCP+TLS 연결을 재사용해 HTTPS 오버헤드를 줄임
   static final http.Client _client = http.Client();
 
-  // 앱 시작 시 토큰을 미리 받아두기 위한 Future
-  static Future<String?>? _prewarmedToken;
+  // 토큰 캐시: 만료 5분 전까지 재사용 → foreground 복귀 후에도 네트워크 왕복 없음
+  static String? _cachedToken;
+  static DateTime? _tokenExpiry;
 
-  // main()에서 Firebase 초기화 직후 호출 → 토큰 fetch를 백그라운드에서 미리 시작
-  static void prewarmToken() {
-    _prewarmedToken = FirebaseAuth.instance.currentUser?.getIdToken();
+  static bool _tokenIsValid() =>
+      _cachedToken != null &&
+      _tokenExpiry != null &&
+      _tokenExpiry!.isAfter(DateTime.now().add(const Duration(minutes: 5)));
+
+  static Future<String?> _getToken({bool forceRefresh = false}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+    if (!forceRefresh && _tokenIsValid()) return _cachedToken;
+    // getIdTokenResult 는 만료 시간도 함께 반환
+    final result = await user.getIdTokenResult(forceRefresh);
+    _cachedToken = result.token;
+    _tokenExpiry = result.expirationTime;
+    return _cachedToken;
   }
 
-  static Future<String?> _getToken() async {
-    if (_prewarmedToken != null) {
-      final token = await _prewarmedToken;
-      _prewarmedToken = null;
-      return token;
-    }
-    return await FirebaseAuth.instance.currentUser?.getIdToken();
-  }
-
-  static Future<Map<String, String>> _authHeaders({bool withJson = false}) async {
-    final token = await _getToken();
+  static Future<Map<String, String>> _authHeaders({
+    bool withJson = false,
+    bool forceRefresh = false,
+  }) async {
+    final token = await _getToken(forceRefresh: forceRefresh);
     return {
       if (withJson) 'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
@@ -44,42 +60,60 @@ class ApiClient {
     }
   }
 
+  // 401 응답 시 토큰 강제 갱신 후 1회 재시도
+  static Future<http.Response> _send(
+    Future<http.Response> Function(Map<String, String> headers) request, {
+    bool withJson = false,
+  }) async {
+    var headers = await _authHeaders(withJson: withJson);
+    var res = await request(headers);
+    if (res.statusCode == 401) {
+      headers = await _authHeaders(withJson: withJson, forceRefresh: true);
+      res = await request(headers);
+    }
+    return res;
+  }
+
   static Future<http.Response> get(Uri url) async {
-    final headers = await _authHeaders();
     final sw = Stopwatch()..start();
-    final res = await _client.get(url, headers: headers);
+    final res = await _send((h) => _client.get(url, headers: h));
     _log('GET', url, res.statusCode, sw.elapsedMilliseconds);
     return res;
   }
 
   static Future<http.Response> post(Uri url, {Object? body}) async {
-    final headers = await _authHeaders(withJson: body != null);
     final sw = Stopwatch()..start();
-    final res = await _client.post(url, headers: headers, body: body);
+    final res = await _send(
+      (h) => _client.post(url, headers: h, body: body),
+      withJson: body != null,
+    );
     _log('POST', url, res.statusCode, sw.elapsedMilliseconds);
     return res;
   }
 
   static Future<http.Response> put(Uri url, {Object? body}) async {
-    final headers = await _authHeaders(withJson: body != null);
     final sw = Stopwatch()..start();
-    final res = await _client.put(url, headers: headers, body: body);
+    final res = await _send(
+      (h) => _client.put(url, headers: h, body: body),
+      withJson: body != null,
+    );
     _log('PUT', url, res.statusCode, sw.elapsedMilliseconds);
     return res;
   }
 
   static Future<http.Response> patch(Uri url, {Object? body}) async {
-    final headers = await _authHeaders(withJson: body != null);
     final sw = Stopwatch()..start();
-    final res = await _client.patch(url, headers: headers, body: body);
+    final res = await _send(
+      (h) => _client.patch(url, headers: h, body: body),
+      withJson: body != null,
+    );
     _log('PATCH', url, res.statusCode, sw.elapsedMilliseconds);
     return res;
   }
 
   static Future<http.Response> delete(Uri url) async {
-    final headers = await _authHeaders();
     final sw = Stopwatch()..start();
-    final res = await _client.delete(url, headers: headers);
+    final res = await _send((h) => _client.delete(url, headers: h));
     _log('DELETE', url, res.statusCode, sw.elapsedMilliseconds);
     return res;
   }
@@ -108,11 +142,18 @@ class ApiClient {
   }
 
   /// 응답 body를 디코딩합니다.
-  /// 백엔드가 ApiResponse 형태({code, message, data})로 응답하면 data 필드를 반환하고,
+  /// 백엔드 ApiResponse({code, message, data}) 형태면:
+  ///   - code >= 400 → ApiException 던짐 (message 포함)
+  ///   - 성공 → data 반환
   /// 그 외 형태(순수 List/Map)이면 그대로 반환합니다.
   static dynamic decodeBody(http.Response response) {
     final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    if (decoded is Map && decoded.containsKey('data')) {
+    if (decoded is Map) {
+      final code = (decoded['code'] as num?)?.toInt() ?? response.statusCode;
+      final message = decoded['message'] as String? ?? '오류가 발생했습니다.';
+      if (code >= 400) {
+        throw ApiException(code: code, message: message);
+      }
       return decoded['data'];
     }
     return decoded;
@@ -122,7 +163,12 @@ class ApiClient {
   static Future<dynamic> decodeStreamedBody(http.StreamedResponse response) async {
     final bodyStr = await response.stream.bytesToString();
     final decoded = jsonDecode(bodyStr);
-    if (decoded is Map && decoded.containsKey('data')) {
+    if (decoded is Map) {
+      final code = (decoded['code'] as num?)?.toInt() ?? response.statusCode;
+      final message = decoded['message'] as String? ?? '오류가 발생했습니다.';
+      if (code >= 400) {
+        throw ApiException(code: code, message: message);
+      }
       return decoded['data'];
     }
     return decoded;

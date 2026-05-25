@@ -142,15 +142,13 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
       }
     }
 
+    if (!mounted) return;
     setState(() => _isUploading = false);
     _fetchPhotos();
-    // [FIX #4] mounted 체크 추가 - 업로드 중 화면 이탈 시 크래시 방지
-    if (mounted) {
-      if (fail == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${success}장 업로드 성공!")));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("성공 ${success}장 / 실패 ${fail}장")));
-      }
+    if (fail == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${success}장 업로드 성공!")));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("성공 ${success}장 / 실패 ${fail}장")));
     }
   }
 

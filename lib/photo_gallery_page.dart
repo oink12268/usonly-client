@@ -221,14 +221,13 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
       }
     }
 
+    if (!mounted) return;
     setState(() => _isUploading = false);
     _fetchPhotos();
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(fail == 0 ? "$success장 업로드 성공!" : "성공 $success장 / 실패 $fail장")),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(fail == 0 ? "$success장 업로드 성공!" : "성공 $success장 / 실패 $fail장")),
+    );
   }
 
   Future<void> _deleteMedia(int mediaId) async {

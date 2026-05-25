@@ -137,7 +137,7 @@ _pages = [
       // bottom: false → BottomNavigationBar가 이미 하단 여백 처리함
       // SafeArea의 bottom padding이 키보드 등장 시 동적으로 0이 되면서
       // 입력창이 키보드 위에 붙은 직후 한 번 더 올라가는 2차 점프 원인
-      body: SafeArea(bottom: false, child: _pages[_selectedIndex]),
+      body: SafeArea(bottom: false, child: IndexedStack(index: _selectedIndex, children: _pages)),
       bottomNavigationBar: MediaQuery(
         data: MediaQuery.of(context).copyWith(
           padding: MediaQuery.of(context).padding.copyWith(

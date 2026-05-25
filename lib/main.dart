@@ -27,9 +27,6 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // 토큰 fetch를 백그라운드에서 미리 시작 (authStateChanges 대기 시간과 겹치게)
-  ApiClient.prewarmToken();
-
   if (_isMobile) {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     ShareIntentService().init();

@@ -88,12 +88,12 @@ class ChatBubble extends StatelessWidget {
 
   Color _myBubbleColor(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return isDark ? const Color(0xFF424242) : const Color(0xFF3A3A3A);
+    return isDark ? const Color(0xFF525252) : const Color(0xFF474747);
   }
 
   Color _partnerBubbleColor(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return isDark ? const Color(0xFF303030) : const Color(0xFFE8E8E8);
+    return isDark ? const Color(0xFF282828) : const Color(0xFFCCCCCC);
   }
 
   Color _myTextColor(BuildContext context) => const Color(0xFFEEEEEE);

@@ -58,3 +58,6 @@ lib/windows_oauth_config.dart
 
 # Build reports
 android/build/
+
+# 개발 환경 설정 (개인 PC IP 등) — prod.json 만 커밋
+dart_defines/dev.json
