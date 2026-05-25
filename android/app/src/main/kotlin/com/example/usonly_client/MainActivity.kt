@@ -1,5 +1,6 @@
 package com.example.usonly_client
 
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -13,6 +14,7 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.example.usonly_client/share"
+    private val BADGE_CHANNEL = "com.example.usonly_client/badge"
     private var pendingShare: Map<String, Any?>? = null
     private var methodChannel: MethodChannel? = null
 
@@ -27,6 +29,36 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BADGE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "updateBadge" -> {
+                        val count = call.argument<Int>("count") ?: 0
+                        updateSamsungBadge(count)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    // Samsung One UI 뱃지 카운트를 알림과 독립적으로 설정.
+    // 알림이 없어도 뱃지가 유지되고, 알림을 스와이프해도 뱃지가 살아있음.
+    private fun updateSamsungBadge(count: Int) {
+        try {
+            val uri = Uri.parse("content://com.sec.badge/apps")
+            contentResolver.delete(uri, "package=?", arrayOf(packageName))
+            if (count > 0) {
+                val values = ContentValues()
+                values.put("package", packageName)
+                values.put("class", this.javaClass.name)
+                values.put("badgecount", count)
+                contentResolver.insert(uri, values)
+            }
+        } catch (e: Exception) {
+            // Samsung 기기가 아니거나 API 미지원 → 무시
         }
     }
 

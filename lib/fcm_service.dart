@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
@@ -56,7 +57,24 @@ Future<SharedPreferences> _freshPrefs() async {
 Future<int> _markBadge(SharedPreferences prefs,
     {required bool isChat}) async {
   await prefs.setInt(isChat ? _kBadgeChatKey : _kBadgeOtherKey, 1);
-  return _readBadge(prefs);
+  final total = _readBadge(prefs);
+  await _syncAndroidBadge(total);
+  return total;
+}
+
+// Android 앱 아이콘 뱃지를 알림과 독립적으로 관리.
+// notification.number 는 알림이 사라지면 뱃지도 함께 사라지므로,
+// 알림을 스와이프해도 뱃지가 유지되려면 Samsung badge ContentProvider를 별도 호출해야 함.
+// MainActivity의 MethodChannel을 통해 Kotlin 쪽에서 처리.
+// 백그라운드 isolate(firebase_messaging)에서도 method channel이 등록되므로 동작하며,
+// flutter_local_notifications isolate 등 미지원 환경에서는 silently 무시.
+final _kBadgeChannel = const MethodChannel('com.example.usonly_client/badge');
+
+Future<void> _syncAndroidBadge(int count) async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+  try {
+    await _kBadgeChannel.invokeMethod('updateBadge', {'count': count});
+  } catch (_) {}
 }
 
 // 어느 쪽이든 알림이 있으면 1, 없으면 0.
@@ -218,6 +236,7 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
     onDidReceiveBackgroundNotificationResponse: notificationReplyHandler,
   );
   await plugin.cancel(_kChatNotifId);
+  await _cancelActiveByChannel(plugin, 'chat_channel_v2');
 
   // reload()로 백그라운드 isolate가 캐싱한 최신 토큰을 반드시 읽어옴
   final prefs = await _freshPrefs();
@@ -235,16 +254,23 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
           options: DefaultFirebaseOptions.currentPlatform);
     }
     final user = FirebaseAuth.instance.currentUser;
+    debugPrint('[Reply] Firebase user: ${user?.uid ?? "null"}');
     if (user != null) {
       token = await user.getIdToken(true).timeout(const Duration(seconds: 10));
       uid = user.uid;
       if (token != null) await prefs.setString(_kAuthTokenKey, token);
       await prefs.setString(_kUserUidKey, uid);
+      debugPrint('[Reply] 토큰 갱신 성공');
     }
-  } catch (_) {}
+  } catch (e) {
+    debugPrint('[Reply] Firebase 토큰 갱신 실패: $e');
+  }
 
   // Firebase 갱신 실패 시 캐시된 토큰으로 fallback
-  token ??= prefs.getString(_kAuthTokenKey);
+  if (token == null) {
+    token = prefs.getString(_kAuthTokenKey);
+    debugPrint('[Reply] 캐시 토큰 사용: ${token != null ? "있음" : "없음"}');
+  }
 
   // payload에서 uid 추출, 없으면 SharedPreferences fallback
   if (uid == null) {
@@ -255,13 +281,16 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
       }
     } catch (_) {}
     uid ??= prefs.getString(_kUserUidKey);
+    debugPrint('[Reply] uid (fallback): ${uid ?? "null"}');
   }
 
-  if (token == null || uid == null) return;
+  if (token == null || uid == null) {
+    debugPrint('[Reply] token 또는 uid null → 전송 취소');
+    return;
+  }
 
   try {
-    // 타임아웃 없으면 서버 무응답 시 핸들러가 영원히 완료되지 않아 무한 로딩 발생
-    await http
+    final res = await http
         .post(
           Uri.parse(ApiEndpoints.chats),
           headers: {
@@ -271,7 +300,37 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
           body: jsonEncode({'message': text, 'writerUid': uid}),
         )
         .timeout(const Duration(seconds: 15));
-  } catch (_) {}
+    debugPrint('[Reply] HTTP 응답: ${res.statusCode}');
+
+    // 401: 토큰 만료 → 강제 갱신 후 1회 재시도
+    // ApiClient에는 자동 재시도 있지만 이 핸들러는 raw http를 사용하므로 직접 처리
+    if (res.statusCode == 401) {
+      debugPrint('[Reply] 401 → 토큰 재갱신 후 재시도');
+      try {
+        final freshToken = await FirebaseAuth.instance.currentUser
+            ?.getIdToken(true)
+            .timeout(const Duration(seconds: 10));
+        if (freshToken != null) {
+          await prefs.setString(_kAuthTokenKey, freshToken);
+          final retryRes = await http
+              .post(
+                Uri.parse(ApiEndpoints.chats),
+                headers: {
+                  'Content-Type': 'application/json; charset=utf-8',
+                  'Authorization': 'Bearer $freshToken',
+                },
+                body: jsonEncode({'message': text, 'writerUid': uid}),
+              )
+              .timeout(const Duration(seconds: 15));
+          debugPrint('[Reply] 재시도 HTTP 응답: ${retryRes.statusCode}');
+        }
+      } catch (e) {
+        debugPrint('[Reply] 401 재시도 실패: $e');
+      }
+    }
+  } catch (e) {
+    debugPrint('[Reply] HTTP 전송 실패: $e');
+  }
 }
 
 class FcmService with WidgetsBindingObserver {
@@ -324,7 +383,9 @@ class FcmService with WidgetsBindingObserver {
     // FCM이 직접 표시한 채팅 알림도 cleanup (notification payload 모드)
     await _cancelActiveByChannel(_localNotifications, 'chat_channel_v2');
     await prefs.setInt(_kBadgeChatKey, 0);
-    await _syncIosBadge(_localNotifications, _readBadge(prefs));
+    final total = _readBadge(prefs);
+    await _syncIosBadge(_localNotifications, total);
+    await _syncAndroidBadge(total);
   }
 
   // 캘린더/기념일 페이지 진입 시 호출: 플래그 0 + 실제 OS 알림도 cancel
@@ -334,14 +395,19 @@ class FcmService with WidgetsBindingObserver {
     await _localNotifications.cancel(_kOtherNotifId);
     await _cancelActiveByChannel(_localNotifications, 'anniversary_channel');
     await prefs.setInt(_kBadgeOtherKey, 0);
-    await _syncIosBadge(_localNotifications, _readBadge(prefs));
+    final total = _readBadge(prefs);
+    await _syncIosBadge(_localNotifications, total);
+    await _syncAndroidBadge(total);
   }
 
-  // resumed 시 호출: iOS OS 배지를 prefs 총합으로 보정
+  // resumed 시 호출: iOS/Android 배지를 prefs 총합으로 보정.
+  // 알림을 스와이프해서 사라진 경우에도 prefs 기준으로 뱃지를 복원.
   Future<void> _resyncBadge() async {
     if (!_isMobile) return;
     final prefs = await _freshPrefs();
-    await _syncIosBadge(_localNotifications, _readBadge(prefs));
+    final total = _readBadge(prefs);
+    await _syncIosBadge(_localNotifications, total);
+    await _syncAndroidBadge(total);
   }
 
   Future<void> initialize() async {
@@ -458,6 +524,9 @@ class FcmService with WidgetsBindingObserver {
       // 포그라운드에서는 Firebase 정상 동작하므로 바로 전송
       final text = response.input?.trim();
       if (text == null || text.isEmpty) return;
+      // Samsung One UI: cancelNotification: true가 포그라운드에서도 무시됨 → 명시적 cancel
+      _localNotifications.cancel(_kChatNotifId);
+      _cancelActiveByChannel(_localNotifications, 'chat_channel_v2');
       _sendReplyFromForeground(text);
       return;
     }
