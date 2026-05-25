@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +10,6 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_client.dart';
 import 'api_endpoints.dart';
-import 'firebase_options.dart';
 
 // 알림 유무만 추적 (읽지 않은 알림이 있으면 1, 없으면 0).
 // 정확한 카운트 대신 boolean 플래그로 관리해 race condition / 중복배달 문제를 원천 차단.
@@ -40,7 +38,11 @@ const _replyAction = AndroidNotificationAction(
   _kReplyActionId,
   '답장',
   inputs: [AndroidNotificationActionInput(label: '메시지를 입력하세요...')],
-  showsUserInterface: false,
+  // true: 앱을 포그라운드로 불러 _onForegroundNotificationResponse에서 처리.
+  // false(이전): flutter_local_notifications 백그라운드 isolate를 띄우는데,
+  // Android 14+(Galaxy S25/One UI 7) 백그라운드 제한으로 isolate가 차단되어
+  // 핸들러가 실행되지 않아 전송이 안 되고 스피너가 무한 돌았음.
+  showsUserInterface: true,
   cancelNotification: true,
 );
 
@@ -187,12 +189,17 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
-  // FCM 수신 시점에 Firebase가 초기화된 상태이므로 토큰을 강제 갱신·캐싱
-  // → 이후 답장 핸들러에서 항상 유효한 토큰을 사용할 수 있도록 보장
+  // FCM 수신 시점에 Firebase는 초기화되어 있지만,
+  // Firebase Auth는 내부 상태를 비동기로 로드하므로 currentUser가 즉시 null일 수 있음.
+  // authStateChanges().first로 Auth 상태가 확정될 때까지 기다린 뒤 토큰을 갱신·캐싱.
   try {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = await FirebaseAuth.instance
+        .authStateChanges()
+        .first
+        .timeout(const Duration(seconds: 5));
     if (user != null) {
-      final freshToken = await user.getIdToken(true);
+      final freshToken =
+          await user.getIdToken(true).timeout(const Duration(seconds: 10));
       if (freshToken != null) {
         await prefs.setString(_kAuthTokenKey, freshToken);
         await prefs.setString(_kUserUidKey, user.uid);
@@ -216,7 +223,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 
-// 알림 답장 처리 핸들러 (앱이 백그라운드/종료 상태일 때도 동작)
+// 알림 답장 처리 핸들러 — showsUserInterface: true로 전환 후 이 핸들러는
+// 앱이 완전히 종료(terminated)된 극단적 케이스에만 호출될 수 있음.
+// 주 경로: showsUserInterface: true → 앱이 포그라운드로 오면서
+//          _onForegroundNotificationResponse → _sendReplyFromForeground
 // top-level 함수여야 하며, @pragma 필수
 @pragma('vm:entry-point')
 Future<void> notificationReplyHandler(NotificationResponse response) async {
@@ -225,72 +235,36 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
   final text = response.input?.trim();
   if (text == null || text.isEmpty) return;
 
-  // Samsung One UI: cancelNotification: true가 백그라운드 isolate에서 무시되는 경우가 있음.
-  // 전송 결과와 무관하게 알림을 직접 cancel해서 "Sending..." 스피너를 제거.
+  // 알림 취소
   final plugin = FlutterLocalNotificationsPlugin();
-  await plugin.initialize(
-    const InitializationSettings(
+  try {
+    await plugin.initialize(const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(),
-    ),
-    onDidReceiveBackgroundNotificationResponse: notificationReplyHandler,
-  );
-  await plugin.cancel(_kChatNotifId);
-  await _cancelActiveByChannel(plugin, 'chat_channel_v2');
+    ));
+    await plugin.cancel(_kChatNotifId);
+    await _cancelActiveByChannel(plugin, 'chat_channel_v2');
+  } catch (_) {}
 
-  // reload()로 백그라운드 isolate가 캐싱한 최신 토큰을 반드시 읽어옴
+  // flutter_local_notifications 백그라운드 isolate에서는 Firebase Auth currentUser가
+  // 항상 null → Firebase 초기화 시도 자체를 제거하고 캐시된 토큰만 사용.
+  // 토큰은 FCM 수신 시 firebaseMessagingBackgroundHandler에서 갱신·캐싱됨.
   final prefs = await _freshPrefs();
+  final token = prefs.getString(_kAuthTokenKey);
 
-  String? token;
   String? uid;
-
-  // Firebase에서 토큰 강제 갱신 시도 (캐시된 토큰은 1시간 후 만료)
-  // flutter_local_notifications 백그라운드 핸들러는 Firebase가 미초기화일 수 있으므로
-  // apps.isEmpty 확인 후 DefaultFirebaseOptions로 initializeApp → getIdToken(true) 순서로 진행.
-  // options 없이 initializeApp()하면 background isolate에서 currentUser가 null이 되어 전송 실패.
   try {
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform);
+    if (response.payload != null) {
+      uid = (jsonDecode(response.payload!) as Map<String, dynamic>)['uid']
+          as String?;
     }
-    final user = FirebaseAuth.instance.currentUser;
-    debugPrint('[Reply] Firebase user: ${user?.uid ?? "null"}');
-    if (user != null) {
-      token = await user.getIdToken(true).timeout(const Duration(seconds: 10));
-      uid = user.uid;
-      if (token != null) await prefs.setString(_kAuthTokenKey, token);
-      await prefs.setString(_kUserUidKey, uid);
-      debugPrint('[Reply] 토큰 갱신 성공');
-    }
-  } catch (e) {
-    debugPrint('[Reply] Firebase 토큰 갱신 실패: $e');
-  }
+  } catch (_) {}
+  uid ??= prefs.getString(_kUserUidKey);
 
-  // Firebase 갱신 실패 시 캐시된 토큰으로 fallback
-  if (token == null) {
-    token = prefs.getString(_kAuthTokenKey);
-    debugPrint('[Reply] 캐시 토큰 사용: ${token != null ? "있음" : "없음"}');
-  }
-
-  // payload에서 uid 추출, 없으면 SharedPreferences fallback
-  if (uid == null) {
-    try {
-      if (response.payload != null) {
-        uid = (jsonDecode(response.payload!) as Map<String, dynamic>)['uid']
-            as String?;
-      }
-    } catch (_) {}
-    uid ??= prefs.getString(_kUserUidKey);
-    debugPrint('[Reply] uid (fallback): ${uid ?? "null"}');
-  }
-
-  if (token == null || uid == null) {
-    debugPrint('[Reply] token 또는 uid null → 전송 취소');
-    return;
-  }
+  if (token == null || uid == null) return;
 
   try {
-    final res = await http
+    await http
         .post(
           Uri.parse(ApiEndpoints.chats),
           headers: {
@@ -300,37 +274,7 @@ Future<void> notificationReplyHandler(NotificationResponse response) async {
           body: jsonEncode({'message': text, 'writerUid': uid}),
         )
         .timeout(const Duration(seconds: 15));
-    debugPrint('[Reply] HTTP 응답: ${res.statusCode}');
-
-    // 401: 토큰 만료 → 강제 갱신 후 1회 재시도
-    // ApiClient에는 자동 재시도 있지만 이 핸들러는 raw http를 사용하므로 직접 처리
-    if (res.statusCode == 401) {
-      debugPrint('[Reply] 401 → 토큰 재갱신 후 재시도');
-      try {
-        final freshToken = await FirebaseAuth.instance.currentUser
-            ?.getIdToken(true)
-            .timeout(const Duration(seconds: 10));
-        if (freshToken != null) {
-          await prefs.setString(_kAuthTokenKey, freshToken);
-          final retryRes = await http
-              .post(
-                Uri.parse(ApiEndpoints.chats),
-                headers: {
-                  'Content-Type': 'application/json; charset=utf-8',
-                  'Authorization': 'Bearer $freshToken',
-                },
-                body: jsonEncode({'message': text, 'writerUid': uid}),
-              )
-              .timeout(const Duration(seconds: 15));
-          debugPrint('[Reply] 재시도 HTTP 응답: ${retryRes.statusCode}');
-        }
-      } catch (e) {
-        debugPrint('[Reply] 401 재시도 실패: $e');
-      }
-    }
-  } catch (e) {
-    debugPrint('[Reply] HTTP 전송 실패: $e');
-  }
+  } catch (_) {}
 }
 
 class FcmService with WidgetsBindingObserver {
@@ -362,12 +306,12 @@ class FcmService with WidgetsBindingObserver {
   }
 
   // Firebase 토큰 + UID를 SharedPreferences에 캐싱
-  // → 앱 종료 상태에서 알림 답장 시 사용 (Firebase SDK 미초기화 상태)
+  // getIdToken(true)로 강제 갱신 → 최대 1시간짜리 신선한 토큰을 보장
   Future<void> _cacheAuthInfo() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
-      final token = await user.getIdToken();
+      final token = await user.getIdToken(true); // 강제 갱신
       if (token == null) return;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kAuthTokenKey, token);
