@@ -47,6 +47,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   // 연결 중 전송 시도한 메시지 큐 (연결 완료 시 일괄 전송)
   final List<Map<String, dynamic>> _pendingMessages = [];
 
+  // 내가 수정 중인 메시지 ID 집합 — WebSocket echo로 인한 이중 업데이트 방지
+  final Set<int> _pendingEditIds = {};
+
   // 답장 관련 상태
   Map<String, dynamic>? _replyTarget;
   bool _isUploadingImage = false;
@@ -391,6 +394,23 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                   _chats.removeWhere((c) => c['id'] == deletedId);
                 });
               }
+            },
+          );
+
+          stompClient!.subscribe(
+            destination: '/sub/chat/edit',
+            callback: (StompFrame frame) {
+              if (frame.body == null) return;
+              final data = jsonDecode(frame.body!) as Map<String, dynamic>;
+              final editedId = (data['id'] as num).toInt();
+              final newMessage = data['message'] as String?;
+              if (newMessage == null) return;
+              if (_pendingEditIds.remove(editedId)) return; // 내가 보낸 수정 — 이미 optimistic update 적용됨
+              final idx = _chats.indexWhere((c) => (c['id'] as num?)?.toInt() == editedId);
+              if (idx == -1) return;
+              setState(() {
+                (_chats[idx] as Map<String, dynamic>)['message'] = newMessage;
+              });
             },
           );
 
@@ -814,6 +834,15 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                   );
                 },
               ),
+            if (isMe && !isImage && !isFile && chat['id'] != null)
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text("수정"),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showEditDialog(chat);
+                },
+              ),
             if (isMe && chat['id'] != null)
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
@@ -827,6 +856,79 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         ),
       ),
     );
+  }
+
+  // --- 메시지 수정 ---
+  void _showEditDialog(dynamic chat) {
+    final original = (chat['message'] as String? ?? '').trim();
+    final controller = TextEditingController(text: original);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("메시지 수정"),
+        content: TextField(
+          controller: controller,
+          maxLines: null,
+          autofocus: true,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("취소"),
+          ),
+          TextButton(
+            onPressed: () {
+              final newText = controller.text.trim();
+              if (newText.isNotEmpty && newText != original) {
+                Navigator.pop(context);
+                _editMessage(chat['id'] as int, newText);
+              } else {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text("완료"),
+          ),
+        ],
+      ),
+    ).then((_) => controller.dispose());
+  }
+
+  Future<void> _editMessage(int id, String newText) async {
+    final idx = _chats.indexWhere((c) => (c['id'] as num?)?.toInt() == id);
+    if (idx == -1) return;
+    final originalMessage = (_chats[idx] as Map<String, dynamic>)['message'] as String?;
+    _pendingEditIds.add(id);
+    setState(() {
+      (_chats[idx] as Map<String, dynamic>)['message'] = newText;
+    });
+    try {
+      final response = await ApiClient.patch(
+        Uri.parse(ApiEndpoints.chatById(id)),
+        body: jsonEncode({'message': newText}),
+      );
+      if (response.statusCode != 200) {
+        _pendingEditIds.remove(id);
+        setState(() {
+          (_chats[idx] as Map<String, dynamic>)['message'] = originalMessage;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('메시지 수정에 실패했어'), duration: Duration(seconds: 2)),
+          );
+        }
+      }
+    } catch (e) {
+      _pendingEditIds.remove(id);
+      setState(() {
+        (_chats[idx] as Map<String, dynamic>)['message'] = originalMessage;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('메시지 수정에 실패했어'), duration: Duration(seconds: 2)),
+        );
+      }
+    }
   }
 
   // --- 메시지 삭제 ---
@@ -864,7 +966,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     });
     try {
       final response = await ApiClient.delete(
-        Uri.parse(ApiEndpoints.chatDelete(chatId)),
+        Uri.parse(ApiEndpoints.chatById(chatId as int)),
       );
       if (response.statusCode != 200) {
         debugPrint("메시지 삭제 실패: ${response.statusCode}");
