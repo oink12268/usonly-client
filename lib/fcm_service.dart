@@ -38,11 +38,10 @@ const _replyAction = AndroidNotificationAction(
   _kReplyActionId,
   '답장',
   inputs: [AndroidNotificationActionInput(label: '메시지를 입력하세요...')],
-  // true: 앱을 포그라운드로 불러 _onForegroundNotificationResponse에서 처리.
-  // false(이전): flutter_local_notifications 백그라운드 isolate를 띄우는데,
-  // Android 14+(Galaxy S25/One UI 7) 백그라운드 제한으로 isolate가 차단되어
-  // 핸들러가 실행되지 않아 전송이 안 되고 스피너가 무한 돌았음.
-  showsUserInterface: true,
+  // false: 앱을 열지 않고 BroadcastReceiver로 처리.
+  // 포그라운드 알림(앱 실행 중 수신)에서만 사용 → _onForegroundNotificationResponse 호출됨.
+  // 백그라운드 알림은 CustomFcmService가 네이티브로 표시 → NotificationReplyReceiver 처리.
+  showsUserInterface: false,
   cancelNotification: true,
 );
 
@@ -214,7 +213,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // data-only 메시지(notification == null)일 때만 직접 표시
   final title = message.data['title'];
   final body = message.data['body'];
-  if (message.notification == null && (title != null || body != null)) {
+
+  // Android 채팅 알림: CustomFcmService(Kotlin)가 네이티브로 표시하므로 여기선 생략.
+  // Kotlin 네이티브 알림의 답장 action → NotificationReplyReceiver (Flutter isolate 불필요).
+  final androidChat =
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android && isChat;
+
+  if (!androidChat && message.notification == null && (title != null || body != null)) {
     final uid = prefs.getString(_kUserUidKey);
     await _showNotif(plugin,
         isChat: isChat, title: title, body: body, uid: uid);
@@ -405,6 +410,13 @@ class FcmService with WidgetsBindingObserver {
       await _sendTokenToServer(token);
     }
     await _cacheAuthInfo();
+
+    // Kotlin NotificationReplyReceiver가 읽을 API URL 캐싱
+    // SharedPreferences에 저장 → Kotlin: "flutter.api_chats_url"
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('api_chats_url', ApiEndpoints.chats);
+    }
 
     _messaging.onTokenRefresh.listen((newToken) async {
       await _sendTokenToServer(newToken);

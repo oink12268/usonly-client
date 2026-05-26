@@ -43,6 +43,9 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Firebase Messaging: Kotlin 컴파일 시 FirebaseMessagingService/RemoteMessage classpath 보장
+    implementation(platform("com.google.firebase:firebase-bom:33.0.0"))
+    implementation("com.google.firebase:firebase-messaging")
 }
 
 flutter {

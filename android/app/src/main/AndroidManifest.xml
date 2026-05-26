@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
@@ -61,6 +62,31 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />
+
+        <!--
+            flutter_local_notifications가 등록한 FlutterFirebaseMessagingService를 제거하고
+            CustomFcmService로 교체. CustomFcmService는 super.onMessageReceived()를 호출해
+            Dart firebaseMessagingBackgroundHandler도 그대로 실행함.
+        -->
+        <service
+            android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".CustomFcmService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- 알림 인라인 답장 네이티브 핸들러 (Flutter 엔진 없이 동작) -->
+        <receiver
+            android:name=".NotificationReplyReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.usonly_client.NOTIFICATION_REPLY" />
+            </intent-filter>
+        </receiver>
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
