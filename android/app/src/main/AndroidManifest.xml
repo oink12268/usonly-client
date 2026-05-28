@@ -79,12 +79,13 @@
             </intent-filter>
         </service>
 
-        <!-- 알림 인라인 답장 네이티브 핸들러 (Flutter 엔진 없이 동작) -->
+        <!-- 알림 인라인 답장 / 스와이프 삭제 네이티브 핸들러 (Flutter 엔진 없이 동작) -->
         <receiver
             android:name=".NotificationReplyReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.example.usonly_client.NOTIFICATION_REPLY" />
+                <action android:name="com.example.usonly_client.NOTIFICATION_DISMISS" />
             </intent-filter>
         </receiver>
 

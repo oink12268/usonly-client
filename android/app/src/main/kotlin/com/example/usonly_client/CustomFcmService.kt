@@ -20,6 +20,10 @@ import com.google.firebase.messaging.RemoteMessage
  * 해결: 이 Service가 알림을 직접 표시 → 답장 action이 NotificationReplyReceiver(순수 Kotlin)로
  *       전달 → Flutter 엔진 없이 완전히 Kotlin 레이어에서 처리.
  *
+ * 뱃지: Samsung ContentProvider(content://com.sec.badge/apps)로 알림과 독립적으로 설정.
+ *       알림 스와이프(deleteIntent) → NotificationReplyReceiver.ACTION_DISMISS → 뱃지 재설정.
+ *       알림 답장 → NotificationReplyReceiver.ACTION → 뱃지 초기화.
+ *
  * Dart firebaseMessagingBackgroundHandler는 FlutterFirebaseMessagingReceiver(독립 BroadcastReceiver)가
  * 별도로 트리거하므로, 이 Service를 교체해도 Dart 핸들러는 정상 실행됨.
  */
@@ -44,6 +48,9 @@ class CustomFcmService : FirebaseMessagingService() {
     private fun showNativeChatNotification(title: String, body: String) {
         // getApplicationContext(): Java-style 명시 호출로 컴파일 오류 방지
         val ctx: Context = getApplicationContext()
+
+        // Samsung ContentProvider 뱃지 설정 (알림과 독립적 → 스와이프해도 뱃지 유지)
+        NotificationReplyReceiver.setSamsungBadge(ctx, 1)
 
         // Flutter SharedPreferences: 'FlutterSharedPreferences' 파일, "flutter." prefix
         val prefs = ctx.getSharedPreferences(
@@ -92,6 +99,14 @@ class CustomFcmService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // 알림 스와이프(삭제) → ACTION_DISMISS → 뱃지 재설정 (메시지 아직 안 읽음)
+        val dismissIntent = Intent(ctx, NotificationReplyReceiver::class.java)
+        dismissIntent.action = NotificationReplyReceiver.ACTION_DISMISS
+        val dismissPendingIntent: PendingIntent = PendingIntent.getBroadcast(
+            ctx, 2, dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notif = NotificationCompat.Builder(ctx, "chat_channel_v2")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
@@ -100,7 +115,7 @@ class CustomFcmService : FirebaseMessagingService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(tapPendingIntent)
             .addAction(replyAction)
-            .setNumber(1)
+            .setDeleteIntent(dismissPendingIntent)
             .build()
 
         NotificationManagerCompat.from(ctx)
