@@ -40,8 +40,10 @@ class MainActivity : FlutterActivity() {
                         val count = call.argument<Int>("count") ?: 0
                         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                         if (count > 0) {
-                            // 뱃지 홀더 알림 게시 (삼성 최신 OS에서 알림 없으면 뱃지 0으로 강제됨)
-                            NotificationReplyReceiver.postBadgeNotification(this)
+                            // Samsung ContentProvider만 갱신.
+                            // postBadgeNotification()은 여기서 호출하지 않음 —
+                            // 앱 열릴 때마다 알림창에 뱃지 알림이 생기는 문제가 발생하기 때문.
+                            // 뱃지 알림은 오직 ACTION_DISMISS(알림 스와이프 시)에서만 게시함.
                             NotificationReplyReceiver.setSamsungBadge(this, count)
                         } else {
                             // 뱃지 홀더 알림 취소 + Samsung ContentProvider 초기화
