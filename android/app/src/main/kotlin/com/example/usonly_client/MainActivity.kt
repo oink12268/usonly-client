@@ -1,8 +1,5 @@
 package com.example.usonly_client
 
-import android.app.NotificationManager
-import android.content.ContentValues
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -16,7 +13,6 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.example.usonly_client/share"
-    private val BADGE_CHANNEL = "com.example.usonly_client/badge"
     private var pendingShare: Map<String, Any?>? = null
     private var methodChannel: MethodChannel? = null
 
@@ -32,34 +28,7 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
-
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BADGE_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "updateBadge" -> {
-                        val count = call.argument<Int>("count") ?: 0
-                        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                        if (count > 0) {
-                            // Samsung ContentProvider만 갱신.
-                            // postBadgeNotification()은 여기서 호출하지 않음 —
-                            // 앱 열릴 때마다 알림창에 뱃지 알림이 생기는 문제가 발생하기 때문.
-                            // 뱃지 알림은 오직 ACTION_DISMISS(알림 스와이프 시)에서만 게시함.
-                            NotificationReplyReceiver.setSamsungBadge(this, count)
-                        } else {
-                            // 뱃지 홀더 알림 취소 + Samsung ContentProvider 초기화
-                            nm.cancel(NotificationReplyReceiver.BADGE_NOTIF_ID)
-                            NotificationReplyReceiver.setSamsungBadge(this, 0)
-                        }
-                        result.success(null)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
     }
-
-    // onResume에서 뱃지를 지우면 안 됨.
-    // 앱이 포그라운드로 와도 채팅을 읽기 전까지 뱃지는 유지해야 함.
-    // 뱃지 제거는 Flutter clearChatNotifications() → updateBadge(0) 경로로만 처리.
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

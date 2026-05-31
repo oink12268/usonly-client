@@ -20,17 +20,12 @@ import com.google.firebase.messaging.RemoteMessage
  * 해결: 이 Service가 알림을 직접 표시 → 답장 action이 NotificationReplyReceiver(순수 Kotlin)로
  *       전달 → Flutter 엔진 없이 완전히 Kotlin 레이어에서 처리.
  *
- * 뱃지: Samsung ContentProvider(content://com.sec.badge/apps)로 알림과 독립적으로 설정.
- *       알림 스와이프(deleteIntent) → NotificationReplyReceiver.ACTION_DISMISS → 뱃지 재설정.
- *       알림 답장 → NotificationReplyReceiver.ACTION → 뱃지 초기화.
- *
  * Dart firebaseMessagingBackgroundHandler는 FlutterFirebaseMessagingReceiver(독립 BroadcastReceiver)가
  * 별도로 트리거하므로, 이 Service를 교체해도 Dart 핸들러는 정상 실행됨.
  */
 class CustomFcmService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
-        // message.data는 Java Map<String,String> → 명시적 타입 지정으로 타입 추론 강제
         val data: Map<String, String> = message.data
         val type: String? = data["type"]
         val isChat: Boolean = (type == "chat" || type == null)
@@ -38,25 +33,15 @@ class CustomFcmService : FirebaseMessagingService() {
         val body: String? = data["body"]
 
         // 채팅 + data-only(notification 필드 없음) + 내용 있음 → 네이티브 알림 표시
-        // Dart 핸들러에서는 Android 채팅 알림 표시를 건너뜀 (중복 방지)
         if (isChat && message.notification == null && (title != null || body != null)) {
             showNativeChatNotification(title ?: "", body ?: "")
         }
-        // Dart handler는 FlutterFirebaseMessagingReceiver가 별도로 트리거함 → super 불필요
     }
 
     private fun showNativeChatNotification(title: String, body: String) {
-        // getApplicationContext(): Java-style 명시 호출로 컴파일 오류 방지
         val ctx: Context = getApplicationContext()
 
-        // Samsung ContentProvider 뱃지 설정 (알림과 독립적 → 스와이프해도 뱃지 유지)
-        NotificationReplyReceiver.setSamsungBadge(ctx, 1)
-
-        // Flutter SharedPreferences: 'FlutterSharedPreferences' 파일, "flutter." prefix
-        val prefs = ctx.getSharedPreferences(
-            "FlutterSharedPreferences",
-            Context.MODE_PRIVATE
-        )
+        val prefs = ctx.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val uid: String = prefs.getString("flutter.cached_user_uid", "") ?: ""
 
         // 알림 채널 생성 (이미 있으면 무시됨)
@@ -77,7 +62,6 @@ class CustomFcmService : FirebaseMessagingService() {
             .setLabel("메시지를 입력하세요...")
             .build()
 
-        // 답장 action → NotificationReplyReceiver (Flutter 엔진 없이 동작)
         val replyIntent = Intent(ctx, NotificationReplyReceiver::class.java)
         replyIntent.action = NotificationReplyReceiver.ACTION
         replyIntent.putExtra(NotificationReplyReceiver.EXTRA_UID, uid)
@@ -99,14 +83,6 @@ class CustomFcmService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 알림 스와이프(삭제) → ACTION_DISMISS → 뱃지 재설정 (메시지 아직 안 읽음)
-        val dismissIntent = Intent(ctx, NotificationReplyReceiver::class.java)
-        dismissIntent.action = NotificationReplyReceiver.ACTION_DISMISS
-        val dismissPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-            ctx, 2, dismissIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         val notif = NotificationCompat.Builder(ctx, "chat_channel_v2")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
@@ -115,7 +91,6 @@ class CustomFcmService : FirebaseMessagingService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(tapPendingIntent)
             .addAction(replyAction)
-            .setDeleteIntent(dismissPendingIntent)
             .build()
 
         NotificationManagerCompat.from(ctx)
