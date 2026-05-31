@@ -411,13 +411,19 @@ class _AlbumListContentState extends State<_AlbumListContent> {
   Widget _buildAlbumCard(dynamic album) {
     return GestureDetector(
       onTap: () async {
+        final savedOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
         await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => AlbumDetailPage(albumId: album['id'], memberId: widget.memberId),
           ),
         );
-        _fetchAlbums();
+        await _fetchAlbums();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.jumpTo(savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent));
+          }
+        });
       },
       onLongPress: () => _showAlbumOptions(album),
       child: ClipRRect(
