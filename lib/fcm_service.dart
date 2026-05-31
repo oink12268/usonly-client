@@ -22,6 +22,9 @@ const _kBadgeOtherKey = 'fcm_has_other_notif';
 // 고정 ID로 덮어쓰면 항상 최신 메시지 1개만 표시되고 그룹화 부작용이 없음.
 const _kChatNotifId = 1;
 const _kOtherNotifId = 2;
+// Kotlin NotificationReplyReceiver.BADGE_NOTIF_ID=999 와 동일.
+// _kOtherNotifId(2)와 달리 999를 사용해 ID 충돌을 방지함.
+const _kAndroidBadgeNotifId = 999;
 
 const _kAuthTokenKey = 'cached_firebase_token';
 const _kUserUidKey = 'cached_user_uid';
@@ -331,6 +334,9 @@ class FcmService with WidgetsBindingObserver {
     await _localNotifications.cancel(_kChatNotifId);
     // FCM이 직접 표시한 채팅 알림도 cleanup (notification payload 모드)
     await _cancelActiveByChannel(_localNotifications, 'chat_channel_v2');
+    // Kotlin 뱃지 홀더 알림(ID=999) 취소.
+    // clearOtherNotifications()는 _kOtherNotifId(2)만 취소하므로 충돌 없음.
+    await _localNotifications.cancel(_kAndroidBadgeNotifId);
     await prefs.setInt(_kBadgeChatKey, 0);
     final total = _readBadge(prefs);
     await _syncIosBadge(_localNotifications, total);

@@ -1,28 +1,21 @@
 package com.example.usonly_client
 
+import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.RemoteInput
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * 알림창 인라인 답장 / 알림 스와이프 처리 네이티브 핸들러.
- *
- * flutter_local_notifications 백그라운드 isolate는 Android 14+(One UI 7)에서
- * 새 Flutter 엔진 시작이 차단되어 핸들러가 실행되지 않는 문제 발생.
- * 이 BroadcastReceiver는 Flutter 엔진 없이 순수 Kotlin으로 동작하므로 제한 없음.
- *
- * 흐름:
- *  CustomFcmService → 네이티브 알림 표시
- *    ├── 답장 action  → ACTION (NOTIFICATION_REPLY)  → HTTP POST + 뱃지 초기화
- *    └── 스와이프     → ACTION_DISMISS               → 뱃지 재설정 (메시지 미읽음)
- */
 class NotificationReplyReceiver : BroadcastReceiver() {
 
     companion object {
@@ -30,13 +23,66 @@ class NotificationReplyReceiver : BroadcastReceiver() {
         const val ACTION_DISMISS = "com.example.usonly_client.NOTIFICATION_DISMISS"
         const val KEY_REPLY = "chat_reply_input"
         const val EXTRA_UID = "uid"
+
+        // Kotlin이 표시하는 채팅 알림 ID.
+        // Dart _kChatNotifId=1 과 동일 → Flutter cancel(1)이 이 알림도 취소함.
         const val CHAT_NOTIF_ID = 1
 
+        // 뱃지 홀더 알림 ID.
+        // Dart _kOtherNotifId=2 와 충돌하지 않도록 999로 설정.
+        // flutter_local_notifications.cancel(2)가 이 알림을 건드리지 않음.
+        const val BADGE_NOTIF_ID = 999
+
+        private const val BADGE_CHANNEL_ID = "badge_holder_channel"
+
         /**
-         * Samsung ContentProvider 뱃지를 알림과 독립적으로 설정/해제.
-         * count=0 이면 뱃지 제거, count>0 이면 해당 값으로 설정.
-         * 알림이 스와이프로 삭제되어도 ContentProvider 행은 남아 뱃지가 유지됨.
+         * 무음 뱃지 홀더 알림을 게시한다.
+         *
+         * 목적: 채팅 알림을 스와이프로 지워도 런처 뱃지가 살아있게 하기 위함.
+         * Samsung One UI 6+ 에서는 알림이 0개이면 ContentProvider 뱃지를 덮어쓰므로
+         * 활성 알림을 1개 유지하는 방식으로 우회한다.
+         *
+         * 채널 중요도는 IMPORTANCE_LOW (소리·팝업 없음, 뱃지 표시).
+         * IMPORTANCE_MIN 은 Samsung에서 뱃지를 표시하지 않는 기기가 있어 사용하지 않음.
          */
+        fun postBadgeNotification(context: Context) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    BADGE_CHANNEL_ID,
+                    "읽지 않은 메시지",
+                    NotificationManager.IMPORTANCE_LOW  // MIN → LOW (뱃지 보장)
+                ).apply {
+                    setShowBadge(true)
+                    enableVibration(false)
+                    enableLights(false)
+                    setSound(null, null)
+                }
+                context.getSystemService(NotificationManager::class.java)
+                    ?.createNotificationChannel(channel)
+            }
+
+            val tapIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            val tapPendingIntent = PendingIntent.getActivity(
+                context, 10, tapIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val notif = NotificationCompat.Builder(context, BADGE_CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle("읽지 않은 메시지")
+                .setContentText("채팅 메시지를 확인하세요")
+                .setSilent(true)
+                .setNumber(1)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+                .setContentIntent(tapPendingIntent)
+                .setAutoCancel(true)  // 탭하면 자동 취소 (앱 열리면서 clearChatNotifications 호출됨)
+                .build()
+
+            NotificationManagerCompat.from(context).notify(BADGE_NOTIF_ID, notif)
+        }
+
+        /** Samsung ContentProvider 뱃지 (구형 삼성 호환 보조 수단). */
         fun setSamsungBadge(context: Context, count: Int) {
             try {
                 val uri = Uri.parse("content://com.sec.badge/apps")
@@ -59,25 +105,24 @@ class NotificationReplyReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        // 알림 스와이프(삭제) → 메시지는 아직 안 읽음 → 뱃지 재설정 후 종료
+        // 알림 스와이프 → 아직 안 읽음 → 뱃지 홀더 알림으로 뱃지 유지
         if (intent.action == ACTION_DISMISS) {
-            setSamsungBadge(context, 1)
+            postBadgeNotification(context)
+            setSamsungBadge(context, 1)  // 구형 삼성 보조
             return
         }
 
-        // RemoteInput에서 답장 텍스트 추출
+        // 인라인 답장 처리
         val bundle = RemoteInput.getResultsFromIntent(intent) ?: return
         val replyText = bundle.getCharSequence(KEY_REPLY)?.toString()?.trim()
         if (replyText.isNullOrEmpty()) return
 
-        // 알림 즉시 취소 → "Sending..." 스피너 제거
+        // 채팅 알림 + 뱃지 홀더 알림 모두 취소
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(CHAT_NOTIF_ID)
-
-        // Samsung 뱃지 초기화 (답장 완료 = 읽음)
+        nm.cancel(BADGE_NOTIF_ID)
         setSamsungBadge(context, 0)
 
-        // Flutter SharedPreferences: 'FlutterSharedPreferences' 파일, "flutter." prefix
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val token = prefs.getString("flutter.cached_firebase_token", null) ?: return
         val uid = intent.getStringExtra(EXTRA_UID)
@@ -86,15 +131,13 @@ class NotificationReplyReceiver : BroadcastReceiver() {
         val apiUrl = prefs.getString("flutter.api_chats_url", "https://usonly.duckdns.org/api/chats")
             ?: "https://usonly.duckdns.org/api/chats"
 
-        // 백그라운드 스레드에서 HTTP POST
         Thread {
             try {
                 val body = JSONObject().apply {
                     put("message", replyText)
                     put("writerUid", uid)
                 }.toString()
-
-                val url = URL(apiUrl)
+                val url = java.net.URL(apiUrl)
                 (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -103,7 +146,7 @@ class NotificationReplyReceiver : BroadcastReceiver() {
                     connectTimeout = 15_000
                     readTimeout = 15_000
                     outputStream.use { out -> out.write(body.toByteArray(Charsets.UTF_8)) }
-                    responseCode // 요청 실행
+                    responseCode
                     disconnect()
                 }
             } catch (_: Exception) {}

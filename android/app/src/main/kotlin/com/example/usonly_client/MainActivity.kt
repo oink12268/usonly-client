@@ -1,6 +1,8 @@
 package com.example.usonly_client
 
+import android.app.NotificationManager
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -36,7 +38,16 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "updateBadge" -> {
                         val count = call.argument<Int>("count") ?: 0
-                        updateSamsungBadge(count)
+                        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        if (count > 0) {
+                            // 뱃지 홀더 알림 게시 (삼성 최신 OS에서 알림 없으면 뱃지 0으로 강제됨)
+                            NotificationReplyReceiver.postBadgeNotification(this)
+                            NotificationReplyReceiver.setSamsungBadge(this, count)
+                        } else {
+                            // 뱃지 홀더 알림 취소 + Samsung ContentProvider 초기화
+                            nm.cancel(NotificationReplyReceiver.BADGE_NOTIF_ID)
+                            NotificationReplyReceiver.setSamsungBadge(this, 0)
+                        }
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -44,27 +55,12 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    // Samsung One UI 뱃지 카운트를 알림과 독립적으로 설정.
-    // 알림이 없어도 뱃지가 유지되고, 알림을 스와이프해도 뱃지가 살아있음.
-    private fun updateSamsungBadge(count: Int) {
-        try {
-            val uri = Uri.parse("content://com.sec.badge/apps")
-            contentResolver.delete(uri, "package=?", arrayOf(packageName))
-            if (count > 0) {
-                val values = ContentValues()
-                values.put("package", packageName)
-                values.put("class", this.javaClass.name)
-                values.put("badgecount", count)
-                contentResolver.insert(uri, values)
-            }
-        } catch (e: Exception) {
-            // Samsung 기기가 아니거나 API 미지원 → 무시
-        }
-    }
+    // onResume에서 뱃지를 지우면 안 됨.
+    // 앱이 포그라운드로 와도 채팅을 읽기 전까지 뱃지는 유지해야 함.
+    // 뱃지 제거는 Flutter clearChatNotifications() → updateBadge(0) 경로로만 처리.
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 키보드 높이 실시간 전달 (WindowInsetsAnimationCallback 활성화)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         handleIntent(intent)
     }
@@ -73,7 +69,6 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIntent(intent)
-        // 앱이 이미 실행 중일 때 공유 → Flutter에 즉시 push
         methodChannel?.invokeMethod("sharedDataReceived", pendingShare)
         pendingShare = null
     }
