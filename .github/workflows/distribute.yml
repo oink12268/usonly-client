@@ -13,12 +13,12 @@ jobs:
       - name: 소스 체크아웃
         uses: actions/checkout@v4
 
-      # 민감 파일 복원 (git에서 제외된 파일들)
+      # 민감 파일 복원 (base64 디코딩 — 특수문자/따옴표 깨짐 방지)
       - name: google-services.json 복원
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+        run: echo '${{ secrets.GOOGLE_SERVICES_JSON_B64 }}' | base64 -d > android/app/google-services.json
 
       - name: firebase_options.dart 복원
-        run: echo '${{ secrets.FIREBASE_OPTIONS_DART }}' > lib/firebase_options.dart
+        run: echo '${{ secrets.FIREBASE_OPTIONS_DART_B64 }}' | base64 -d > lib/firebase_options.dart
 
       - name: Flutter 설치
         uses: subosito/flutter-action@v2
@@ -44,5 +44,4 @@ jobs:
           token: ${{ secrets.FIREBASE_TOKEN }}
           testers: oink12268@gmail.com
           file: build/app/outputs/flutter-apk/app-release.apk
-          releaseNotes: ${{ steps.release_notes.outputs.notes }}
           releaseNotesFile: release_notes.txt
