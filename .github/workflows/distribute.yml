@@ -1,0 +1,48 @@
+name: Android 배포 (Firebase App Distribution)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  distribute:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      # 민감 파일 복원 (git에서 제외된 파일들)
+      - name: google-services.json 복원
+        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+
+      - name: firebase_options.dart 복원
+        run: echo '${{ secrets.FIREBASE_OPTIONS_DART }}' > lib/firebase_options.dart
+
+      - name: Flutter 설치
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+
+      - name: 의존성 설치
+        run: flutter pub get
+
+      - name: APK 빌드
+        run: flutter build apk --release
+
+      # 릴리즈 노트: 최신 커밋 메시지 사용
+      - name: 릴리즈 노트 생성
+        run: git log -1 --pretty=format:"%s" > release_notes.txt
+
+      - name: Firebase App Distribution 배포
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          token: ${{ secrets.FIREBASE_TOKEN }}
+          testers: oink12268@gmail.com
+          file: build/app/outputs/flutter-apk/app-release.apk
+          releaseNotes: ${{ steps.release_notes.outputs.notes }}
+          releaseNotesFile: release_notes.txt

@@ -40,6 +40,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   // 채팅 데이터 담을 리스트
   List<dynamic> _chats = [];
 
+  // 앱 포그라운드 여부 (백그라운드에서 WebSocket 수신 시 chatRead 호출 방지)
+  bool _isAppInForeground = true;
+
   // 소켓 클라이언트 객체
   StompClient? stompClient;
   bool _isConnecting = false;
@@ -133,6 +136,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _isAppInForeground = true;
       // 채팅 화면으로 복귀: 알림/배지 소거 + 읽음 처리
       FcmService().clearChatNotifications();
       ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
@@ -144,6 +148,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       _isConnecting = false;
       _connectSocket();
     } else if (state == AppLifecycleState.paused) {
+      _isAppInForeground = false;
       // 홈버튼으로 백그라운드 전환 시 clear_chat FCM 발송 (본인 기기 배지 소거)
       ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
     }
@@ -432,7 +437,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                   await _getNickname(uid);
                 }
 
-                if (uid != widget.uid) {
+                // 포그라운드일 때만 읽음 처리 (백그라운드에서 호출하면 서버가
+                // clear_chat FCM을 전송해 방금 뜬 알림이 즉시 사라지는 문제 발생)
+                if (uid != widget.uid && _isAppInForeground) {
                   ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
                 }
 

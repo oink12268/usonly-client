@@ -39,7 +39,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _selectedIndex = 2; // 처음엔 채팅 탭
   late final List<Widget> _pages;
   StreamSubscription? _shareSubscription;
@@ -47,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _shareSubscription = ShareIntentService().stream.listen((_) {
       if (mounted) setState(() => _selectedIndex = 2);
     });
@@ -99,9 +100,19 @@ _pages = [
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _shareSubscription?.cancel();
     FcmService().onNavigate = null;
     super.dispose();
+  }
+
+  // 앱이 포그라운드로 복귀 시, 현재 탭이 캘린더면 알림 소거
+  // (_onItemTapped은 탭을 누를 때만 호출되므로, 이미 캘린더 탭인 채로 resume되는 경우를 커버)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _selectedIndex == 1) {
+      FcmService().clearOtherNotifications();
+    }
   }
 
   void _navigateByNotificationType(String type) {
@@ -128,6 +139,10 @@ _pages = [
     setState(() {
       _selectedIndex = index;
     });
+    // 캘린더 탭(1) 진입 시 일정/기념일 알림 소거
+    // IndexedStack은 모든 탭을 앱 시작 시 한 번만 생성하므로
+    // initState만으로는 탭 전환 시 알림이 안 지워짐
+    if (index == 1) FcmService().clearOtherNotifications();
   }
 
   @override
