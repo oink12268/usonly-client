@@ -20,6 +20,9 @@ jobs:
       - name: firebase_options.dart 복원
         run: echo '${{ secrets.FIREBASE_OPTIONS_DART_B64 }}' | base64 -d > lib/firebase_options.dart
 
+      - name: release.jks 복원
+        run: echo '${{ secrets.KEYSTORE_B64 }}' | base64 -d > android/release.jks
+
       - name: windows_oauth_config.dart 생성
         run: |
           cat > lib/windows_oauth_config.dart << 'EOF'
