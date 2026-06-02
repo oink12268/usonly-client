@@ -59,6 +59,7 @@ dependencies:
   pdfx: ^2.7.0
   package_info_plus: ^8.3.0
   material_symbols_icons: ^4.2793.0
+  super_clipboard: ^0.8.0
 
 dev_dependencies:
   flutter_test:

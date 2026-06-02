@@ -20,6 +20,7 @@ import 'widgets/chat_search_toolbar.dart';
 import 'widgets/chat_typing_indicator.dart';
 import 'widgets/chat_reply_preview.dart';
 import 'widgets/chat_input_bar.dart';
+import 'package:super_clipboard/super_clipboard.dart';
 
 class ChatPage extends StatefulWidget {
   final String uid; // 내 아이디
@@ -720,6 +721,69 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     }
   }
 
+  // 클립보드 붙여넣기: 이미지면 전송, 텍스트면 일반 붙여넣기
+  Future<void> _handlePaste() async {
+    final clipboard = SystemClipboard.instance;
+    if (clipboard == null) return;
+
+    final reader = await clipboard.read();
+
+    SimpleFileFormat? imageFormat;
+    if (reader.canProvide(Formats.png)) {
+      imageFormat = Formats.png;
+    } else if (reader.canProvide(Formats.jpeg)) {
+      imageFormat = Formats.jpeg;
+    }
+
+    if (imageFormat != null) {
+      reader.getFile(imageFormat, (file) async {
+        final bytes = await file.readAll();
+        final ext = imageFormat == Formats.png ? 'png' : 'jpg';
+        await _uploadClipboardImage(bytes, ext);
+      }, onError: (e) {
+        debugPrint('클립보드 이미지 읽기 실패: $e');
+      });
+      return;
+    }
+
+    // 이미지 없으면 텍스트 붙여넣기
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null) {
+      final sel = _controller.selection;
+      final text = _controller.text;
+      final newText = text.replaceRange(sel.start.clamp(0, text.length), sel.end.clamp(0, text.length), data!.text!);
+      _controller.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: sel.start.clamp(0, text.length) + data.text!.length),
+      );
+    }
+  }
+
+  Future<void> _uploadClipboardImage(Uint8List bytes, String ext) async {
+    setState(() => _isUploadingImage = true);
+    try {
+      final filename = 'clipboard_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final request = http.MultipartRequest('POST', Uri.parse(ApiEndpoints.chatImageUpload));
+      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      final response = await ApiClient.sendMultipart(request);
+      if (response.statusCode == 200) {
+        final data = await ApiClient.decodeStreamedBody(response);
+        _sendImageMessage(data['imageUrl']);
+      } else {
+        throw Exception('업로드 실패: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('클립보드 이미지 업로드 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('이미지 전송 중 오류가 발생했습니다.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
+  }
+
   Future<void> _pickAndUploadImage(ImageSource source) async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: source, imageQuality: 80, maxWidth: 1200);
@@ -1390,6 +1454,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
             onAttachment: _showAttachmentSheet,
             sendScaleAnim: _sendScaleAnim,
             sendAnimController: _sendAnimController,
+            onPaste: Platform.isAndroid ? _handlePaste : null,
           ),
         ],
       ),

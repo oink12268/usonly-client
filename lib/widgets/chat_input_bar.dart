@@ -8,6 +8,7 @@ class ChatInputBar extends StatelessWidget {
   final VoidCallback onAttachment;
   final Animation<double> sendScaleAnim;
   final AnimationController sendAnimController;
+  final VoidCallback? onPaste;
 
   const ChatInputBar({
     super.key,
@@ -18,6 +19,7 @@ class ChatInputBar extends StatelessWidget {
     required this.onAttachment,
     required this.sendScaleAnim,
     required this.sendAnimController,
+    this.onPaste,
   });
 
   @override
@@ -52,6 +54,23 @@ class ChatInputBar extends StatelessWidget {
                 ),
                 onChanged: onTypingChanged,
                 onSubmitted: (_) => onSend(),
+                contextMenuBuilder: onPaste == null
+                    ? null
+                    : (context, editableTextState) {
+                        final items = editableTextState.contextMenuButtonItems.map((item) {
+                          if (item.type == ContextMenuButtonType.paste) {
+                            return item.copyWith(onPressed: () {
+                              ContextMenuController.removeAny();
+                              onPaste!();
+                            });
+                          }
+                          return item;
+                        }).toList();
+                        return AdaptiveTextSelectionToolbar.buttonItems(
+                          anchors: editableTextState.contextMenuAnchors,
+                          buttonItems: items,
+                        );
+                      },
               ),
             ),
           ),
