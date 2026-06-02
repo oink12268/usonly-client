@@ -41,7 +41,7 @@ jobs:
         run: flutter pub get
 
       - name: APK 빌드
-        run: flutter build apk --release
+        run: flutter build apk --release --build-number=${{ github.run_number }}
 
       # 릴리즈 노트: 최신 커밋 메시지 사용
       - name: 릴리즈 노트 생성
