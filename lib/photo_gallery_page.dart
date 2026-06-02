@@ -80,6 +80,39 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
     }
   }
 
+  Future<void> _refetchAllLoaded() async {
+    final lastPage = _currentPage;
+    _currentPage = 0;
+    try {
+      final allPhotos = <dynamic>[];
+      for (int p = 0; p <= lastPage; p++) {
+        final response = await ApiClient.get(
+          Uri.parse(ApiEndpoints.archiveMediaPaged(page: p, size: _pageSize)),
+        );
+        if (response.statusCode == 200) {
+          final photos = ApiClient.decodeBody(response) as List;
+          allPhotos.addAll(photos);
+          if (photos.length < _pageSize) {
+            _hasMore = false;
+            _currentPage = p;
+            break;
+          }
+          _currentPage = p;
+        } else {
+          break;
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _photos = allPhotos;
+          if (_hasMore) _hasMore = allPhotos.length >= _pageSize;
+        });
+      }
+    } catch (e) {
+      debugPrint("사진 재로딩 에러: $e");
+    }
+  }
+
   Future<void> _loadMore() async {
     setState(() => _isLoadingMore = true);
     _currentPage++;
@@ -223,7 +256,7 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
 
     if (!mounted) return;
     setState(() => _isUploading = false);
-    _fetchPhotos();
+    _fetchPhotos(); // 업로드 후엔 맨 위에 새 사진이 추가되므로 전체 리셋이 맞음
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(fail == 0 ? "$success장 업로드 성공!" : "성공 $success장 / 실패 $fail장")),
@@ -236,7 +269,13 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
         Uri.parse(ApiEndpoints.archiveMediaDelete(mediaId)),
       );
       if (response.statusCode == 200) {
-        _fetchPhotos();
+        final savedOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+        await _refetchAllLoaded();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.jumpTo(savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent));
+          }
+        });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("사진 삭제 완료")));
         }

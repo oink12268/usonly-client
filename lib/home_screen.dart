@@ -16,6 +16,9 @@ import 'calendar_page.dart';
 import 'note_page.dart';
 import 'work_schedule_page.dart';
 import 'dino_game_page.dart';
+import 'snake_game_page.dart';
+import 'gomoku_game_page.dart';
+import 'pong_game_page.dart';
 import 'profile_edit_page.dart';
 import 'notification_settings_page.dart';
 import 'coupon_page.dart';
@@ -465,6 +468,50 @@ class _MorePageState extends State<_MorePage> {
               );
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.videogame_asset_outlined),
+            title: const Text('스네이크'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SnakeGamePage()),
+              );
+            },
+          ),
+          if (widget.coupleId != null) ...[
+            ListTile(
+              leading: const Icon(Icons.circle_outlined),
+              title: const Text('오목'),
+              subtitle: const Text('커플 실시간 대전', style: TextStyle(fontSize: 12)),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GomokuGamePage(
+                      memberId: widget.memberId,
+                      coupleId: widget.coupleId!,
+                    ),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.sports_tennis_outlined),
+              title: const Text('Pong'),
+              subtitle: const Text('커플 실시간 대전', style: TextStyle(fontSize: 12)),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PongGamePage(
+                      memberId: widget.memberId,
+                      coupleId: widget.coupleId!,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
           // 알림 설정
           ListTile(
             leading: const Icon(Icons.notifications_outlined),

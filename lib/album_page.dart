@@ -210,6 +210,40 @@ class _AlbumListContentState extends State<_AlbumListContent> {
     }
   }
 
+  // 현재까지 로드한 페이지 수 그대로 다시 불러오기 (스크롤 복원용)
+  Future<void> _refetchAllLoaded() async {
+    final lastPage = _currentPage;
+    _currentPage = 0;
+    try {
+      final allAlbums = <dynamic>[];
+      for (int p = 0; p <= lastPage; p++) {
+        final response = await ApiClient.get(
+          Uri.parse(ApiEndpoints.archiveAlbumsPaged(page: p, size: _pageSize)),
+        );
+        if (response.statusCode == 200) {
+          final albums = ApiClient.decodeBody(response) as List;
+          allAlbums.addAll(albums);
+          if (albums.length < _pageSize) {
+            _hasMore = false;
+            _currentPage = p;
+            break;
+          }
+          _currentPage = p;
+        } else {
+          break;
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _albums = allAlbums;
+          if (_hasMore) _hasMore = allAlbums.length >= _pageSize;
+        });
+      }
+    } catch (e) {
+      debugPrint("앨범 재로딩 에러: $e");
+    }
+  }
+
   Future<void> _loadMore() async {
     setState(() => _isLoadingMore = true);
     _currentPage++;
@@ -418,7 +452,7 @@ class _AlbumListContentState extends State<_AlbumListContent> {
             builder: (_) => AlbumDetailPage(albumId: album['id'], memberId: widget.memberId),
           ),
         );
-        await _fetchAlbums();
+        await _refetchAllLoaded();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_scrollController.hasClients) {
             _scrollController.jumpTo(savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent));

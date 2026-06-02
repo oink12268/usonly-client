@@ -52,6 +52,6 @@ jobs:
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
           token: ${{ secrets.FIREBASE_TOKEN }}
-          testers: oink12268@gmail.com
+          testers: oink12268@gmail.com, jinaoj@gmail.com
           file: build/app/outputs/flutter-apk/app-release.apk
           releaseNotesFile: release_notes.txt

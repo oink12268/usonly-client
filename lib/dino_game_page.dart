@@ -97,10 +97,16 @@ class FlappyGame extends FlameGame
       anchor: Anchor.center,
       textRenderer: TextPaint(
         style: const TextStyle(
-          color: Colors.white,
-          fontSize: 44,
+          color: Color(0xFFFFEE58),
+          fontSize: 46,
           fontWeight: FontWeight.bold,
-          shadows: [Shadow(blurRadius: 4, color: Colors.black45)],
+          shadows: [
+            Shadow(blurRadius: 2, color: Colors.black, offset: Offset(-2, -2)),
+            Shadow(blurRadius: 2, color: Colors.black, offset: Offset(2, -2)),
+            Shadow(blurRadius: 2, color: Colors.black, offset: Offset(-2, 2)),
+            Shadow(blurRadius: 2, color: Colors.black, offset: Offset(2, 2)),
+            Shadow(blurRadius: 8, color: Colors.black87),
+          ],
         ),
       ),
     );
@@ -495,14 +501,13 @@ class _GameOverOverlayState extends State<_GameOverOverlay> {
   }
 
   Future<void> _submitAndFetch() async {
-    final results = await Future.wait([
-      _GameScoreService.submitScore(widget.game.score),
-      _GameScoreService.getTop10(),
-    ]);
+    // 점수 저장 먼저, 완료 후 Top10 조회 (순서 바뀌면 새 기록이 반영 안 됨)
+    final summary = await _GameScoreService.submitScore(widget.game.score);
+    final top10 = await _GameScoreService.getTop10();
     if (mounted) {
       setState(() {
-        _summary = results[0] as Map<String, dynamic>?;
-        _top10 = results[1] as List<dynamic>?;
+        _summary = summary;
+        _top10 = top10;
         _loading = false;
       });
     }

@@ -31,6 +31,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
   int? _draggingNoteId;
   int? _hoveringNoteId;
   int? _reorderTargetIndex;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -56,6 +57,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stompClient?.deactivate();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -157,7 +159,12 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
             ),
           ),
         );
-        _fetchNotes();
+        await _fetchNotes();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.jumpTo(0);
+          }
+        });
       }
     } catch (e) {
       debugPrint("메모 생성 에러: $e");
@@ -347,6 +354,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: () async {
+              final savedOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
               await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -357,7 +365,12 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                   ),
                 ),
               );
-              _fetchNotes();
+              await _fetchNotes();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_scrollController.hasClients) {
+                  _scrollController.jumpTo(savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent));
+                }
+              });
             },
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 76),
@@ -417,6 +430,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                   if (childCount > 0)
                     GestureDetector(
                       onTap: () async {
+                        final savedOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -428,7 +442,12 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                             ),
                           ),
                         );
-                        _fetchNotes();
+                        await _fetchNotes();
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (_scrollController.hasClients) {
+                            _scrollController.jumpTo(savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent));
+                          }
+                        });
                       },
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
@@ -491,6 +510,7 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
                   ),
                 )
               : ListView.builder(
+                  controller: _scrollController,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   // 아이템 사이사이 + 맨 위/아래에 드롭존 (separator)
                   // index: 짝수 = separator, 홀수 = note
