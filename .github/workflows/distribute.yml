@@ -20,8 +20,12 @@ jobs:
       - name: firebase_options.dart 복원
         run: echo '${{ secrets.FIREBASE_OPTIONS_DART_B64 }}' | base64 -d > lib/firebase_options.dart
 
-      - name: windows_oauth_config.dart 복원
-        run: echo '${{ secrets.WINDOWS_OAUTH_CONFIG_B64 }}' | base64 -d > lib/windows_oauth_config.dart
+      - name: windows_oauth_config.dart 생성
+        run: |
+          cat > lib/windows_oauth_config.dart << 'EOF'
+          const windowsClientId = '${{ secrets.WINDOWS_CLIENT_ID }}';
+          const windowsClientSecret = '${{ secrets.WINDOWS_CLIENT_SECRET }}';
+          EOF
 
       - name: Flutter 설치
         uses: subosito/flutter-action@v2
