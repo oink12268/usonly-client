@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:any_link_preview/any_link_preview.dart';
@@ -121,18 +120,24 @@ class ChatBubble extends StatelessWidget {
         spans.add(TextSpan(text: text.substring(last, m.start)));
       }
       final url = m.group(0)!;
-      spans.add(TextSpan(
-        text: url,
-        style: TextStyle(
-          color: isMe ? _myTextColor(context) : _partnerTextColor(context),
-          decoration: TextDecoration.underline,
-          decorationColor: isMe ? _myTextColor(context) : _partnerTextColor(context),
-        ),
-        recognizer: TapGestureRecognizer()
-          ..onTap = () async {
+      spans.add(WidgetSpan(
+        alignment: PlaceholderAlignment.baseline,
+        baseline: TextBaseline.alphabetic,
+        child: GestureDetector(
+          onTap: () async {
             final uri = Uri.tryParse(url);
             if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
           },
+          child: Text(
+            url,
+            style: TextStyle(
+              fontSize: 16,
+              color: isMe ? _myTextColor(context) : _partnerTextColor(context),
+              decoration: TextDecoration.underline,
+              decorationColor: isMe ? _myTextColor(context) : _partnerTextColor(context),
+            ),
+          ),
+        ),
       ));
       last = m.end;
     }
