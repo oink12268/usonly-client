@@ -125,8 +125,28 @@ class ChatBubble extends StatelessWidget {
         baseline: TextBaseline.alphabetic,
         child: GestureDetector(
           onTap: () async {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('URL 탭됨: $url')),
+            );
             final uri = Uri.tryParse(url);
-            if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+            if (uri == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('URI 파싱 실패')),
+              );
+              return;
+            }
+            try {
+              final result = await launchUrl(uri, mode: LaunchMode.externalApplication);
+              if (!result) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('launchUrl 실패 (false 반환)')),
+                );
+              }
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('에러: $e')),
+              );
+            }
           },
           child: Text(
             url,
