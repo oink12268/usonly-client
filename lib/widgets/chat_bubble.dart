@@ -54,7 +54,7 @@ class ChatBubble extends StatelessWidget {
     return GestureDetector(
       onTap: () async {
         final uri = Uri.tryParse(url);
-        if (uri != null) await launchUrl(uri);
+        if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
       },
       child: Container(
         margin: const EdgeInsets.only(top: 6),
@@ -136,7 +136,7 @@ class ChatBubble extends StatelessWidget {
               return;
             }
             try {
-              final result = await launchUrl(uri);
+              final result = await launchUrl(uri, mode: LaunchMode.externalApplication);
               if (!result) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('launchUrl 실패 (false 반환)')),
