@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:any_link_preview/any_link_preview.dart';
+import '../utils/date_formatter.dart';
+import '../chat_search_page.dart';
+import '../pdf_viewer_page.dart';
 
 const _shareChannel = MethodChannel('com.example.usonly_client/share');
 
@@ -16,9 +19,6 @@ Future<void> _launchUrl(String url) async {
     if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }
-import '../utils/date_formatter.dart';
-import '../chat_search_page.dart';
-import '../pdf_viewer_page.dart';
 
 class ChatBubble extends StatelessWidget {
   final Map<String, dynamic> chat;
