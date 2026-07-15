@@ -25,6 +25,21 @@ class MainActivity : FlutterActivity() {
                     result.success(pendingShare)
                     pendingShare = null
                 }
+                "launchUrl" -> {
+                    val url = call.argument<String>("url")
+                    if (url == null) {
+                        result.error("INVALID_URL", "URL is null", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("LAUNCH_FAILED", e.message, null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }

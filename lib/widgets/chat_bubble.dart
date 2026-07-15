@@ -1,7 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:any_link_preview/any_link_preview.dart';
+
+const _shareChannel = MethodChannel('com.example.usonly_client/share');
+
+Future<void> _launchUrl(String url) async {
+  if (url.isEmpty) return;
+  try {
+    await _shareChannel.invokeMethod('launchUrl', {'url': url});
+  } catch (_) {
+    // 폴백: url_launcher 시도
+    final uri = Uri.tryParse(url);
+    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+}
 import '../utils/date_formatter.dart';
 import '../chat_search_page.dart';
 import '../pdf_viewer_page.dart';
@@ -52,10 +66,7 @@ class ChatBubble extends StatelessWidget {
 
   Widget _buildLinkPreview(BuildContext context, String url, bool isMe) {
     return GestureDetector(
-      onTap: () async {
-        final uri = Uri.tryParse(url);
-        if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
-      },
+      onTap: () => _launchUrl(url),
       child: Container(
         margin: const EdgeInsets.only(top: 6),
         constraints: const BoxConstraints(maxWidth: 280),
@@ -124,30 +135,7 @@ class ChatBubble extends StatelessWidget {
         alignment: PlaceholderAlignment.baseline,
         baseline: TextBaseline.alphabetic,
         child: GestureDetector(
-          onTap: () async {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('URL 탭됨: $url')),
-            );
-            final uri = Uri.tryParse(url);
-            if (uri == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('URI 파싱 실패')),
-              );
-              return;
-            }
-            try {
-              final result = await launchUrl(uri, mode: LaunchMode.externalApplication);
-              if (!result) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('launchUrl 실패 (false 반환)')),
-                );
-              }
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('에러: $e')),
-              );
-            }
-          },
+          onTap: () => _launchUrl(url),
           child: Text(
             url,
             style: TextStyle(
@@ -517,7 +505,7 @@ class ChatBubble extends StatelessWidget {
                                     ),
                                   );
                                 } else {
-                                  launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
+                                  _launchUrl(fileUrl);
                                 }
                               },
                               child: Container(
