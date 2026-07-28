@@ -387,6 +387,10 @@ class FcmService with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _resyncBadge();
+      // 알림 인라인 답장(NotificationReplyReceiver, 네이티브)이 쓰는 캐시 토큰이
+      // 오래돼 있으면 백그라운드 답장 전송이 401로 조용히 실패하므로, 앱이 포그라운드로
+      // 돌아올 때마다 갱신해 캐시 신선도를 높인다.
+      _cacheAuthInfo();
     }
   }
 

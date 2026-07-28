@@ -21,6 +21,7 @@ import 'widgets/chat_typing_indicator.dart';
 import 'widgets/chat_reply_preview.dart';
 import 'widgets/chat_input_bar.dart';
 import 'package:super_clipboard/super_clipboard.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 class ChatPage extends StatefulWidget {
   final String uid; // 내 아이디
@@ -1109,19 +1110,22 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         });
 
         // 타겟 메시지를 화면 중앙으로 스크롤
-        // ListView.builder는 뷰포트 밖 아이템을 빌드하지 않으므로,
-        // 먼저 타겟 근처로 점프해 렌더링 범위를 확장한 뒤 ensureVisible 호출
+        // ListView.builder는 뷰포트(+cacheExtent) 밖 아이템을 빌드하지 않으므로,
+        // 먼저 타겟 근처로 점프해 렌더링 범위를 확장한 뒤 ensureVisible 호출.
+        // 채팅 버블은 높이가 제각각이라 인덱스 비율만으로는 위치가 부정확할 수 있어
+        // (아래 ListView의 cacheExtent를 크게 잡아 전체 아이템이 빌드되도록 함),
+        // 여기서는 몇 프레임에 걸쳐 재시도해 타겟이 늦게 빌드되는 경우까지 커버한다.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!_scrollController.hasClients) return;
           final maxScroll = _scrollController.position.maxScrollExtent;
-          // 타겟은 older의 마지막(index = older.length-1)에 위치
-          // reverse:true에서 index i의 픽셀 위치 ≈ maxScroll * (1 - i/N)
+          // 타겟은 older의 마지막(index = older.length-1) = newer.length번째(reverse 기준)에 위치
+          // reverse:true에서 ListView index i의 픽셀 위치 ≈ maxScroll * (1 - i/N)
           final targetRatio = _chats.isNotEmpty
-              ? 1.0 - (older.length / _chats.length)
+              ? 1.0 - (newer.length / _chats.length)
               : 0.5;
           _scrollController.jumpTo((maxScroll * targetRatio).clamp(0.0, maxScroll));
 
-          WidgetsBinding.instance.addPostFrameCallback((_) {
+          void tryEnsureVisible(int attemptsLeft) {
             final ctx = _targetMessageKey.currentContext;
             if (ctx != null) {
               Scrollable.ensureVisible(
@@ -1129,8 +1133,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                 alignment: 0.5,
                 duration: const Duration(milliseconds: 300),
               );
+              return;
             }
-          });
+            if (attemptsLeft <= 0) return;
+            WidgetsBinding.instance.addPostFrameCallback((_) => tryEnsureVisible(attemptsLeft - 1));
+          }
+
+          WidgetsBinding.instance.addPostFrameCallback((_) => tryEnsureVisible(5));
         });
 
         Future.delayed(const Duration(seconds: 2), () {
@@ -1296,7 +1305,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                 child: Text(query, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurface)),
               ),
               const SizedBox(height: 12),
-              Text(result, style: const TextStyle(fontSize: 14, height: 1.5)),
+              MarkdownBody(
+                data: result,
+                styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                  p: const TextStyle(fontSize: 14, height: 1.5),
+                ),
+              ),
             ],
           ),
         ),
@@ -1370,6 +1384,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
               child: ListView.builder(
                 controller: _scrollController,
                 reverse: true,
+                // 검색 결과 등에서 특정 메시지로 점프할 때는 인덱스 기반 위치 추정이
+                // 부정확할 수 있어(버블 높이가 제각각) cacheExtent를 크게 잡아
+                // 로드된 메시지 전체가 빌드되도록 해서 ensureVisible이 항상 타겟을 찾도록 한다.
+                cacheExtent: _highlightedMessageId != null ? 20000 : null,
                 padding: const EdgeInsets.fromLTRB(8, 16, 8, 4),
                 itemCount: _chats.length + (_isLoadingMore ? 1 : 0),
                 itemBuilder: (context, index) {

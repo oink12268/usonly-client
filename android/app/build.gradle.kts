@@ -53,6 +53,9 @@ dependencies {
     // Firebase Messaging: Kotlin 컴파일 시 FirebaseMessagingService/RemoteMessage classpath 보장
     implementation(platform("com.google.firebase:firebase-bom:33.0.0"))
     implementation("com.google.firebase:firebase-messaging")
+    // Firebase Auth: NotificationReplyReceiver가 Flutter 엔진 없이도 최신 ID 토큰을
+    // 직접 갱신할 수 있도록 (SharedPreferences 캐시 토큰이 만료돼 답장 전송이 실패하는 문제 방지)
+    implementation("com.google.firebase:firebase-auth")
 }
 
 flutter {
