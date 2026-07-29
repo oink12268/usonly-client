@@ -60,6 +60,7 @@ dependencies:
   package_info_plus: ^8.3.0
   material_symbols_icons: ^4.2793.0
   super_clipboard: ^0.8.0
+  flutter_markdown_plus: ^1.0.3
 
 dev_dependencies:
   flutter_test:
