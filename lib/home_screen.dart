@@ -27,7 +27,6 @@ import 'api_endpoints.dart';
 import 'share_intent_service.dart';
 import 'fcm_service.dart';
 import 'anniversary_page.dart';
-import 'widgets/confirm_delete_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   final User? user;
@@ -260,13 +259,57 @@ class _MorePageState extends State<_MorePage> {
     }
   }
 
-  Future<void> _deleteAccount() async {
-    final confirmed = await ConfirmDeleteDialog.show(
-      context,
-      title: '회원탈퇴',
-      content: '탈퇴하면 계정과, 커플로 연결되어 있던 경우 함께 만든 채팅·앨범·메모·일정·기념일·쿠폰 기록이 전부 삭제됩니다.\n\n'
-          '되돌릴 수 없습니다. 정말 탈퇴하시겠어요?',
+  // 회원탈퇴는 되돌릴 수 없고 커플 공유 데이터까지 지워지므로, 다른 삭제 확인(ConfirmDeleteDialog)보다
+  // 한 단계 더 강한 안전장치로 "삭제"를 직접 입력해야 확인 버튼이 활성화되게 함
+  Future<bool> _confirmAccountDeletion() async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final canConfirm = controller.text == '삭제';
+          return AlertDialog(
+            title: const Text('회원탈퇴'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '탈퇴하면 계정과, 커플로 연결되어 있던 경우 함께 만든 채팅·앨범·메모·일정·기념일·쿠폰 기록이 전부 삭제됩니다.\n\n'
+                  '되돌릴 수 없습니다. 계속하려면 아래에 "삭제"를 입력하세요.',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: '삭제',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => setDialogState(() {}),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('취소'),
+              ),
+              TextButton(
+                onPressed: canConfirm ? () => Navigator.pop(context, true) : null,
+                child: const Text('탈퇴', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          );
+        },
+      ),
     );
+    controller.dispose();
+    return confirmed ?? false;
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await _confirmAccountDeletion();
     if (!confirmed) return;
 
     try {
