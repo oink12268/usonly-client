@@ -27,6 +27,7 @@ import 'api_endpoints.dart';
 import 'share_intent_service.dart';
 import 'fcm_service.dart';
 import 'anniversary_page.dart';
+import 'widgets/confirm_delete_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   final User? user;
@@ -256,6 +257,28 @@ class _MorePageState extends State<_MorePage> {
       _debugTapCount = 0;
       _debugTapTimer?.cancel();
       Navigator.push(context, MaterialPageRoute(builder: (_) => const DebugLogScreen()));
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await ConfirmDeleteDialog.show(
+      context,
+      title: '회원탈퇴',
+      content: '탈퇴하면 계정과, 커플로 연결되어 있던 경우 함께 만든 채팅·앨범·메모·일정·기념일·쿠폰 기록이 전부 삭제됩니다.\n\n'
+          '되돌릴 수 없습니다. 정말 탈퇴하시겠어요?',
+    );
+    if (!confirmed) return;
+
+    try {
+      await ApiClient.delete(Uri.parse(ApiEndpoints.me));
+      await AuthService().signOut();
+      // 로그인 화면으로의 전환은 main.dart의 authStateChanges 스트림이 자동으로 처리함
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('탈퇴 처리 중 오류가 발생했습니다: $e')),
+        );
+      }
     }
   }
 
@@ -586,6 +609,13 @@ class _MorePageState extends State<_MorePage> {
               onTap: () async {
                 await AuthService().signOut();
               },
+            ),
+          // 회원탈퇴
+          if (widget.user != null)
+            ListTile(
+              leading: const Icon(Icons.person_remove_outlined, color: Colors.red),
+              title: const Text('회원탈퇴', style: TextStyle(color: Colors.red)),
+              onTap: _deleteAccount,
             ),
           // 숨은 디버그 진입 영역 (7번 빠르게 탭)
           GestureDetector(
