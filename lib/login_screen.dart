@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'auth_service.dart';
+import 'api_config.dart';
 
 // ⚠️ 개발용
 const _devEmail = 'ink12268@gmail.com';
@@ -68,6 +70,21 @@ class LoginScreen extends StatelessWidget {
                   }
                 }
               },
+            ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: () async {
+                final uri = Uri.parse('${ApiConfig.baseUrl}/privacy-policy.html');
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              },
+              child: Text(
+                '개인정보처리방침',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
             ),
           ],
         ),
