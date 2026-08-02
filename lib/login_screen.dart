@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'auth_service.dart';
 import 'api_config.dart';
+import 'utils/url_launcher_helper.dart';
 
 // ⚠️ 개발용
 const _devEmail = 'ink12268@gmail.com';
@@ -74,14 +74,8 @@ class LoginScreen extends StatelessWidget {
             const SizedBox(height: 20),
             TextButton(
               onPressed: () async {
-                final uri = Uri.parse('${ApiConfig.baseUrl}/privacy-policy.html');
                 try {
-                  final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  if (!launched && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('브라우저를 열 수 없습니다: $uri')),
-                    );
-                  }
+                  await launchUrlWithFallback('${ApiConfig.baseUrl}/privacy-policy.html');
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(

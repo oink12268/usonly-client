@@ -1,24 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:any_link_preview/any_link_preview.dart';
 import '../utils/date_formatter.dart';
+import '../utils/url_launcher_helper.dart';
 import '../chat_search_page.dart';
 import '../pdf_viewer_page.dart';
 
-const _shareChannel = MethodChannel('com.example.usonly_client/share');
-
-Future<void> _launchUrl(String url) async {
-  if (url.isEmpty) return;
-  try {
-    await _shareChannel.invokeMethod('launchUrl', {'url': url});
-  } catch (_) {
-    // 폴백: url_launcher 시도
-    final uri = Uri.tryParse(url);
-    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-}
+Future<void> _launchUrl(String url) => launchUrlWithFallback(url);
 
 class ChatBubble extends StatelessWidget {
   final Map<String, dynamic> chat;
