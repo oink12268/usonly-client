@@ -96,6 +96,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   final String socketUrl = ApiEndpoints.wsUrl;
   final String httpUrl = ApiEndpoints.chats;
 
+  StreamSubscription<SharedContent>? _shareSub;
+
   @override
   void initState() {
     super.initState();
@@ -122,8 +124,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
     _scrollController.addListener(_onScroll);
 
-    // 공유 인텐트로 앱이 열렸을 때 처리
+    // 앱이 종료 상태에서 공유 인텐트로 열린 경우 (cold start)
     WidgetsBinding.instance.addPostFrameCallback((_) => _handlePendingShare());
+    // 앱이 이미 떠 있는 상태에서 공유가 들어온 경우 (warm start / onNewIntent)
+    // ChatPage는 IndexedStack에 한 번만 생성되므로 initState만으로는 처리되지 않음
+    _shareSub = ShareIntentService().stream.listen((_) {
+      if (mounted) _handlePendingShare();
+    });
 
     _focusNode.addListener(() {
       if (!mounted || !_focusNode.hasFocus) return;
@@ -159,6 +166,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _shareSub?.cancel();
     // 채팅 화면 이탈: 포그라운드 알림 억제 해제 + 읽음 처리 (뒤로가기)
     FcmService().setChatActive(false);
     ApiClient.post(Uri.parse(ApiEndpoints.chatRead)).catchError((_) {});
