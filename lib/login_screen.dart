@@ -75,7 +75,20 @@ class LoginScreen extends StatelessWidget {
             TextButton(
               onPressed: () async {
                 final uri = Uri.parse('${ApiConfig.baseUrl}/privacy-policy.html');
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                try {
+                  final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  if (!launched && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('브라우저를 열 수 없습니다: $uri')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('페이지를 여는 중 오류가 발생했습니다: $e')),
+                    );
+                  }
+                }
               },
               child: Text(
                 '개인정보처리방침',
