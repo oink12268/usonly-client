@@ -7,7 +7,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:exif/exif.dart';
 import 'package:http/http.dart' as http;
-import 'package:video_player/video_player.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:async';
@@ -67,10 +66,10 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
         Uri.parse(ApiEndpoints.archiveMediaPaged(page: 0, size: _pageSize)),
       );
       if (response.statusCode == 200) {
-        final photos = ApiClient.decodeBody(response) as List;
+        final rawPhotos = ApiClient.decodeBody(response) as List;
         setState(() {
-          _photos = photos;
-          _hasMore = photos.length >= _pageSize;
+          _photos = rawPhotos.where((p) => p['mediaType'] != 'VIDEO').toList();
+          _hasMore = rawPhotos.length >= _pageSize;
           _isLoading = false;
         });
       }
@@ -104,7 +103,7 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
       }
       if (mounted) {
         setState(() {
-          _photos = allPhotos;
+          _photos = allPhotos.where((p) => p['mediaType'] != 'VIDEO').toList();
           if (_hasMore) _hasMore = allPhotos.length >= _pageSize;
         });
       }
@@ -123,7 +122,7 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
       if (response.statusCode == 200) {
         final more = ApiClient.decodeBody(response) as List;
         setState(() {
-          _photos = [..._photos, ...more];
+          _photos = [..._photos, ...more.where((p) => p['mediaType'] != 'VIDEO')];
           _hasMore = more.length >= _pageSize;
         });
       }
@@ -154,7 +153,9 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
       Navigator.pop(context); // 로딩 닫기
 
       if (response.statusCode == 200) {
-        final allPhotos = ApiClient.decodeBody(response) as List;
+        final allPhotos = (ApiClient.decodeBody(response) as List)
+            .where((p) => p['mediaType'] != 'VIDEO')
+            .toList();
         if (allPhotos.isEmpty) return;
         Navigator.push(
           context,
@@ -169,15 +170,10 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
     }
   }
 
-  bool _isVideoFile(String filename) {
-    final ext = filename.toLowerCase().split('.').last;
-    return ['mp4', 'mov', 'avi', 'mkv'].contains(ext);
-  }
-
   Future<void> pickAndUploadImage() async {
     setState(() => _isUploading = true);
 
-    final List<XFile> mediaFiles = await _picker.pickMultipleMedia(imageQuality: 85, maxWidth: 2000);
+    final List<XFile> mediaFiles = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 2000);
     if (mediaFiles.isEmpty) {
       setState(() => _isUploading = false);
       return;
@@ -191,12 +187,10 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
 
     for (final file in mediaFiles) {
       try {
-        final isVideo = _isVideoFile(file.name);
-        final type = isVideo ? 'VIDEO' : 'IMAGE';
         Uint8List bytes = await file.readAsBytes();
 
         // Windows는 imageQuality/maxWidth가 무시되므로 직접 압축 (순수 Dart)
-        if (!isVideo && defaultTargetPlatform == TargetPlatform.windows) {
+        if (defaultTargetPlatform == TargetPlatform.windows) {
           try {
             final decoded = img.decodeImage(bytes);
             if (decoded != null && (decoded.width > 2000 || decoded.height > 2000)) {
@@ -210,25 +204,22 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
         }
 
         DateTime? takenAt;
-        if (!isVideo) {
-          try {
-            final exifData = await readExifFromBytes(bytes);
-            final dateStr = exifData['EXIF DateTimeOriginal']?.printable
-                         ?? exifData['Image DateTime']?.printable;
-            if (dateStr != null && dateStr.length >= 19) {
-              final datePart = dateStr.substring(0, 10).replaceAll(':', '-');
-              final timePart = dateStr.substring(11, 19);
-              takenAt = DateTime.parse('${datePart}T$timePart');
-            }
-          } catch (_) {}
-        }
+        try {
+          final exifData = await readExifFromBytes(bytes);
+          final dateStr = exifData['EXIF DateTimeOriginal']?.printable
+                       ?? exifData['Image DateTime']?.printable;
+          if (dateStr != null && dateStr.length >= 19) {
+            final datePart = dateStr.substring(0, 10).replaceAll(':', '-');
+            final timePart = dateStr.substring(11, 19);
+            takenAt = DateTime.parse('${datePart}T$timePart');
+          }
+        } catch (_) {}
         takenAt ??= await file.lastModified();
 
         var request = http.MultipartRequest(
           'POST',
           Uri.parse(ApiEndpoints.archiveUpload),
         );
-        request.fields['type'] = type;
         if (takenAt != null) {
           final local = takenAt.toLocal();
           request.fields['takenAt'] =
@@ -363,37 +354,25 @@ class PhotoGalleryPageState extends State<PhotoGalleryPage> {
             itemBuilder: (context, index) {
               final photo = _photos[index];
               final thumbUrl = photo['thumbnailUrl'] as String? ?? photo['mediaUrl'] as String;
-              final isVideo = photo['mediaType'] == 'VIDEO';
               return GestureDetector(
                 onTap: () => _openPhotoViewer(index),
                 onLongPress: () => _showPhotoOptions(photo),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: thumbUrl,
-                      cacheKey: '${thumbUrl}_thumb',
-                      fit: BoxFit.cover,
-                      memCacheWidth: 300,
-                      maxWidthDiskCache: 300,
-                      placeholder: (context, url) => Container(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        child: Icon(
-                          isVideo ? Icons.videocam : Icons.broken_image,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+                child: CachedNetworkImage(
+                  imageUrl: thumbUrl,
+                  cacheKey: '${thumbUrl}_thumb',
+                  fit: BoxFit.cover,
+                  memCacheWidth: 300,
+                  maxWidthDiskCache: 300,
+                  placeholder: (context, url) => Container(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.broken_image,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                    if (isVideo)
-                      const Center(
-                        child: Icon(Icons.play_circle_outline, color: Colors.white, size: 36,
-                          shadows: [Shadow(color: Colors.black54, blurRadius: 8)],
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
               );
             },
@@ -439,8 +418,6 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   bool _isDownloading = false;
   bool _isPeeking = false; // 롱프레스 중 원본 보기
   bool _showUI = false;
-
-  bool get _isCurrentVideo => widget.photos[_currentIndex]['mediaType'] == 'VIDEO';
 
   TransformationController _controllerFor(int index) {
     return _transformControllers.putIfAbsent(index, () {
@@ -574,7 +551,6 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   Future<void> _downloadMedia() async {
     final photo = widget.photos[_currentIndex];
     final url = photo['mediaUrl'] as String;
-    final isVideo = photo['mediaType'] == 'VIDEO';
     final filename = url.split('/').last.split('?').first;
 
     setState(() => _isDownloading = true);
@@ -597,15 +573,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
       } else {
         if (!await Gal.hasAccess(toAlbum: true)) await Gal.requestAccess(toAlbum: true);
         final response = await http.get(Uri.parse(url));
-        if (isVideo) {
-          final tempDir = await getTemporaryDirectory();
-          final tempFile = File('${tempDir.path}/$filename');
-          await tempFile.writeAsBytes(response.bodyBytes);
-          await Gal.putVideo(tempFile.path, album: 'UsOnly');
-          await tempFile.delete();
-        } else {
-          await Gal.putImageBytes(response.bodyBytes, album: 'UsOnly');
-        }
+        await Gal.putImageBytes(response.bodyBytes, album: 'UsOnly');
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('갤러리에 저장되었습니다')),
         );
@@ -622,7 +590,6 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
 
   void _showPhotoInfo() {
     final photo = widget.photos[_currentIndex];
-    final mediaType = photo['mediaType'] as String? ?? 'IMAGE';
 
     String _buildDateStr(String? takenAt) {
       if (takenAt == null) return '-';
@@ -662,11 +629,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _infoRow(
-                    mediaType == 'VIDEO' ? Icons.videocam_outlined : Icons.image_outlined,
-                    '파일 유형',
-                    mediaType == 'VIDEO' ? '동영상' : '사진',
-                  ),
+                  _infoRow(Icons.image_outlined, '파일 유형', '사진'),
                 ],
               ),
             ),
@@ -823,7 +786,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
           style: const TextStyle(color: Colors.white),
         ),
         actions: [
-          if (!_isCurrentVideo && _selectedFilterIndex != 0)
+          if (_selectedFilterIndex != 0)
             _isSaving
                 ? const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -897,14 +860,6 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
                 onPageChanged: _onPageChanged,
                 itemBuilder: (context, index) {
                   final photo = widget.photos[index];
-                  final isVideo = photo['mediaType'] == 'VIDEO';
-
-                  if (isVideo) {
-                    return Center(
-                      child: _VideoPlayerWidget(url: photo['mediaUrl'] as String),
-                    );
-                  }
-
                   final controller = _controllerFor(index);
                   Widget imageWidget = CachedNetworkImage(
                     imageUrl: photo['mediaUrl'],
@@ -937,92 +892,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
               ),
             ),
           ),
-          if (_showUI && !_isCurrentVideo) _buildFilterBar(),
-        ],
-      ),
-    );
-  }
-}
-
-class _VideoPlayerWidget extends StatefulWidget {
-  final String url;
-  const _VideoPlayerWidget({required this.url});
-
-  @override
-  State<_VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
-}
-
-class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
-  late VideoPlayerController _controller;
-  bool _initialized = false;
-  bool _unsupported = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
-    _controller.initialize().then((_) {
-      if (mounted) setState(() => _initialized = true);
-    }).catchError((e) {
-      debugPrint('비디오 초기화 실패: $e');
-      if (mounted) setState(() => _unsupported = true);
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_unsupported) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.videocam_off, color: Colors.white54, size: 48),
-            SizedBox(height: 8),
-            Text('이 기기에서는 동영상을 재생할 수 없어요', style: TextStyle(color: Colors.white54)),
-          ],
-        ),
-      );
-    }
-    if (!_initialized) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
-    }
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _controller.value.isPlaying ? _controller.pause() : _controller.play();
-        });
-      },
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          AspectRatio(
-            aspectRatio: _controller.value.aspectRatio,
-            child: VideoPlayer(_controller),
-          ),
-          if (!_controller.value.isPlaying)
-            const Icon(Icons.play_circle_outline, color: Colors.white70, size: 72,
-              shadows: [Shadow(color: Colors.black54, blurRadius: 8)],
-            ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: VideoProgressIndicator(
-              _controller,
-              allowScrubbing: true,
-              colors: const VideoProgressColors(
-                playedColor: Colors.white,
-                bufferedColor: Colors.white38,
-                backgroundColor: Colors.white12,
-              ),
-            ),
-          ),
+          if (_showUI) _buildFilterBar(),
         ],
       ),
     );
@@ -1100,8 +970,6 @@ class _SlideshowPageState extends State<SlideshowPage>
     }
     for (final index in toPreload) {
       final photo = widget.photos[index];
-      final mediaType = photo['mediaType'] as String?;
-      if (mediaType == 'VIDEO') continue;
       final url = photo['mediaUrl'] as String?;
       if (url != null && mounted) {
         precacheImage(CachedNetworkImageProvider(url), context);
