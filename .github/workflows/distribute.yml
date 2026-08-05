@@ -64,3 +64,15 @@ jobs:
           testers: oink12268@gmail.com, jinaoj@gmail.com
           file: build/app/outputs/flutter-apk/app-release.apk
           releaseNotesFile: release_notes.txt
+
+      # Play Store 제출용 AAB. Firebase 테스트 배포와는 별개 산출물이라
+      # 스토어에 올릴 때만 워크플로 결과에서 내려받아 수동으로 Play Console에 업로드.
+      - name: AAB 빌드 (Play Store 제출용)
+        run: flutter build appbundle --release --build-number=${{ github.run_number }}
+
+      - name: AAB 아티팩트 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 90
