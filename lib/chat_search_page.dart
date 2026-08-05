@@ -21,24 +21,54 @@ class ChatSearchListPage extends StatefulWidget {
 }
 
 class _ChatSearchListPageState extends State<ChatSearchListPage> {
+  static const int _pageSize = 30;
+
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   List<dynamic> _results = [];
   bool _isLoading = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = false;
+  int _currentPage = 0;
+  String _lastQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 300
+        && _hasMore && !_isLoadingMore && !_isLoading) {
+      _loadMore();
+    }
+  }
 
   Future<void> _search(String query) async {
-    if (query.trim().isEmpty) {
-      setState(() => _results = []);
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _results = [];
+        _hasMore = false;
+      });
       return;
     }
 
+    _lastQuery = trimmed;
+    _currentPage = 0;
     setState(() => _isLoading = true);
 
     try {
       final response = await ApiClient.get(
-        Uri.parse(ApiEndpoints.chatSearchQuery(query.trim())),
+        Uri.parse(ApiEndpoints.chatSearchQuery(trimmed, page: 0, size: _pageSize)),
       );
       if (response.statusCode == 200) {
-        setState(() => _results = ApiClient.decodeBody(response) as List);
+        final page = ApiClient.decodeBody(response) as List;
+        setState(() {
+          _results = page;
+          _hasMore = page.length >= _pageSize;
+        });
       }
     } catch (e) {
       debugPrint('Search error: $e');
@@ -47,9 +77,32 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
     }
   }
 
+  Future<void> _loadMore() async {
+    setState(() => _isLoadingMore = true);
+    final nextPage = _currentPage + 1;
+    try {
+      final response = await ApiClient.get(
+        Uri.parse(ApiEndpoints.chatSearchQuery(_lastQuery, page: nextPage, size: _pageSize)),
+      );
+      if (response.statusCode == 200) {
+        final more = ApiClient.decodeBody(response) as List;
+        setState(() {
+          _currentPage = nextPage;
+          _results = [..._results, ...more];
+          _hasMore = more.length >= _pageSize;
+        });
+      }
+    } catch (e) {
+      debugPrint('Search load more error: $e');
+    } finally {
+      setState(() => _isLoadingMore = false);
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -84,7 +137,12 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               ),
               onChanged: (val) {
-                if (val.isEmpty) setState(() => _results = []);
+                if (val.isEmpty) {
+                  setState(() {
+                    _results = [];
+                    _hasMore = false;
+                  });
+                }
               },
               onSubmitted: _search,
             ),
@@ -95,7 +153,7 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  '${_results.length}개',
+                  _hasMore ? '${_results.length}개+' : '${_results.length}개',
                   style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface),
                 ),
               ),
@@ -108,8 +166,20 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
                         child: Text('검색 결과가 없어', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       )
                     : ListView.builder(
-                        itemCount: _results.length,
+                        controller: _scrollController,
+                        itemCount: _results.length + (_isLoadingMore ? 1 : 0),
                         itemBuilder: (context, index) {
+                          if (index >= _results.length) {
+                            return Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            );
+                          }
                           final chat = _results[index];
                           final msg = (chat['message'] as String?) ?? '';
                           final isMe = chat['writerUid'] == widget.uid;
