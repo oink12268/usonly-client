@@ -66,6 +66,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
 
     int success = 0;
     int fail = 0;
+    String? failMessage; // 서버가 내려준 실패 사유(예: 저장 용량 초과)
 
     // 토큰을 루프 전에 한 번만 가져와서 재사용 (Windows에서 매번 갱신 시 401 오류 방지)
     final uploadToken = await FirebaseAuth.instance.currentUser?.getIdToken(true);
@@ -126,6 +127,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
           success++;
         } else {
           fail++;
+          failMessage ??= _parseErrorMessage(response.bodyBytes);
           debugPrint("업로드 실패: ${response.statusCode} / ${response.body}");
         }
       } catch (e) {
@@ -140,7 +142,20 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
     if (fail == 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${success}장 업로드 성공!")));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("성공 ${success}장 / 실패 ${fail}장")));
+      // 서버가 사유를 내려줬으면(예: 저장 용량 초과) 그 문구를 우선 표시
+      final msg = failMessage ?? "성공 ${success}장 / 실패 ${fail}장";
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  // 서버 에러 응답(JSON)에서 message 필드를 뽑아낸다. 실패하면 null.
+  String? _parseErrorMessage(List<int> bodyBytes) {
+    try {
+      final body = jsonDecode(utf8.decode(bodyBytes)) as Map<String, dynamic>;
+      final msg = body['message'] as String?;
+      return (msg != null && msg.isNotEmpty) ? msg : null;
+    } catch (_) {
+      return null;
     }
   }
 

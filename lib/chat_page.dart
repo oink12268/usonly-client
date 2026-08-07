@@ -648,6 +648,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       _uploadProgress = '0/${images.length}';
     });
     int successCount = 0;
+    String? failMessage; // 서버가 내려준 실패 사유(예: 저장 용량 초과)
     try {
       for (int i = 0; i < images.length; i++) {
         final image = images[i];
@@ -666,7 +667,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           successCount++;
         } else {
           debugPrint("❌ 이미지 업로드 실패: ${response.statusCode}");
+          if (failMessage == null) {
+            try {
+              final body = jsonDecode(await response.stream.bytesToString()) as Map<String, dynamic>;
+              final m = body['message'] as String?;
+              if (m != null && m.isNotEmpty) failMessage = m;
+            } catch (_) {}
+          }
         }
+      }
+      final fm = failMessage;
+      if (fm != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(fm)),
+        );
       }
     } catch (e) {
       debugPrint("❌ 이미지 업로드 에러: $e");
