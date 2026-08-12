@@ -12,6 +12,7 @@ import 'api_client.dart';
 import 'api_endpoints.dart';
 import 'fcm_service.dart';
 import 'share_intent_service.dart';
+import 'utils/platform_support.dart';
 import 'chat_media_page.dart';
 import 'chat_search_page.dart';
 import 'utils/date_formatter.dart';
@@ -640,14 +641,16 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
                 _pickAndUploadMultipleImages();
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('카메라'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickAndUploadImage(ImageSource.camera);
-              },
-            ),
+            // 데스크톱은 image_picker 카메라 소스를 지원하지 않아 항목 자체를 숨긴다
+            if (supportsCamera)
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('카메라'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndUploadImage(ImageSource.camera);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.attach_file),
               title: const Text('파일 첨부'),
@@ -1518,7 +1521,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
             onAttachment: _showAttachmentSheet,
             sendScaleAnim: _sendScaleAnim,
             sendAnimController: _sendAnimController,
-            onPaste: Platform.isAndroid ? _handlePaste : null,
+            onPaste: supportsClipboardPaste ? _handlePaste : null,
           ),
         ],
       ),

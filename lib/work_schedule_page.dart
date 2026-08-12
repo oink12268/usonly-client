@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'api_client.dart';
 import 'api_endpoints.dart';
+import 'utils/platform_support.dart';
 
 class WorkSchedulePage extends StatefulWidget {
   final String? nickname;
@@ -193,18 +194,20 @@ class _WorkSchedulePageState extends State<WorkSchedulePage> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickImage(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('카메라'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.primary,
-                      side: BorderSide(color: Theme.of(context).colorScheme.primary),
+                // 데스크톱은 카메라 소스를 지원하지 않아 갤러리만 남긴다
+                if (supportsCamera) const SizedBox(width: 12),
+                if (supportsCamera)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _pickImage(ImageSource.camera),
+                      icon: const Icon(Icons.camera_alt),
+                      label: const Text('카메라'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.primary,
+                        side: BorderSide(color: Theme.of(context).colorScheme.primary),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 16),

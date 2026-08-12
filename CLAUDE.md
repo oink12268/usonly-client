@@ -1,14 +1,15 @@
 # UsOnly Client - 개발 참고사항
 
 ## 프로젝트 개요
-커플 전용 Flutter 앱 (Android / iOS / Windows)
+커플 전용 Flutter 앱 (Android / iOS / Windows / macOS)
 - 백엔드: `usonly.duckdns.org` (HTTPS / DDNS)
 - WebSocket: `wss://usonly.duckdns.org/ws`
 
 ## 지원 플랫폼
 - Android / iOS (주 타겟)
 - Windows (MSIX 설치파일)
-- ~~linux, macos, windows 스캐폴딩 제거됨~~ (windows만 유지)
+- macOS (네이티브 빌드 — 세팅·알려진 이슈는 `docs/macos-build.md` 참고)
+- 데스크톱 기능 분기는 `lib/utils/platform_support.dart`에 모아둠
 
 ## Firebase
 - `firebase_options.dart` / `google-services.json` / `GoogleService-Info.plist` 는 `.gitignore` 처리됨

@@ -26,8 +26,21 @@ flutter build macos --release
 
 - Xcode 설치 및 라이선스 동의: `sudo xcodebuild -license accept`
 - Xcode 개발자 도구 설정: `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`
+  - Command Line Tools만 깔려 있으면(`xcode-select -p`가 `/Library/Developer/CommandLineTools`) macOS 빌드 불가. 정식 Xcode.app 필요
 - CocoaPods: Homebrew Ruby 필요 (`brew install ruby` → `gem install cocoapods`)
 - `firebase_options.dart` 생성: `flutterfire configure` (macOS 포함 선택)
+
+### 새 맥에서 처음 세팅할 때
+
+레포에는 없고(gitignore) 반드시 따로 채워야 실행되는 파일들:
+
+| 파일 | 없으면 | 얻는 법 |
+|------|--------|---------|
+| `lib/firebase_options.dart` | 컴파일 실패 (`main.dart`가 import) | `flutterfire configure` — macOS 선택 시 번들 ID는 기존 등록값 `com.example.usonlyClient` 그대로 |
+| `lib/windows_oauth_config.dart` | 컴파일 실패 (`auth_service.dart`가 import) | 기존 머신에서 복사. macOS 로그인이 Windows용 PKCE 플로우를 재사용하므로 데스크톱 OAuth client id/secret이 필요 |
+| `macos/Runner/GoogleService-Info.plist` | Firebase 초기화 실패 | `flutterfire configure`가 생성, 또는 Firebase 콘솔에서 다운로드 |
+
+> 번들 ID(`com.example.usonlyClient`)는 Firebase macOS 앱 등록값·keychain-access-groups·서명 팀(`3V2TWU95TH`)과 묶여 있다. Android/iOS(`com.evho.usonly`)와 다르다고 해서 바꾸면 Firebase Auth와 keychain이 전부 깨진다.
 
 ---
 
@@ -137,6 +150,11 @@ if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.windows ||
 | 파일 다운로드 | gal (갤러리) | 다운로드 폴더 | 다운로드 폴더 |
 | FCM 푸시 알림 | O | X (WebSocket) | X (WebSocket) |
 | keychain 저장 | 네이티브 | 해당 없음 | UserDefaults (우회) |
+| 카메라 촬영 | O | X (버튼 숨김) | X (버튼 숨김) |
+| 이미지 붙여넣기 | Android만 O | O | O |
+
+플랫폼 분기는 `lib/utils/platform_support.dart`의 `supportsCamera` / `supportsClipboardPaste`로 판단한다.
+image_picker의 `ImageSource.camera`는 데스크톱에서 지원되지 않아 채팅 첨부 시트와 근무일정 화면에서 카메라 항목을 아예 숨긴다.
 
 ---
 
