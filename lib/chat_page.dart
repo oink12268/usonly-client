@@ -25,7 +25,8 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 class ChatPage extends StatefulWidget {
   final String uid; // 내 아이디
-  const ChatPage({super.key, required this.uid});
+  final int? coupleId; // 실시간 이벤트가 커플별 토픽으로 오므로 구독에 필요
+  const ChatPage({super.key, required this.uid, this.coupleId});
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -85,6 +86,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
   // 전송 실패 감지 타이머 (8초 내 소켓 연결 안 되면 failed로 전환)
   Timer? _sendFailTimer;
+
+  // STOMP ERROR 안내를 세션당 한 번만 띄우기 위한 플래그 (재연결마다 스낵바 도배 방지)
+  bool _stompErrorNotified = false;
 
   // uid → 닉네임 / 프로필 이미지 캐시
   final Map<String, String> _nicknameCache = {};
@@ -346,6 +350,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   // --- [2] 소켓 연결 및 구독 (WebSocket) ---
   void _connectSocket() async {
     if (_isConnecting) return;
+    // 서버가 커플별 토픽(/sub/chat/{coupleId})으로만 브로드캐스트하고, 그 외 목적지 구독은
+    // 서버에서 거부한다. coupleId가 없으면 커플 연결 자체가 안 된 상태라 채팅도 성립 안 함.
+    final coupleId = widget.coupleId;
+    if (coupleId == null) {
+      debugPrint('⚠️ coupleId 없음 — 채팅 소켓 연결 생략');
+      return;
+    }
     _isConnecting = true;
     final connectHeaders = await ApiClient.stompHeaders();
     if (!mounted) { _isConnecting = false; return; }
@@ -380,7 +391,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
           // 타이핑 이벤트 구독
           stompClient!.subscribe(
-            destination: '/sub/chat/typing',
+            destination: '/sub/chat/typing/$coupleId',
             callback: (StompFrame frame) {
               if (frame.body != null) {
                 final data = jsonDecode(frame.body!);
@@ -400,7 +411,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
 
           // 채팅 삭제 이벤트 구독
           stompClient!.subscribe(
-            destination: '/sub/chat/delete',
+            destination: '/sub/chat/delete/$coupleId',
             callback: (StompFrame frame) {
               if (frame.body != null) {
                 final data = jsonDecode(frame.body!);
@@ -413,7 +424,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           );
 
           stompClient!.subscribe(
-            destination: '/sub/chat/edit',
+            destination: '/sub/chat/edit/$coupleId',
             callback: (StompFrame frame) {
               if (frame.body == null) return;
               final data = jsonDecode(frame.body!) as Map<String, dynamic>;
@@ -429,9 +440,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
             },
           );
 
-          // 구독(Subscribe): 서버가 '/sub/chat'으로 뭐 보내면 내가 낚아챔
+          // 구독(Subscribe): 서버가 '/sub/chat/{coupleId}'로 뭐 보내면 내가 낚아챔
           stompClient!.subscribe(
-            destination: '/sub/chat',
+            destination: '/sub/chat/$coupleId',
             callback: (StompFrame frame) async {
               if (frame.body != null) {
                 // 받은 메시지를 JSON으로 변환
@@ -477,6 +488,19 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           debugPrint("🚨 소켓 에러: $error");
           _isConnecting = false;
           _scheduleReconnect();
+        },
+        // 서버가 SUBSCRIBE/SEND를 거부하면 ERROR 프레임만 오고 소켓은 그대로 살아있다.
+        // 이걸 안 잡으면 "전송은 되는데 화면만 안 갱신되는" 상태가 로그도 없이 방치된다.
+        onStompError: (StompFrame frame) {
+          final reason = frame.headers['message'] ?? frame.body ?? '알 수 없는 오류';
+          debugPrint("🚨 STOMP 에러: $reason / body=${frame.body}");
+          if (!mounted || _stompErrorNotified) return;
+          _stompErrorNotified = true;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('실시간 연결에 문제가 있어 새 메시지가 자동으로 표시되지 않을 수 있습니다.'),
+            ),
+          );
         },
         onDisconnect: (StompFrame frame) {
           debugPrint("🔌 소켓 연결 끊김, 재연결 예약...");

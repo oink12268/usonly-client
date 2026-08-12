@@ -109,6 +109,9 @@ class _PongGamePageState extends State<PongGamePage>
         stompConnectHeaders: headers,
         onConnect: _onConnect,
         onWebSocketError: (e) => debugPrint('Pong 소켓 에러: $e'),
+        // 구독 거부 등 서버가 보낸 ERROR 프레임 (소켓은 살아있어서 안 잡으면 조용히 묻힌다)
+        onStompError: (StompFrame f) =>
+            debugPrint('🚨 Pong STOMP 에러: ${f.headers['message'] ?? f.body}'),
       ),
     );
     _stomp!.activate();

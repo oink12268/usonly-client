@@ -134,6 +134,9 @@ class _NotePageState extends State<NotePage> with WidgetsBindingObserver {
           );
         },
         onWebSocketError: (e) => debugPrint("노트 소켓 에러: $e"),
+        // 구독 거부 등 서버가 보낸 ERROR 프레임 (소켓은 살아있어서 안 잡으면 조용히 묻힌다)
+        onStompError: (StompFrame f) =>
+            debugPrint("🚨 노트 STOMP 에러: ${f.headers['message'] ?? f.body}"),
       ),
     );
     _stompClient!.activate();

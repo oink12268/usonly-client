@@ -95,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 _pages = [
       AlbumPage(memberId: widget.memberId),
       CalendarPage(memberId: widget.memberId),
-      ChatPage(uid: widget.uid),
+      ChatPage(uid: widget.uid, coupleId: widget.coupleId),
       NotePage(memberId: widget.memberId, coupleId: widget.coupleId),
       _MorePage(user: widget.user, memberId: widget.memberId, coupleId: widget.coupleId),
     ];
