@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:stomp_dart_client/stomp_dart_client.dart'; // 소켓 라이브러리
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart'; // RenderAbstractViewport (검색 결과 스크롤 보정)
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
@@ -80,6 +81,14 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   int? _highlightedMessageId;
   // 답장 이동 시 해당 아이템을 화면 중앙으로 스크롤하기 위한 GlobalKey
   final GlobalKey _targetMessageKey = GlobalKey();
+  // 타겟 메시지로 점프하는 중 여부 — 이때 발생하는 스크롤로 추가 로딩이 트리거되면
+  // 리스트 앞뒤에 아이템이 붙어 타겟 위치가 밀리므로 _onScroll에서 무시한다.
+  bool _isJumpingToMessage = false;
+  // 점프 직후 짧게 타겟 위치를 재보정하는 타이머 (늦게 확정되는 버블 높이 흡수용)
+  Timer? _targetCenterTimer;
+  // 이동한 메시지를 하이라이트하고 위치를 보정해주는 시간.
+  // 보정은 _targetMessageKey가 붙어 있는 동안(= 하이라이트 중)에만 가능하므로 둘은 같아야 한다.
+  static const Duration _targetFocusDuration = Duration(milliseconds: 2500);
 
   // 전송 버튼 애니메이션
   late AnimationController _sendAnimController;
@@ -181,6 +190,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
     _typingTimer?.cancel();
     _partnerTypingTimer?.cancel();
     _sendFailTimer?.cancel();
+    _targetCenterTimer?.cancel();
     _partnerTypingNotifier.dispose();
     _focusNotifier.dispose();
     _controller.dispose();
@@ -211,6 +221,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   // 스크롤 맨 위 도달 시 이전 메시지 추가 로드
   // (reverse: true 이므로 pixels가 maxScrollExtent에 가까울 때 = 화면 맨 위)
   void _onScroll() {
+    // 검색 결과로 점프하는 동안의 스크롤은 무시 (추가 로딩이 타겟 위치를 밀어냄)
+    if (_isJumpingToMessage) return;
     // 맨 위 → 오래된 메시지 로드 (reverse: true 이므로 maxScrollExtent = 화면 맨 위)
     if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50 &&
         _hasMore &&
@@ -1156,48 +1168,93 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
           _hasMore = older.length >= 50;
           _hasNewer = newer.length >= 50;
           _highlightedMessageId = targetId;
+          _isJumpingToMessage = true;
         });
 
-        // 타겟 메시지를 화면 중앙으로 스크롤
-        // ListView.builder는 뷰포트(+cacheExtent) 밖 아이템을 빌드하지 않으므로,
-        // 먼저 타겟 근처로 점프해 렌더링 범위를 확장한 뒤 ensureVisible 호출.
-        // 채팅 버블은 높이가 제각각이라 인덱스 비율만으로는 위치가 부정확할 수 있어
-        // (아래 ListView의 cacheExtent를 크게 잡아 전체 아이템이 빌드되도록 함),
-        // 여기서는 몇 프레임에 걸쳐 재시도해 타겟이 늦게 빌드되는 경우까지 커버한다.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!_scrollController.hasClients) return;
-          final maxScroll = _scrollController.position.maxScrollExtent;
-          // 타겟은 older의 마지막(index = older.length-1) = newer.length번째(reverse 기준)에 위치
-          // reverse:true에서 ListView index i의 픽셀 위치 ≈ maxScroll * (1 - i/N)
-          final targetRatio = _chats.isNotEmpty
-              ? 1.0 - (newer.length / _chats.length)
-              : 0.5;
-          _scrollController.jumpTo((maxScroll * targetRatio).clamp(0.0, maxScroll));
+        _scrollToTargetMessage(newerCount: newer.length);
 
-          void tryEnsureVisible(int attemptsLeft) {
-            final ctx = _targetMessageKey.currentContext;
-            if (ctx != null) {
-              Scrollable.ensureVisible(
-                ctx,
-                alignment: 0.5,
-                duration: const Duration(milliseconds: 300),
-              );
-              return;
-            }
-            if (attemptsLeft <= 0) return;
-            WidgetsBinding.instance.addPostFrameCallback((_) => tryEnsureVisible(attemptsLeft - 1));
-          }
-
-          WidgetsBinding.instance.addPostFrameCallback((_) => tryEnsureVisible(5));
-        });
-
-        Future.delayed(const Duration(seconds: 2), () {
+        Future.delayed(_targetFocusDuration, () {
           if (mounted) setState(() => _highlightedMessageId = null);
         });
       }
     } catch (e) {
       debugPrint('메시지 이동 실패: $e');
+      _isJumpingToMessage = false;
     }
+  }
+
+  // 타겟 메시지를 화면 중앙에 위치시킨다.
+  //
+  // 한 번 스크롤하고 끝내면 안 되는 이유가 두 가지다.
+  //  1) ListView.builder는 아직 빌드되지 않은 아이템의 높이를 평균값으로 추정한다.
+  //     채팅 버블은 높이가 제각각(사진 200px / 텍스트 한 줄 / 답장 인용)이라 인덱스
+  //     비율로 계산한 오프셋은 실제 위치와 화면 몇 개 분량까지 어긋날 수 있다.
+  //  2) 링크가 포함된 메시지의 미리보기(AnyLinkPreview)는 로딩이 끝난 뒤에야 높이가
+  //     확정된다(자리표시자 60px → 실제 카드 높이, 실패 시 0). 타겟보다 아래쪽
+  //     (= 더 최신) 메시지에서 이 일이 일어나면 스크롤 오프셋은 그대로인데 타겟만
+  //     화면 밖으로 밀려난다. 스크롤 직후엔 맞았다가 잠시 뒤 엉뚱한 메시지가 보이는
+  //     증상의 원인.
+  //
+  // 그래서 (a) 타겟의 실제 RenderBox 위치를 읽어 보정하고, (b) 하이라이트가 유지되는
+  // 동안 짧게 반복 보정해 늦게 확정되는 높이까지 흡수한다. 사용자가 직접 스크롤을
+  // 시작하면 즉시 손을 뗀다.
+  void _scrollToTargetMessage({required int newerCount}) {
+    _targetCenterTimer?.cancel();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        _isJumpingToMessage = false;
+        return;
+      }
+
+      // reverse: true 리스트에서는 ListView index 0 = 최신(맨 아래, offset 0)이고
+      // index가 커질수록 오래된 메시지 = offset이 커진다.
+      // 타겟은 older의 마지막이므로 ListView index = newerCount → 비율도 newerCount / N.
+      // (여기서는 타겟이 빌드되게 만드는 게 목적이고, 정확한 위치는 아래에서 보정한다)
+      final position = _scrollController.position;
+      final ratio = _chats.isEmpty ? 0.5 : newerCount / _chats.length;
+      _scrollController.jumpTo(
+        (position.maxScrollExtent * ratio)
+            .clamp(position.minScrollExtent, position.maxScrollExtent),
+      );
+
+      // 위 jumpTo가 레이아웃에 반영된 다음 프레임에 1차 보정.
+      // (같은 프레임에서 바로 재면 position.pixels만 새 값이고 렌더 위치는 아직 옛날
+      //  것이라 엉뚱한 오프셋이 나온다)
+      WidgetsBinding.instance.addPostFrameCallback((_) => _centerOnTargetMessage());
+
+      final deadline = DateTime.now().add(_targetFocusDuration);
+      _targetCenterTimer = Timer.periodic(const Duration(milliseconds: 80), (timer) {
+        if (!mounted ||
+            !_scrollController.hasClients ||
+            DateTime.now().isAfter(deadline) ||
+            // 사용자가 직접 스크롤을 시작했으면 더 이상 끼어들지 않는다
+            _scrollController.position.userScrollDirection != ScrollDirection.idle) {
+          timer.cancel();
+          _targetCenterTimer = null;
+          _isJumpingToMessage = false;
+          return;
+        }
+        _centerOnTargetMessage();
+      });
+    });
+  }
+
+  // 타겟의 실제 렌더 위치를 읽어 화면 중앙으로 보정 (이미 중앙이면 아무것도 하지 않음)
+  void _centerOnTargetMessage() {
+    final renderObject = _targetMessageKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.attached) return; // 아직 빌드 전
+    final viewport = RenderAbstractViewport.maybeOf(renderObject);
+    if (viewport == null) return;
+
+    final position = _scrollController.position;
+    final revealed = viewport
+        .getOffsetToReveal(renderObject, 0.5)
+        .offset
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+
+    if ((revealed - position.pixels).abs() < 1.0) return; // 이미 제자리
+    _scrollController.jumpTo(revealed);
   }
 
   void _openCalendarSearch() {
@@ -1212,6 +1269,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
   // 스크롤 맨 아래로 내리는 함수
   // (reverse: true 이므로 pixels == 0 이 맨 아래 = 최신 메시지)
   void _scrollToBottom() {
+    // 검색 결과 위치 보정과 맨 아래 이동이 서로 스크롤을 뺏지 않도록 보정을 먼저 중단
+    _targetCenterTimer?.cancel();
+    _targetCenterTimer = null;
+    _isJumpingToMessage = false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.jumpTo(0);
