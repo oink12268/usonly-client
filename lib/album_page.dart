@@ -6,6 +6,7 @@ import 'photo_gallery_page.dart';
 import 'api_client.dart';
 import 'api_endpoints.dart';
 import 'widgets/confirm_delete_dialog.dart';
+import 'widgets/app_input.dart';
 
 class AlbumPage extends StatefulWidget {
   final int memberId;
@@ -29,10 +30,10 @@ class _AlbumPageState extends State<AlbumPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("새 앨범 만들기"),
-        content: TextField(
+        content: AppTextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: "앨범 이름을 입력하세요"),
+          hint: "앨범 이름을 입력하세요",
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("취소")),
@@ -373,10 +374,10 @@ class _AlbumListContentState extends State<_AlbumListContent> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("앨범 이름 수정"),
-        content: TextField(
+        content: AppTextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: "새 앨범 이름"),
+          hint: "새 앨범 이름",
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("취소")),

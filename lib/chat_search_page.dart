@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'api_client.dart';
 import 'api_endpoints.dart';
 import 'utils/date_formatter.dart';
+import 'widgets/app_input.dart';
 
 // ─────────────────────────────────────────────
 // 채팅 키워드 검색 결과 페이지
@@ -121,20 +122,17 @@ class _ChatSearchListPageState extends State<ChatSearchListPage> {
               controller: _controller,
               autofocus: true,
               textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: '검색어를 입력해주세요.',
-                prefixIcon: const Icon(Icons.search),
+              decoration: AppInput.decoration(
+                context,
+                hint: '검색어를 입력해주세요.',
+                prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.send),
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 20),
                   onPressed: () => _search(_controller.text),
                 ),
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                // 검색바는 알약 모양이 더 자연스러워 반경만 키운다.
+                radius: 24,
+                dense: true,
               ),
               onChanged: (val) {
                 if (val.isEmpty) {

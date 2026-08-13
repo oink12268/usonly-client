@@ -6,6 +6,7 @@ import 'auth_service.dart'; // 로그아웃용
 import 'api_client.dart';
 import 'home_screen.dart'; // 매칭 성공 시 이동할 화면
 import 'api_endpoints.dart';
+import 'widgets/app_input.dart';
 
 class MatchingScreen extends StatefulWidget {
   final User user;
@@ -195,22 +196,12 @@ class _MatchingScreenState extends State<MatchingScreen> {
               ),
               const SizedBox(height: 16),
               
-              TextField(
+              AppTextField(
                 controller: _codeController,
                 maxLength: 6,
                 textCapitalization: TextCapitalization.characters,
-                decoration: InputDecoration(
-                  hintText: "코드를 입력하세요",
-                  prefixIcon: Icon(Icons.favorite, color: Theme.of(context).colorScheme.outline),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
-                  ),
-                  counterText: "",
-                ),
+                hint: "코드를 입력하세요",
+                prefixIcon: const Icon(Icons.favorite, size: 20),
               ),
               
               const SizedBox(height: 24),

@@ -24,6 +24,7 @@ import 'widgets/chat_reply_preview.dart';
 import 'widgets/chat_input_bar.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'widgets/app_input.dart';
 
 class ChatPage extends StatefulWidget {
   final String uid; // 내 아이디
@@ -999,11 +1000,11 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("메시지 수정"),
-        content: TextField(
+        content: AppTextField(
           controller: controller,
           maxLines: null,
           autofocus: true,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
+          hint: "메시지를 입력하세요",
         ),
         actions: [
           TextButton(
@@ -1306,20 +1307,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
               ],
             ),
             const SizedBox(height: 12),
-            TextField(
+            AppTextField(
               controller: queryController,
               autofocus: true,
-              decoration: InputDecoration(
-                hintText: '예) 최근에 놀러가고 싶다고 했던 곳들',
-                hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4), fontSize: 14),
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
+              hint: '예) 최근에 놀러가고 싶다고 했던 곳들',
               onSubmitted: (_) {
                 if (queryController.text.isNotEmpty) {
                   Navigator.pop(context);

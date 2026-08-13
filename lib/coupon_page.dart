@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'api_client.dart';
 import 'api_endpoints.dart';
+import 'widgets/app_input.dart';
 
 class CouponPage extends StatefulWidget {
   const CouponPage({super.key});
@@ -76,14 +77,18 @@ class _CouponPageState extends State<CouponPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              AppTextField(
                 controller: storeCtrl,
-                decoration: const InputDecoration(labelText: '브랜드/가게명'),
+                label: '브랜드/가게명',
+                hint: '예) 스타벅스',
+                dense: true,
               ),
-              const SizedBox(height: 8),
-              TextField(
+              const SizedBox(height: 12),
+              AppTextField(
                 controller: discountCtrl,
-                decoration: const InputDecoration(labelText: '할인 내용'),
+                label: '할인 내용',
+                hint: '예) 아메리카노 1잔',
+                dense: true,
               ),
               const SizedBox(height: 12),
               Row(

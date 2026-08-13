@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:typed_data';
 import 'api_client.dart';
 import 'api_endpoints.dart';
+import 'widgets/app_input.dart';
 
 class ProfileEditPage extends StatefulWidget {
   final int memberId;
@@ -161,19 +162,12 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             ),
             const SizedBox(height: 36),
             // 닉네임 입력
-            TextField(
+            AppTextField(
               controller: _nicknameController,
               maxLength: 20,
-              decoration: InputDecoration(
-                labelText: '이름',
-                labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
-                border: const OutlineInputBorder(),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
-                ),
-                counterStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
-              cursorColor: Theme.of(context).colorScheme.primary,
+              showCounter: true,
+              label: '이름',
+              hint: '표시할 이름',
             ),
           ],
         ),

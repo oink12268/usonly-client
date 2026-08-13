@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_input.dart';
+
 class ChatInputBar extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -40,7 +42,11 @@ class ChatInputBar extends StatelessWidget {
             child: Container(
               height: 36,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                // 앱 전역 입력 필드와 같은 면/테두리 (알약 반경만 유지)
+                color: AppInput.fill(Theme.of(context).colorScheme),
+                border: Border.fromBorderSide(
+                  AppInput.restSide(Theme.of(context).colorScheme),
+                ),
                 borderRadius: BorderRadius.circular(30),
               ),
               child: TextField(
@@ -48,6 +54,8 @@ class ChatInputBar extends StatelessWidget {
                 focusNode: focusNode,
                 maxLines: 1,
                 decoration: const InputDecoration(
+                  // 바깥 Container가 이미 알약 배경을 그리므로 전역 filled를 끈다.
+                  filled: false,
                   border: InputBorder.none,
                   isDense: true,
                   contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),

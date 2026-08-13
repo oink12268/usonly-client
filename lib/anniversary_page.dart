@@ -4,6 +4,7 @@ import 'api_client.dart';
 import 'api_endpoints.dart';
 import 'fcm_service.dart';
 import 'widgets/confirm_delete_dialog.dart';
+import 'widgets/app_input.dart';
 
 class AnniversaryPage extends StatefulWidget {
   final int memberId;
@@ -60,12 +61,9 @@ class _AnniversaryPageState extends State<AnniversaryPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
+                AppTextField(
                   controller: titleController,
-                  decoration: const InputDecoration(
-                    hintText: "기념일 이름 (예: 100일, 생일)",
-                    border: OutlineInputBorder(),
-                  ),
+                  hint: "기념일 이름 (예: 100일, 생일)",
                 ),
                 const SizedBox(height: 12),
                 SwitchListTile(

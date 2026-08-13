@@ -8,6 +8,7 @@ import 'utils/date_formatter.dart';
 import 'widgets/confirm_delete_dialog.dart';
 import 'widgets/calendar_grid.dart';
 import 'widgets/schedule_list_view.dart';
+import 'widgets/app_input.dart';
 
 class CalendarPage extends StatefulWidget {
   final int memberId;
@@ -223,21 +224,15 @@ class _CalendarPageState extends State<CalendarPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
+              AppTextField(
                 controller: titleController,
-                decoration: const InputDecoration(
-                  hintText: "일정 제목",
-                  border: OutlineInputBorder(),
-                ),
+                hint: "일정 제목",
               ),
               const SizedBox(height: 12),
-              TextField(
+              AppTextField(
                 controller: memoController,
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  hintText: "메모 (선택)",
-                  border: OutlineInputBorder(),
-                ),
+                hint: "메모 (선택)",
               ),
               const SizedBox(height: 8),
               Row(
@@ -385,19 +380,17 @@ class _CalendarPageState extends State<CalendarPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              TextField(
+              AppTextField(
                 controller: titleController,
-                decoration: const InputDecoration(labelText: "제목", border: OutlineInputBorder()),
+                label: "제목",
+                hint: "일정 제목",
               ),
               const SizedBox(height: 12),
-              TextField(
+              AppTextField(
                 controller: memoController,
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: "메모",
-                  hintText: "메모 없음",
-                  border: OutlineInputBorder(),
-                ),
+                label: "메모",
+                hint: "메모 없음",
               ),
               if (schedule['writerNickname'] != null &&
                   schedule['writerNickname'].toString().isNotEmpty) ...[

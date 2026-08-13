@@ -27,6 +27,7 @@ import 'api_endpoints.dart';
 import 'share_intent_service.dart';
 import 'fcm_service.dart';
 import 'anniversary_page.dart';
+import 'widgets/app_input.dart';
 
 class HomeScreen extends StatefulWidget {
   final User? user;
@@ -279,13 +280,10 @@ class _MorePageState extends State<_MorePage> {
                   '되돌릴 수 없습니다. 계속하려면 아래에 "삭제"를 입력하세요.',
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                AppTextField(
                   controller: controller,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: '삭제',
-                    border: OutlineInputBorder(),
-                  ),
+                  hint: '삭제',
                   onChanged: (_) => setDialogState(() {}),
                 ),
               ],

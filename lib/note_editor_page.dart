@@ -11,6 +11,7 @@ import 'api_client.dart';
 import 'api_endpoints.dart';
 import 'note_page.dart';
 import 'google_calendar_service.dart';
+import 'widgets/app_input.dart';
 
 class NoteEditorPage extends StatefulWidget {
   final Map<String, dynamic> note;
@@ -424,12 +425,16 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
+            AppTextField(
               controller: titleCtrl,
-              decoration: const InputDecoration(labelText: '일정 제목', isDense: true),
+              label: '일정 제목',
+              hint: '제목',
+              dense: true,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            const AppInputLabel('날짜'),
             InkWell(
+              borderRadius: BorderRadius.circular(AppInput.radius),
               onTap: () async {
                 final picked = await showDatePicker(
                   context: ctx,
@@ -440,9 +445,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 if (picked != null) setDialogState(() => dates[i] = picked);
               },
               child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: '날짜',
-                  isDense: true,
+                decoration: AppInput.decoration(
+                  context,
+                  dense: true,
                   suffixIcon: date == null
                       ? const Icon(Icons.warning_amber, color: Colors.orange, size: 18)
                       : null,
@@ -453,10 +458,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            TextField(
+            const SizedBox(height: 12),
+            AppTextField(
               controller: descCtrl,
-              decoration: const InputDecoration(labelText: '설명 (선택)', isDense: true),
+              label: '설명 (선택)',
+              hint: '설명',
+              dense: true,
               maxLines: 2,
             ),
           ],
@@ -503,6 +510,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           controller: _titleController,
           decoration: const InputDecoration(
             hintText: '제목을 입력하세요',
+            // 앱바 안에서는 필드 배경 없이 텍스트만 (전역 filled 기본값 해제)
+            filled: false,
             border: InputBorder.none,
           ),
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
