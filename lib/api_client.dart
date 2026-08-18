@@ -18,22 +18,31 @@ class ApiClient {
   static final http.Client _client = http.Client();
 
   // 토큰 캐시: 만료 5분 전까지 재사용 → foreground 복귀 후에도 네트워크 왕복 없음
+  // uid를 같이 저장해서, 로그아웃 후 다른 계정으로 로그인해도 이전 계정 토큰이 재사용되지 않도록 함
   static String? _cachedToken;
   static DateTime? _tokenExpiry;
+  static String? _cachedUid;
 
-  static bool _tokenIsValid() =>
+  static bool _tokenIsValid(String uid) =>
       _cachedToken != null &&
       _tokenExpiry != null &&
+      _cachedUid == uid &&
       _tokenExpiry!.isAfter(DateTime.now().add(const Duration(minutes: 5)));
 
   static Future<String?> _getToken({bool forceRefresh = false}) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return null;
-    if (!forceRefresh && _tokenIsValid()) return _cachedToken;
+    if (user == null) {
+      _cachedToken = null;
+      _tokenExpiry = null;
+      _cachedUid = null;
+      return null;
+    }
+    if (!forceRefresh && _tokenIsValid(user.uid)) return _cachedToken;
     // getIdTokenResult 는 만료 시간도 함께 반환
     final result = await user.getIdTokenResult(forceRefresh);
     _cachedToken = result.token;
     _tokenExpiry = result.expirationTime;
+    _cachedUid = user.uid;
     return _cachedToken;
   }
 
