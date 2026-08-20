@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/ai_feature_gate.dart';
+
 class ChatSearchToolbar extends StatelessWidget {
   final VoidCallback onSearch;
   final VoidCallback onCalendar;
@@ -31,7 +33,8 @@ class ChatSearchToolbar extends StatelessWidget {
         children: [
           _button(context, Icons.search, '검색', onSearch),
           _button(context, Icons.calendar_month, '날짜', onCalendar),
-          _button(context, Icons.auto_awesome, 'AI 검색', onAiSearch),
+          if (AiFeatureGate.isEnabled)
+            _button(context, Icons.auto_awesome, 'AI 검색', onAiSearch),
           _button(context, Icons.photo_library_outlined, '사진 모음', onMediaGallery),
           IconButton(
             icon: const Icon(Icons.close),

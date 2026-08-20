@@ -12,6 +12,7 @@ import 'api_endpoints.dart';
 import 'note_page.dart';
 import 'google_calendar_service.dart';
 import 'widgets/app_input.dart';
+import 'utils/ai_feature_gate.dart';
 
 class NoteEditorPage extends StatefulWidget {
   final Map<String, dynamic> note;
@@ -529,19 +530,20 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               },
             ),
           ),
-          ValueListenableBuilder<bool>(
-            valueListenable: _isExtractingSchedule,
-            builder: (_, extracting, __) => extracting
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.auto_awesome),
-                    tooltip: 'AI로 구글 캘린더에 저장',
-                    onPressed: _extractAndSaveToCalendar,
-                  ),
-          ),
+          if (AiFeatureGate.isEnabled)
+            ValueListenableBuilder<bool>(
+              valueListenable: _isExtractingSchedule,
+              builder: (_, extracting, __) => extracting
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.auto_awesome),
+                      tooltip: 'AI로 구글 캘린더에 저장',
+                      onPressed: _extractAndSaveToCalendar,
+                    ),
+            ),
           IconButton(
             icon: const Icon(Icons.folder_open),
             tooltip: '하위 메모',
