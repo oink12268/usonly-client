@@ -11,6 +11,9 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
+        <!-- adjustNothing + edge-to-edge(WindowInsetsAnimationCallback 기반 부드러운 키보드 애니메이션)는
+             One UI 업데이트 이후 콜백이 제대로 전달되지 않아 키보드는 뜨는데 입력창이 못 따라가는 문제 발생.
+             표준 adjustResize로 복귀해 안정성 우선 (삼성 키보드 자동완성바로 인한 이중 점프는 재발 가능). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -20,7 +23,7 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustNothing">
+            android:windowSoftInputMode="adjustResize">
             <!-- Specifies an Android theme to apply to this Activity as soon as
                  the Android process has started. This theme is visible to the user
                  while the Flutter UI initializes. After that, this theme continues
