@@ -135,7 +135,7 @@ class ApiClient {
       request.headers['Authorization'] = 'Bearer $t';
     }
     final sw = Stopwatch()..start();
-    final res = await _client.send(request);
+    final res = await _client.send(request).timeout(const Duration(seconds: 15));
     final path = request.url.path;
     final msg = 'MULTIPART ${request.method} $path → ${res.statusCode} (${sw.elapsedMilliseconds}ms)';
     if (res.statusCode >= 400) { appLog.warn(msg); } else { appLog.info(msg); }

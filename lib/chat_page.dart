@@ -758,14 +758,26 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver, Ticker
         final bytes = await File(path).readAsBytes();
         final filename = path.split('/').last;
 
-        var request = http.MultipartRequest(
-          'POST',
-          Uri.parse(ApiEndpoints.chatImageUpload),
-        );
-        request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+        // 공유 인텐트 직후엔 네트워크가 막 붙는 타이밍이라 일시적으로 끊겨 있을 수 있어
+        // 연결 단계 실패(타임아웃/소켓 에러)는 최대 3회까지 재시도한다.
+        http.StreamedResponse? response;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+          var request = http.MultipartRequest(
+            'POST',
+            Uri.parse(ApiEndpoints.chatImageUpload),
+          );
+          request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+          try {
+            response = await ApiClient.sendMultipart(request);
+            break;
+          } catch (e) {
+            debugPrint("공유 이미지 업로드 재시도 $attempt/3 실패: $e");
+            if (attempt == 3) rethrow;
+            await Future.delayed(Duration(seconds: attempt));
+          }
+        }
 
-        final response = await ApiClient.sendMultipart(request);
-        if (response.statusCode == 200) {
+        if (response!.statusCode == 200) {
           final data = await ApiClient.decodeStreamedBody(response);
           _sendImageMessage(data['imageUrl']);
         } else {
